@@ -31,9 +31,22 @@ default. The bar's Add/Edit Widgets interface remains available when hidden.
 ## Settings
 
 Open the popup and select its gear button. Changes are saved through Omarchy's
-shell API to this widget's entry in `~/.config/omarchy/shell.json`. No separate
-preferences file is created. Tab navigates controls; Escape returns from settings
-or closes the player. Dropdowns support arrow keys and Enter. Invalid values
+shell API to this widget's entry in `~/.config/omarchy/shell.json`. Browser identifiers are
+under **Browser settings**. Choose an open YouTube web-app window from
+**Use an open window** to expand an inline list. Selecting a window fills the
+detected settings and collapses the list; the row keeps the configured browser
+and profile visible. App ID and MPRIS fields are under **Advanced**. The picker reads
+live Wayland windows, MPRIS players, and installed desktop entries locally; it
+does not store window titles. Standard `Profile_N` suffixes suggest `Profile N`,
+so check that field if you use a custom profile directory. Unknown or ambiguous values stay unchanged for
+manual review. A browser may need to play a video before exposing MPRIS. Only
+YouTube web-app IDs of the form `<browser>-youtube.com__-<profile>` are detected;
+ordinary browser windows and opaque PWA IDs need manual configuration.
+
+Volume step and artwork intensity appear when their associated feature is
+enabled. No separate preferences file is created. Tab navigates controls; Escape returns from settings
+or closes the player. Dropdowns and the window list support arrow keys and Enter. Escape collapses
+the expanded window list before leaving settings. Invalid values
 show an error and are not saved.
 
 | Key | Default | Meaning |
@@ -122,6 +135,7 @@ omarchy plugin remove foamy.media
 ```sh
 node test/model-test.js
 node test/preferences-test.js
+node test/browser-setup-test.js
 sh test/probe-test.sh
 omarchy plugin validate .
 ```
@@ -140,4 +154,6 @@ MIT. Foamy Media builds on [Spotmarchy](https://github.com/mich-nduka/spotmarchy
 by Mich Nduka. Its copyright and permission notice are preserved in
 [LICENSE-SPOTMARCHY](LICENSE-SPOTMARCHY). The popup lifecycle and dropdown derive
 from Omarchy, whose notice is in [LICENSE-OMARCHY](LICENSE-OMARCHY).
+The settings cog uses the same Lucide artwork and ghost button as Foamy Weather
+and GitHub; its notice is in [LICENSE-LUCIDE](LICENSE-LUCIDE).
 Foamy changes are covered by [LICENSE](LICENSE).

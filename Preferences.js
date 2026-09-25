@@ -144,7 +144,47 @@ var fields = [
     "defaultValue": "vivaldi"
   }
 ]
+var labels = {
+  "leftClick": "Left-click plays/pauses",
+  "hideWhenClosed": "Hide when stopped",
+  "scrollAction": "Mouse wheel",
+  "volumeStep": "Volume step (%)",
+  "maxLabelWidth": "Label width (px)",
+  "showArtist": "Show artist",
+  "showProgress": "Show progress",
+  "animateTitle": "Scroll long titles",
+  "showEqualizer": "Show equalizer",
+  "accent": "Accent",
+  "artBackground": "Artwork background",
+  "artIntensity": "Artwork intensity (%)",
+  "youtubeEnabled": "Enable YouTube",
+  "youtubeBrowser": "Browser",
+  "youtubeProfile": "Profile",
+  "youtubeAppId": "Window app ID",
+  "youtubeMprisName": "MPRIS name"
+}
 var norwegian = {
+  "Use an open window": "Bruk et åpent vindu",
+  "Advanced": "Avansert",
+  "No open YouTube windows": "Ingen åpne YouTube-vinduer",
+  "Browser settings": "Nettleserinnstillinger",
+  "Hide when stopped": "Skjul når avspilling stopper",
+  "Mouse wheel": "Musehjul",
+  "Volume step (%)": "Volumsteg (%)",
+  "Label width (px)": "Tekstbredde (px)",
+  "Show artist": "Vis artist",
+  "Show progress": "Vis fremdrift",
+  "Scroll long titles": "Rull lange titler",
+  "Show equalizer": "Vis lydindikator",
+  "Accent": "Aksentfarge",
+  "Artwork background": "Albumomslag som bakgrunn",
+  "Artwork intensity (%)": "Omslagsstyrke (%)",
+  "Enable YouTube": "Aktiver YouTube",
+  "Browser": "Nettleser",
+  "Profile": "Profil",
+  "Window app ID": "App-ID for vindu",
+  "MPRIS name": "MPRIS-navn",
+  "YouTube": "YouTube",
   "Could not start browser.": "Kunne ikke starte nettleseren.",
   "Settings": "Innstillinger",
   "Back": "Tilbake",
@@ -236,5 +276,5 @@ function youtubeLaunch(settings) {
   return ["uwsm-app", "--", value(settings, "youtubeBrowser"),
     "--app=https://youtube.com/", "--profile-directory=" + value(settings, "youtubeProfile")]
 }
-if (typeof module !== "undefined") module.exports = {fields: fields, norwegian: norwegian, language: language,
+if (typeof module !== "undefined") module.exports = {labels: labels, fields: fields, norwegian: norwegian, language: language,
   text: text, field: field, valid: valid, value: value, clickAction: clickAction, youtubeLaunch: youtubeLaunch}

@@ -9,6 +9,7 @@ import qs.Ui
 import qs.Commons
 import "Model.js" as Model
 import "Preferences.js" as Preferences
+import "BrowserSetup.js" as BrowserSetup
 
 Panel {
   id: root
@@ -63,6 +64,20 @@ Panel {
     pendingPreferences[key] = value
     flushPreferences()
   }
+  function saveBrowserSetup(values) {
+    var keys = Object.keys(values)
+    // Validate the whole suggestion before queuing any writes.
+    for (var i = 0; i < keys.length; i++) {
+      if (["youtubeBrowser", "youtubeProfile", "youtubeAppId", "youtubeMprisName"].indexOf(keys[i]) === -1
+          || !Preferences.valid(keys[i], values[keys[i]])) {
+        root.settingsError = root.tr("Invalid setting.")
+        return
+      }
+    }
+    root.settingsError = ""
+    for (var j = 0; j < keys.length; j++) pendingPreferences[keys[j]] = values[keys[j]]
+    flushPreferences()
+  }
   function flushPreferences() {
     if (preferencesSave.running) return
     var keys = Object.keys(pendingPreferences)
@@ -87,7 +102,7 @@ Panel {
   }
   onOpenedChanged: {
     if (!opened) { editingSettings = false; mediaScroll.contentY = 0 }
-    else Qt.callLater(function() { if (!root.editingSettings) settingsButton.forceActiveFocus() })
+    else Qt.callLater(function() { if (!root.editingSettings) mediaScroll.forceActiveFocus() })
   }
 
   // ------------------------------------------------------------------- theme
@@ -1060,7 +1075,7 @@ Panel {
     bar: root.bar
     owner: root
     open: root.opened
-    focusTarget: root.editingSettings ? settingsPane.backTarget : settingsButton
+    focusTarget: root.editingSettings ? settingsPane.backTarget : mediaScroll
     padding: 0
     borderSpec: Border.flat(root.panelOutline, 1)
     contentWidth: popup.fittedContentWidth(Style.space(420))
@@ -1109,6 +1124,9 @@ Panel {
           visible: root.editingSettings
           width: parent.width
           settings: root.settings
+          browserCandidates: root.editingSettings && settingsPane.browserSettingsOpen
+            ? BrowserSetup.candidates(ToplevelManager.toplevels.values || [], root.players, DesktopEntries.applications.values || []) : []
+          onApplyBrowser: function(values) { root.saveBrowserSetup(values) }
           language: root.language
           saving: preferencesSave.running
           error: root.settingsError
@@ -1238,6 +1256,23 @@ Panel {
             }
           }
 
+          MediaAction {
+            id: settingsButton
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.topMargin: Style.space(13)
+            anchors.rightMargin: Style.space(16)
+            implicitWidth: Style.space(32)
+            implicitHeight: Style.space(32)
+            radius: Style.space(7)
+            iconSize: Style.space(16)
+            iconName: "settings"
+            foreground: root.panelMuted
+            tooltipText: root.tr("Settings")
+            keyTarget: mediaScroll
+            onClicked: root.openSettings()
+          }
+
           Column {
             id: headerContent
             anchors.centerIn: parent
@@ -1247,6 +1282,8 @@ Panel {
 
             Row {
               width: parent.width
+              // Keep long metadata below the top-right settings button.
+              height: Math.max(art.height, headerMetadata.implicitHeight + settingsButton.height)
               spacing: Style.space(18)
 
               Rectangle {
@@ -1287,6 +1324,7 @@ Panel {
               }
 
               Column {
+                id: headerMetadata
                 width: parent.width - art.width - parent.spacing
                 anchors.bottom: parent.bottom
                 spacing: Style.space(5)
@@ -1488,20 +1526,6 @@ Panel {
               }
             }
 
-            PanelActionButton {
-              id: settingsButton
-              anchors.right: launchButton.left
-              anchors.rightMargin: Style.space(6)
-              anchors.verticalCenter: parent.verticalCenter
-              size: Style.space(26)
-              iconText: "󰒓"
-              fontFamily: root.fontFamily
-              fontSize: Style.space(16)
-              foreground: root.panelMuted
-              focusable: true
-              tooltipText: root.tr("Settings")
-              onClicked: root.openSettings()
-            }
             PanelActionButton {
               id: launchButton
               anchors.right: parent.right
