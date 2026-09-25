@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "id": "foamy.media",
+  "name": "Foamy Media",
+  "version": "1.0.0",
+  "author": "foamrider",
+  "license": "MIT",
+  "description": "Spotify and the dedicated YouTube web app in the Omarchy bar, with source-aware transport and artwork.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Media",
+    "description": "Now playing from Spotify or the dedicated YouTube web app, with source switching when both play.",
+    "category": "Media",
+    "aliases": [
+      "spotify",
+      "youtube",
+      "music",
+      "media",
+      "now-playing"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "center",
+    "defaults": {
+      "maxLabelWidth": 200,
+      "showArtist": true,
+      "showProgress": true,
+      "hideWhenClosed": true,
+      "scrollAction": "Previous/next track",
+      "accent": "Source color",
+      "leftClick": "Open panel",
+      "artBackground": true,
+      "artIntensity": 55,
+      "language": "system",
+      "animateTitle": true,
+      "showEqualizer": true,
+      "volumeStep": 5,
+      "youtubeEnabled": true,
+      "youtubeBrowser": "vivaldi",
+      "youtubeProfile": "Default",
+      "youtubeAppId": "vivaldi-youtube.com__-Default",
+      "youtubeMprisName": "vivaldi"
+    },
+    "schema": [
+      {
+        "key": "maxLabelWidth",
+        "type": "integer",
+        "label": "Maximum label width (px)",
+        "min": 60,
+        "max": 600,
+        "step": 10,
+        "defaultValue": 200,
+        "description": "Track text wider than this scrolls instead of stretching the bar."
+      },
+      {
+        "key": "showArtist",
+        "type": "boolean",
+        "label": "Show artist next to the title",
+        "defaultValue": true
+      },
+      {
+        "key": "showProgress",
+        "type": "boolean",
+        "label": "Show a progress underline in the bar",
+        "defaultValue": true
+      },
+      {
+        "key": "hideWhenClosed",
+        "type": "boolean",
+        "label": "Hide when playback stops",
+        "defaultValue": true,
+        "description": "Paused tracks remain visible. Turn off to keep a dimmed source icon when supported players are stopped, empty, or closed."
+      },
+      {
+        "key": "leftClick",
+        "type": "enum",
+        "label": "Left click",
+        "options": [
+          "Open panel",
+          "Play/pause"
+        ],
+        "defaultValue": "Open panel",
+        "description": "Which action left click takes. The other of the two lands on right click."
+      },
+      {
+        "key": "scrollAction",
+        "type": "enum",
+        "label": "Mouse wheel over the widget",
+        "options": [
+          "Previous/next track",
+          "Volume",
+          "Nothing"
+        ],
+        "defaultValue": "Previous/next track"
+      },
+      {
+        "key": "accent",
+        "type": "enum",
+        "label": "Accent color",
+        "options": [
+          "Source color",
+          "Album art",
+          "Theme accent",
+          "Bar foreground"
+        ],
+        "defaultValue": "Source color",
+        "description": "Color of the icon, progress underline, and popup controls. Source color is Spotify green or YouTube red; Album art takes the dominant color of the current artwork."
+      },
+      {
+        "key": "artBackground",
+        "type": "boolean",
+        "label": "Album cover behind the panel",
+        "defaultValue": true,
+        "description": "Blurs the current cover into the panel background, tinted and dimmed to whatever keeps the theme's text readable. Needs ImageMagick and curl for the color reading; without them the panel keeps its plain background."
+      },
+      {
+        "key": "artIntensity",
+        "type": "integer",
+        "label": "How much cover shows through (%)",
+        "min": 0,
+        "max": 100,
+        "step": 5,
+        "defaultValue": 55,
+        "description": "A starting point, not a fixed opacity \u2014 bright covers are still covered more heavily than dark ones from wherever this is set."
+      },
+      {
+        "key": "language",
+        "type": "enum",
+        "label": "Language",
+        "options": [
+          "system",
+          "nb",
+          "en"
+        ],
+        "defaultValue": "system"
+      },
+      {
+        "key": "animateTitle",
+        "type": "boolean",
+        "label": "Animate track title",
+        "defaultValue": true
+      },
+      {
+        "key": "showEqualizer",
+        "type": "boolean",
+        "label": "Show animated equalizer",
+        "defaultValue": true
+      },
+      {
+        "key": "volumeStep",
+        "type": "integer",
+        "label": "Volume scroll step (%)",
+        "min": 1,
+        "max": 20,
+        "step": 1,
+        "defaultValue": 5
+      },
+      {
+        "key": "youtubeEnabled",
+        "type": "boolean",
+        "label": "Enable YouTube integration",
+        "defaultValue": true
+      },
+      {
+        "key": "youtubeBrowser",
+        "type": "string",
+        "label": "Browser executable",
+        "defaultValue": "vivaldi"
+      },
+      {
+        "key": "youtubeProfile",
+        "type": "string",
+        "label": "Browser profile",
+        "defaultValue": "Default"
+      },
+      {
+        "key": "youtubeAppId",
+        "type": "string",
+        "label": "YouTube window app ID",
+        "defaultValue": "vivaldi-youtube.com__-Default"
+      },
+      {
+        "key": "youtubeMprisName",
+        "type": "string",
+        "label": "MPRIS browser name",
+        "defaultValue": "vivaldi"
+      }
+    ]
+  }
+}
