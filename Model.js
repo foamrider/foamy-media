@@ -37,8 +37,9 @@ function isYoutubePageUrl(value) {
 }
 
 function youtubeWindowTitleMatches(player, windowTitle) {
-  var title = String(player && player.trackTitle || "").trim()
-  var toplevelTitle = String(windowTitle || "").trim()
+  // Match canonically equivalent accents from browser titles and MPRIS metadata.
+  var title = String(player && player.trackTitle || "").trim().normalize("NFC")
+  var toplevelTitle = String(windowTitle || "").trim().normalize("NFC")
   return title !== "" && toplevelTitle === title + " - YouTube"
 }
 

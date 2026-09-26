@@ -76,6 +76,16 @@ const M = require("../Model.js")
   assert.ok(!M.isYoutube(youtubeWithoutUrl, "A YouTube video - Vimeo"))
   assert.ok(!M.isYoutube(normalVivaldiMedia, "A YouTube video - YouTube"))
 
+  // Browser window titles and MPRIS metadata can encode the same accent differently.
+  const composedTitle = "ROS\u00c9 & Bruno Mars - APT. (Official Music Video)"
+  const decomposedTitle = "ROSE\u0301 & Bruno Mars - APT. (Official Music Video)"
+  const accentedYoutube = Object.assign({}, youtubeWithoutUrl, { trackTitle: composedTitle })
+  assert.strictEqual(M.findYoutube([accentedYoutube], decomposedTitle + " - YouTube"), accentedYoutube)
+  assert.ok(M.isYoutube(Object.assign({}, accentedYoutube, { trackTitle: decomposedTitle }), composedTitle + " - YouTube"))
+  assert.ok(!M.isYoutube(accentedYoutube, "ROSE & Bruno Mars - APT. (Official Music Video) - YouTube"))
+  assert.ok(!M.isYoutube(accentedYoutube, decomposedTitle + " - Vimeo"))
+  assert.ok(!M.isYoutube(Object.assign({}, accentedYoutube, { metadata: normalVivaldiMedia.metadata }), decomposedTitle + " - YouTube"))
+
   assert.strictEqual(M.sourceKind(desktop), "spotify")
   assert.strictEqual(M.sourceKind(youtube), "youtube")
   assert.strictEqual(M.sourceKind(normalVivaldiMedia), "")
