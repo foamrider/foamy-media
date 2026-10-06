@@ -116,7 +116,7 @@ Column {
             implicitHeight: Style.space(36)
             borderSpec: activeFocus ? Border.flat(Color.accent, 1) : Border.none()
             color: "transparent"
-            radius: Style.space(7)
+            radius: Style.cornerRadius * 2
             titleSize: Style.space(13)
             fontFamily: "sans-serif"
             label: fieldRow.shortLabel
@@ -179,7 +179,7 @@ Column {
               padding: Style.space(6)
               Accessible.name: fieldRow.shortLabel
               background: Rectangle {
-                radius: Style.space(7)
+                radius: Style.cornerRadius * 2
                 color: Qt.alpha(Color.popups.text, 0.055)
                 border.width: numberInput.activeFocus ? 1 : 0
                 border.color: Color.accent
@@ -218,7 +218,7 @@ Column {
               padding: Style.space(8)
               Accessible.name: fieldRow.shortLabel
               background: Rectangle {
-                radius: Style.space(7)
+                radius: Style.cornerRadius * 2
                 color: "transparent"
                 border.width: 1
                 border.color: valueInput.activeFocus ? Color.accent : Qt.alpha(Color.popups.text, 0.22)

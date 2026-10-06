@@ -38,7 +38,7 @@ Column {
     id: header
     width: parent.width
     height: headerText.implicitHeight + Style.space(18)
-    radius: Style.space(6)
+    radius: Style.cornerRadius * 2
     color: headerMouse.containsMouse || activeFocus ? Qt.alpha(Color.popups.text, 0.08) : "transparent"
     border.width: activeFocus ? 1 : 0
     border.color: Color.accent
@@ -148,7 +148,7 @@ Column {
           readonly property string description: BrowserSetup.description(modelData.id, modelData.values.youtubeProfile)
           width: windowColumn.width
           height: Style.space(54)
-          radius: Style.space(6)
+          radius: Style.cornerRadius * 2
           color: windowMouse.containsMouse || activeFocus || selected ? Qt.alpha(Color.popups.text, 0.08) : "transparent"
           border.width: activeFocus ? 1 : 0
           border.color: Color.accent

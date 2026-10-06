@@ -448,7 +448,7 @@ Panel {
 
     Rectangle {
       anchors.fill: parent
-      radius: Style.space(6)
+      radius: Style.cornerRadius * 2
       color: tabMouse.containsMouse || tab.activeFocus ? root.panelFill : "transparent"
 
       Behavior on color { ColorAnimation { duration: 120 } }
@@ -1050,7 +1050,7 @@ Panel {
     height: Style.space(36)
     horizontalPadding: 0
     verticalPadding: 0
-    radius: Style.space(7)
+    radius: Style.cornerRadius * 2
     fontFamily: root.fontFamily
     iconSize: Style.space(18)
     foreground: root.foreground
@@ -1148,7 +1148,7 @@ Panel {
             anchors.fill: parent
             visible: false
             layer.enabled: true
-            Rectangle { anchors.fill: parent; radius: Style.space(13); color: "white" }
+            Rectangle { anchors.fill: parent; radius: Math.max(0, popup.cornerRadius - Border.top(popup.borderSpec)); color: "white" }
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: parent.height / 2; color: "white" }
           }
 
@@ -1264,7 +1264,7 @@ Panel {
             anchors.rightMargin: Style.space(16)
             implicitWidth: Style.space(32)
             implicitHeight: Style.space(32)
-            radius: Style.space(7)
+            radius: Style.cornerRadius * 2
             iconSize: Style.space(16)
             iconName: "settings"
             foreground: root.panelMuted
@@ -1290,7 +1290,7 @@ Panel {
                 id: art
                 width: Math.min(Style.space(root.compactPanel ? 96 : 128), parent.width * 0.34)
                 height: width
-                radius: Style.space(8)
+                radius: Style.cornerRadius * 2
                 color: root.panelFill
                 layer.enabled: true
                 layer.effect: MultiEffect { maskEnabled: true; maskSource: artworkMask }
@@ -1527,6 +1527,8 @@ Panel {
             }
 
             PanelActionButton {
+
+              radius: Style.cornerRadius * 2
               id: launchButton
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
