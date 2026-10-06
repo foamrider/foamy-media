@@ -26,6 +26,8 @@ YouTube web app. Start a video first if it is not detected. Check the browser
 and profile; ordinary browser tabs are not automatically detected.
 The widget hides when no supported player has a track by default.
 
+Remote artwork waits briefly for the network connection to settle and retries failed downloads up to three times with increasing delays. It resumes after reconnection. Local artwork and playback controls remain available offline.
+
 ## Remove
 
 ```sh

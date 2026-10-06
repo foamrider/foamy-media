@@ -3,6 +3,7 @@ import QtQuick.Effects
 import QtQuick.Controls as Controls
 import Quickshell
 import Quickshell.Io
+import Quickshell.Networking
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
 import qs.Ui
@@ -555,7 +556,29 @@ Panel {
     return Qt.rgba(mixed.r, mixed.g, mixed.b, scrimStrength)
   }
 
-  onArtUrlChanged: artProbeDelay.restart()
+  readonly property bool networkConnected: Networking.connectivity === NetworkConnectivity.Full
+    || Networking.connectivity === NetworkConnectivity.Limited
+  property bool networkSettled: false
+  readonly property bool networkReady: networkConnected && networkSettled
+  readonly property bool remoteArt: /^https?:\/\//i.test(root.artUrl)
+  property int artRetries: 0
+  onNetworkConnectedChanged: networkSettled = false
+  onNetworkReadyChanged: {
+    artRetry.stop()
+    artRetries = 0
+    if (networkReady && remoteArt) artProbeDelay.restart()
+  }
+  Timer {
+    // Local artwork remains available while DNS and routes settle.
+    interval: 2000
+    running: root.networkConnected && !root.networkSettled
+    onTriggered: root.networkSettled = true
+  }
+  onArtUrlChanged: {
+    artRetry.stop()
+    artRetries = 0
+    artProbeDelay.restart()
+  }
   onArtWantedChanged: if (artWanted) probeArt(false)
   Component.onCompleted: {
     Qt.callLater(function() { root.chooseInitialSource() })
@@ -571,9 +594,19 @@ Panel {
       return
     }
     if (!force && root.artProbed === root.artUrl) return
+    if (remoteArt && !networkReady) {
+      if (root.artProbed !== root.artUrl) root.forgetArt()
+      return
+    }
+    artRetry.stop()
 
-    // A skipped-through queue can outrun the probe; the last URL wins.
-    if (artProbe.running) artProbe.running = false
+    // Wait for the cancelled process to exit before assigning a new request URL.
+    if (artProbe.running) {
+      if (artProbe.pending === root.artUrl) return
+      artProbe.running = false
+      artProbeDelay.restart()
+      return
+    }
     artProbe.pending = root.artUrl
     artProbe.command = ["/bin/sh", "-c", Model.artProbeScript(), "sh", target]
     artProbe.running = true
@@ -599,6 +632,8 @@ Panel {
     }
 
     root.artProbeError = ""
+    root.artRetries = 0
+    artRetry.stop()
     root.artFile = probe.file
     root.artDominant = probe.dominant
     root.artMean = probe.mean
@@ -614,6 +649,11 @@ Panel {
     onTriggered: root.probeArt(false)
   }
 
+  Timer {
+    id: artRetry
+    onTriggered: root.probeArt(false)
+  }
+
   Process {
     id: artProbe
     property string pending: ""
@@ -626,7 +666,15 @@ Panel {
     onExited: function(exitCode) {
       // The collector still fires on failure, with nothing in it; this is
       // only here so the reason survives for `artDebug`.
+      if (pending !== root.artUrl) return
       if (exitCode !== 0) root.artProbeError = "probe exited " + exitCode
+      // Allow the stdout collector to apply a successful result before retrying.
+      Qt.callLater(function() {
+        if (artProbe.pending !== root.artUrl || root.artProbed === root.artUrl
+            || !root.remoteArt || !root.networkReady || root.artRetries >= 3) return
+        artRetry.interval = 2500 * Math.pow(2, root.artRetries++)
+        artRetry.restart()
+      })
     }
   }
 
