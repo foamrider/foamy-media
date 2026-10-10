@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
 import QtQuick.Controls as Controls
@@ -14,6 +15,33 @@ import "BrowserSetup.js" as BrowserSetup
 
 Panel {
   id: root
+  readonly property SettingsPane settingsPane: settingsLoader.item
+  function open() { preparePopup(); controller.show() }
+
+  // Keep the window and shaders warm; release the heavier sections after the fade.
+  property bool popupContentActive: false
+  property bool settingsContentActive: false
+  function preparePopup() { popupUnload.stop(); popupContentActive = true }
+  Connections {
+    target: root
+    function onEditingSettingsChanged() {
+      if (root.editingSettings) root.settingsContentActive = true
+    }
+    function onOpenedChanged() {
+      if (root.opened) root.preparePopup()
+      else popupUnload.restart()
+    }
+  }
+  Timer {
+    id: popupUnload
+    interval: 1000
+    onTriggered: {
+      if (!root.opened && !popup.visible) {
+        root.popupContentActive = false
+        root.settingsContentActive = false
+      }
+    }
+  }
 
   moduleName: "foamy.media"
   ipcTarget: "foamy.media"
@@ -47,7 +75,7 @@ Panel {
     root.editingSettings = true
     root.open()
     mediaScroll.contentY = 0
-    Qt.callLater(function() { settingsPane.focusBack() })
+    Qt.callLater(function() { if (root.opened && settingsPane) settingsPane.focusBack() })
   }
   function closeSettings() {
     root.editingSettings = false
@@ -1123,7 +1151,7 @@ Panel {
     bar: root.bar
     owner: root
     open: root.opened
-    focusTarget: root.editingSettings ? settingsPane.backTarget : mediaScroll
+    focusTarget: root.editingSettings ? (settingsPane ? settingsPane.backTarget : null) : mediaScroll
     padding: 0
     borderSpec: Border.flat(root.panelOutline, 1)
     contentWidth: popup.fittedContentWidth(Style.space(420))
@@ -1167,20 +1195,36 @@ Panel {
         id: column
         width: parent.width
 
-        SettingsPane {
-          id: settingsPane
-          visible: root.editingSettings
+        Loader {
+          id: settingsLoader
+
           width: parent.width
-          settings: root.settings
-          browserCandidates: root.editingSettings && settingsPane.browserSettingsOpen
-            ? BrowserSetup.candidates(ToplevelManager.toplevels.values || [], root.players, DesktopEntries.applications.values || []) : []
-          onApplyBrowser: function(values) { root.saveBrowserSetup(values) }
-          language: root.language
-          saving: preferencesSave.running
-          error: root.settingsError
-          onClearError: root.settingsError = ""
-          onSave: function(key, value) { root.savePreference(key, value) }
-          onBack: root.closeSettings()
+          active: root.settingsContentActive
+          visible: root.editingSettings
+
+          sourceComponent: Component {
+            SettingsPane {
+              id: settingsPane
+
+              visible: root.editingSettings
+              width: parent.width
+              settings: root.settings
+              browserCandidates: root.editingSettings && settingsPane.browserSettingsOpen ? BrowserSetup.candidates(ToplevelManager.toplevels.values || [], root.players, DesktopEntries.applications.values || []) : []
+              onApplyBrowser: function(values) {
+                root.saveBrowserSetup(values);
+              }
+              language: root.language
+              saving: preferencesSave.running
+              error: root.settingsError
+              onClearError: root.settingsError = ""
+              onSave: function(key, value) {
+                root.savePreference(key, value);
+              }
+              onBack: root.closeSettings()
+            }
+
+          }
+
         }
 
         Item {
@@ -1345,11 +1389,14 @@ Panel {
 
                 Image {
                   id: coverImage
+                  // Decode only the physical pixels painted by the thumbnail.
+                  sourceSize.width: Math.max(1, Math.ceil(width * Screen.devicePixelRatio))
+                  sourceSize.height: Math.max(1, Math.ceil(height * Screen.devicePixelRatio))
                   anchors.fill: parent
                   fillMode: Image.PreserveAspectCrop
                   asynchronous: true
                   cache: true
-                  source: root.artSourceUrl
+                  source: root.popupContentActive ? root.artSourceUrl : ""
                   visible: status === Image.Ready
                 }
                 MediaLabel {
