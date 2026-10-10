@@ -8,7 +8,9 @@ Spotify and YouTube playback controls. Also supports spotifyd and spotify-player
 
 Requires Omarchy Quattro with MPRIS support and a supported media player.
 Artwork processing uses `curl` and ImageMagick (`magick`); browser integration
-uses Hyprland and the configured browser.
+uses Hyprland and the configured browser. Settings paste uses the existing
+Omarchy tools `wl-paste`, `jq`, and `timeout`, with a 16 KiB limit and a two-second
+deadline. Clipboard failures leave the field unchanged and show an error.
 
 ```sh
 omarchy plugin add https://github.com/foamrider/foamy-media.git --enable

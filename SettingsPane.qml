@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls as Controls
 import QtQuick.Layouts
 import qs.Ui
 import qs.Commons
@@ -203,12 +202,11 @@ Column {
                   text: fieldRow.shortLabel
                   Layout.fillWidth: true
                 }
-                Controls.TextField {
+                SafeTextField {
                   id: numberInput
                   Layout.preferredWidth: Style.space(72)
                   implicitHeight: Style.space(32)
                   text: String(fieldRow.current)
-                  selectByMouse: true
                   horizontalAlignment: Text.AlignHCenter
                   color: Color.popups.text
                   font.family: "sans-serif"
@@ -218,9 +216,11 @@ Column {
                   background: Rectangle {
                     radius: Style.cornerRadius * 2
                     color: Qt.alpha(Color.popups.text, 0.055)
-                    border.width: numberInput.activeFocus ? 1 : 0
+                    border.width: numberInput.inputActiveFocus ? 1 : 0
                     border.color: Color.accent
                   }
+                  translate: root.tr
+                  onPasteErrorChanged: if (pasteError !== "") root.error = pasteError
                   onTextEdited: root.clearError()
                   onEditingFinished: {
                     if (!visible) return
@@ -229,7 +229,7 @@ Column {
                   Keys.onEscapePressed: { text = String(fieldRow.current); root.back() }
                   HoverHandler { id: numberHover }
                   PanelToolTip {
-                    visible: numberHover.hovered || numberInput.activeFocus
+                    visible: numberHover.hovered || numberInput.inputActiveFocus
                     text: String(fieldRow.spec.min || 0) + "–" + String(fieldRow.spec.max || 0)
                     fontFamily: "sans-serif"
                   }
@@ -250,12 +250,11 @@ Column {
                   text: fieldRow.shortLabel
                   Layout.preferredWidth: Style.space(80)
                 }
-                Controls.TextField {
+                SafeTextField {
                   id: valueInput
                   Layout.fillWidth: true
                   implicitHeight: Style.space(34)
                   text: String(fieldRow.current)
-                  selectByMouse: true
                   color: Color.popups.text
                   font.family: "sans-serif"
                   font.pixelSize: Style.space(12)
@@ -265,8 +264,10 @@ Column {
                     radius: Style.cornerRadius * 2
                     color: "transparent"
                     border.width: 1
-                    border.color: valueInput.activeFocus ? Color.accent : Qt.alpha(Color.popups.text, 0.22)
+                    border.color: valueInput.inputActiveFocus ? Color.accent : Qt.alpha(Color.popups.text, 0.22)
                   }
+                  translate: root.tr
+                  onPasteErrorChanged: if (pasteError !== "") root.error = pasteError
                   onTextEdited: root.clearError()
                   onEditingFinished: {
                     if (!visible) return
