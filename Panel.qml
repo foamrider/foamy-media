@@ -15,6 +15,8 @@ import "BrowserSetup.js" as BrowserSetup
 
 Panel {
   id: root
+  LayoutMirroring.enabled: FoamyI18n.rightToLeft
+  LayoutMirroring.childrenInherit: true
   readonly property SettingsPane settingsPane: settingsLoader.item
   function open() { preparePopup(); controller.show() }
 
@@ -1467,6 +1469,9 @@ Panel {
             width: parent.width
             spacing: Style.space(1)
             visible: root.live && root.trackLength > 0
+            // Playback time and transport retain their conventional physical direction.
+            LayoutMirroring.enabled: false
+            LayoutMirroring.childrenInherit: true
             PanelSlider {
               id: seekSlider
               width: parent.width
@@ -1504,6 +1509,8 @@ Panel {
 
           Row {
             id: transportControls
+            LayoutMirroring.enabled: false
+            LayoutMirroring.childrenInherit: true
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: Math.max(Style.space(8), (controlBody.width - Style.space(216)) / 4)
             visible: root.live
@@ -1567,6 +1574,9 @@ Panel {
             }
             PanelSlider {
               id: volumeSlider
+              // The host slider uses absolute pointer coordinates and a left-origin fill.
+              LayoutMirroring.enabled: false
+              LayoutMirroring.childrenInherit: true
               width: parent.width - Style.space(71)
               anchors.verticalCenter: parent.verticalCenter
               bar: root.bar

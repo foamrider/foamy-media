@@ -52,3 +52,5 @@ Provided **as is**, without warranty or guaranteed support. Use at your own risk
 Language follows **Omarchy → Setup → Language** on Omarchy 4.5. Plugin language overrides are no longer used. Omarchy 4.0 displays the plugin in English. Missing translations fall back to English.
 
 Translation checks: `python3 test/i18n-runtime.py` uses the installed shell. Set `OMARCHY_PATH` to a 4.5 source tree to check live language switching against that version.
+
+RTL languages mirror the popup and settings navigation. Playback transport, timelines, and volume tracks keep their conventional direction. Run `python3 test/rtl.py` to check mirrored layouts, icons, and browser-picker arrow keys in a disposable fixture.

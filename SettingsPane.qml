@@ -7,6 +7,8 @@ import "Preferences.js" as Preferences
 
 Column {
   id: root
+  LayoutMirroring.enabled: FoamyI18n.rightToLeft
+  LayoutMirroring.childrenInherit: true
   required property var settings
   required property string language
   property var browserCandidates: []
@@ -76,7 +78,7 @@ Column {
       required property var modelData
       width: root.width - root.padding * 2
       spacing: Style.space(8)
-      SettingLabel { text: root.tr(group.modelData.title); font.bold: true }
+      SettingLabel { width: parent.width; text: root.tr(group.modelData.title); font.bold: true; horizontalAlignment: Text.AlignLeft }
       // Instantiate each field's applicable control instead of all hidden control types.
       Repeater {
         model: group.modelData.keys
