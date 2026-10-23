@@ -7,6 +7,8 @@ import "Preferences.js" as Preferences
 
 Column {
   id: root
+  LayoutMirroring.enabled: FoamyI18n.rightToLeft
+  LayoutMirroring.childrenInherit: true
   required property var settings
   required property string language
   property var browserCandidates: []
@@ -22,7 +24,7 @@ Column {
   signal save(string key, var value)
   signal back()
   signal clearError()
-  function tr(text) { return Preferences.text(text, language) }
+  function tr(text) { return FoamyI18n.t(text) }
   function focusBack() { backButton.forceActiveFocus() }
   spacing: Style.space(12)
   padding: Style.space(20)
@@ -63,16 +65,7 @@ Column {
     text: root.error
     Accessible.role: Accessible.AlertMessage
   }
-  MediaDropdown {
-    width: parent.width - root.padding * 2
-    fontFamily: "sans-serif"
-    label: root.tr("Language")
-    value: Preferences.value(root.settings, "language")
-    options: [{value:"system", label:root.tr("Default (system language)")},
-      {value:"nb", label:"Norsk bokmål"}, {value:"en", label:"English"}]
-    enabled: !root.saving
-    onChanged: function(value) { root.save("language", value) }
-  }
+
 
   Repeater {
     model: [
@@ -85,7 +78,7 @@ Column {
       required property var modelData
       width: root.width - root.padding * 2
       spacing: Style.space(8)
-      SettingLabel { text: root.tr(group.modelData.title); font.bold: true }
+      SettingLabel { width: parent.width; text: root.tr(group.modelData.title); font.bold: true; horizontalAlignment: Text.AlignLeft }
       // Instantiate each field's applicable control instead of all hidden control types.
       Repeater {
         model: group.modelData.keys

@@ -15,6 +15,8 @@ import "BrowserSetup.js" as BrowserSetup
 
 Panel {
   id: root
+  LayoutMirroring.enabled: FoamyI18n.rightToLeft
+  LayoutMirroring.childrenInherit: true
   readonly property SettingsPane settingsPane: settingsLoader.item
   function open() { preparePopup(); controller.show() }
 
@@ -51,8 +53,8 @@ Panel {
 
   // ---------------------------------------------------------------- settings
   function preference(key) { return Preferences.value(root.settings, key) }
-  readonly property string language: Preferences.language(preference("language"), Qt.locale().name)
-  function tr(value) { return Preferences.text(value, language) }
+  readonly property string language: FoamyI18n.language
+  function tr(value) { return FoamyI18n.t(value) }
   readonly property int maxLabelWidth: Style.space(preference("maxLabelWidth"))
   readonly property bool showArtist: preference("showArtist")
   readonly property bool showProgress: preference("showProgress")
@@ -870,7 +872,8 @@ Panel {
         font.family: root.fontFamily
         font.pixelSize: Style.font.body
         anchors.verticalCenter: parent.verticalCenter
-        x: -panOffset
+        // Text direction determines which end contains the beginning of the title.
+        x: horizontalAlignment === Text.AlignRight ? panOffset-overflow : -panOffset
 
         property real panOffset: 0
         readonly property real overflow: Math.max(0, implicitWidth - labelClip.width)
@@ -1467,6 +1470,9 @@ Panel {
             width: parent.width
             spacing: Style.space(1)
             visible: root.live && root.trackLength > 0
+            // Playback time and transport retain their conventional physical direction.
+            LayoutMirroring.enabled: false
+            LayoutMirroring.childrenInherit: true
             PanelSlider {
               id: seekSlider
               width: parent.width
@@ -1504,6 +1510,8 @@ Panel {
 
           Row {
             id: transportControls
+            LayoutMirroring.enabled: false
+            LayoutMirroring.childrenInherit: true
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: Math.max(Style.space(8), (controlBody.width - Style.space(216)) / 4)
             visible: root.live
@@ -1567,6 +1575,9 @@ Panel {
             }
             PanelSlider {
               id: volumeSlider
+              // The host slider uses absolute pointer coordinates and a left-origin fill.
+              LayoutMirroring.enabled: false
+              LayoutMirroring.childrenInherit: true
               width: parent.width - Style.space(71)
               anchors.verticalCenter: parent.verticalCenter
               bar: root.bar

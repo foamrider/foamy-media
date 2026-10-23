@@ -5,6 +5,8 @@ import "BrowserSetup.js" as BrowserSetup
 
 Column {
   id: root
+  LayoutMirroring.enabled: FoamyI18n.rightToLeft
+  LayoutMirroring.childrenInherit: true
   required property var candidates
   required property var settings
   required property string language
@@ -15,7 +17,7 @@ Column {
   readonly property string selectedLabel: settings.youtubeAppId
     ? BrowserSetup.description(settings.youtubeAppId, Preferences.value(settings, "youtubeProfile")) : ""
   signal apply(var values)
-  function tr(text) { return Preferences.text(text, language) }
+  function tr(text) { return FoamyI18n.t(text) }
   function matches(values) {
     return Object.keys(values).every(function(key) { return Preferences.value(root.settings, key) === values[key] })
   }
@@ -36,6 +38,7 @@ Column {
 
   Rectangle {
     id: header
+    objectName: "browserPickerHeader"
     width: parent.width
     height: headerText.implicitHeight + Style.space(18)
     radius: Style.cornerRadius * 2
@@ -49,6 +52,14 @@ Column {
     Accessible.checked: root.expanded
     Accessible.onPressAction: if (!root.saving) root.expanded = !root.expanded
     function toggle() { if (!root.saving) root.expanded = !root.expanded }
+    // Expand toward the reading direction; collapse toward the leading edge.
+    Keys.onPressed: function(event) {
+      if (event.key === (FoamyI18n.rightToLeft ? Qt.Key_Left : Qt.Key_Right) && !root.saving) {
+        root.expanded = true; root.focusWindow(0); event.accepted = true
+      } else if (event.key === (FoamyI18n.rightToLeft ? Qt.Key_Right : Qt.Key_Left) && root.expanded) {
+        root.collapse(); event.accepted = true
+      }
+    }
     Keys.onReturnPressed: toggle()
     Keys.onEnterPressed: toggle()
     Keys.onSpacePressed: toggle()
@@ -99,7 +110,7 @@ Column {
       height: width
       color: root.secondaryForeground
       name: "chevron-right"
-      rotation: root.expanded ? 90 : 0
+      rotation: root.expanded ? (FoamyI18n.rightToLeft ? -90 : 90) : 0
       Behavior on rotation { NumberAnimation { duration: 160; easing.type: Easing.InOutQuad } }
     }
     MouseArea {
@@ -121,8 +132,10 @@ Column {
     Behavior on height { NumberAnimation { duration: 160; easing.type: Easing.InOutQuad } }
     Column {
       id: windowColumn
-      x: Style.space(20)
-      width: parent.width - x
+      objectName: "browserWindowList"
+      anchors.left: parent.left
+      anchors.leftMargin: Style.space(20)
+      anchors.right: parent.right
       spacing: Style.space(2)
       topPadding: Style.space(4)
       bottomPadding: Style.space(5)
@@ -156,6 +169,11 @@ Column {
           Accessible.role: Accessible.Button
           Accessible.name: modelData.title + ", " + description
           Accessible.onPressAction: root.choose(modelData)
+          Keys.onPressed: function(event) {
+            if (event.key === (FoamyI18n.rightToLeft ? Qt.Key_Right : Qt.Key_Left)) {
+              root.collapse(); event.accepted = true
+            }
+          }
           Keys.onReturnPressed: root.choose(modelData)
           Keys.onEnterPressed: root.choose(modelData)
           Keys.onSpacePressed: root.choose(modelData)

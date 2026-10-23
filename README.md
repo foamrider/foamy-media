@@ -21,7 +21,7 @@ omarchy plugin add https://github.com/foamrider/foamy-media.git --enable
 - Start playback, then left-click the widget to open the player.
 - Right-click to play/pause; middle-click to skip to the next track.
 - Use the panel for seeking, volume, shuffle, repeat, and source selection.
-- Open the cog to change controls, appearance, language, and browser settings.
+- Open the cog to change controls, appearance, and browser settings.
 
 For YouTube, open **Browser settings → Use an open window** and select your
 YouTube web app. Start a video first if it is not detected. Check the browser
@@ -48,3 +48,9 @@ Licensed under [MIT](LICENSE). Based on [Spotmarchy](LICENSE-SPOTMARCHY), with
 [Omarchy](LICENSE-OMARCHY) and [Lucide](LICENSE-LUCIDE) components.
 
 Provided **as is**, without warranty or guaranteed support. Use at your own risk.
+
+Language follows **Omarchy → Setup → Language** on Omarchy 4.5. Plugin language overrides are no longer used. Omarchy 4.0 displays the plugin in English. Missing translations fall back to English.
+
+Translation checks: `python3 test/i18n-runtime.py` uses the installed shell. Set `OMARCHY_PATH` to a 4.5 source tree to check live language switching against that version.
+
+RTL languages mirror the popup and settings navigation. Playback transport, timelines, and volume tracks keep their conventional direction. Run `python3 test/rtl.py` to check mirrored layouts, icons, and browser-picker arrow keys in a disposable fixture.

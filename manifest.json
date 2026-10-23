@@ -35,7 +35,6 @@
       "leftClick": "Open panel",
       "artBackground": true,
       "artIntensity": 55,
-      "language": "system",
       "animateTitle": true,
       "showEqualizer": true,
       "volumeStep": 5,
@@ -125,18 +124,7 @@
         "max": 100,
         "step": 5,
         "defaultValue": 55,
-        "description": "A starting point, not a fixed opacity \u2014 bright covers are still covered more heavily than dark ones from wherever this is set."
-      },
-      {
-        "key": "language",
-        "type": "enum",
-        "label": "Language",
-        "options": [
-          "system",
-          "nb",
-          "en"
-        ],
-        "defaultValue": "system"
+        "description": "A starting point, not a fixed opacity — bright covers are still covered more heavily than dark ones from wherever this is set."
       },
       {
         "key": "animateTitle",

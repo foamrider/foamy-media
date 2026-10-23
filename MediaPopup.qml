@@ -406,6 +406,9 @@ PanelWindow {
 
     Item {
       id: contentHolder
+      // A popup is a separate window and does not inherit the bar item direction.
+      LayoutMirroring.enabled: FoamyI18n.rightToLeft
+      LayoutMirroring.childrenInherit: true
       anchors.fill: parent
       anchors.topMargin: card.contentTopInset
       anchors.rightMargin: card.contentRightInset
