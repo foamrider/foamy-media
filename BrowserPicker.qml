@@ -132,8 +132,10 @@ Column {
     Behavior on height { NumberAnimation { duration: 160; easing.type: Easing.InOutQuad } }
     Column {
       id: windowColumn
-      x: Style.space(20)
-      width: parent.width - x
+      objectName: "browserWindowList"
+      anchors.left: parent.left
+      anchors.leftMargin: Style.space(20)
+      anchors.right: parent.right
       spacing: Style.space(2)
       topPadding: Style.space(4)
       bottomPadding: Style.space(5)

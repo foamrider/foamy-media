@@ -872,7 +872,8 @@ Panel {
         font.family: root.fontFamily
         font.pixelSize: Style.font.body
         anchors.verticalCenter: parent.verticalCenter
-        x: -panOffset
+        // Text direction determines which end contains the beginning of the title.
+        x: horizontalAlignment === Text.AlignRight ? panOffset-overflow : -panOffset
 
         property real panOffset: 0
         readonly property real overflow: Math.max(0, implicitWidth - labelClip.width)

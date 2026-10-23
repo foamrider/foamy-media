@@ -23,7 +23,7 @@ for name in ['Commons', 'Ui']:
     (app / name).symlink_to('/usr/share/omarchy/shell/' + name)
 runtime = base / 'runtime'
 runtime.mkdir(mode=0o700)
-(app / 'shell.qml').write_text('''import QtQuick
+qml = '''import QtQuick
 import QtTest
 import Quickshell
 import "plugin" as Plugin
@@ -42,6 +42,8 @@ ShellRoot {
     visible: true; implicitWidth: 600; implicitHeight: 1800; color: "#24273a"
     Plugin.SettingsPane { id: pane; width: 560; settings: ({}); language: Plugin.FoamyI18n.language }
     Plugin.BrowserPicker { id: picker; y: 1350; width: 560; settings: ({}); candidates: []; language: Plugin.FoamyI18n.language }
+    Plugin.MediaDropdown { id: dropdown; y: 1550; width: 300; label: "Output"; options: ["First", "Second"]; value: "First" }
+    Text { id: title; text: "مرحبا بالعالم"; property real panOffset: 0; property real overflow: 80; x: MARQUEE_BINDING }
     Plugin.MediaIcon { id: backIcon; name: "arrow-left"; width: 24; height: 24; y: 1500 }
     TestCase {
       name: "MediaDirection"
@@ -68,17 +70,31 @@ ShellRoot {
             verify(direction ? pane.backTarget.x > width / 2 : pane.backTarget.x < width / 2);
             capture((direction ? "rtl-" : "ltr-") + width);
           }
+          var list = findChild(picker, "browserWindowList");
+          compare(list.x, direction ? 0 : 20);
+          mouseClick(dropdown, dropdown.width / 2, dropdown.height - 10); wait(100);
+          var options = findChild(dropdown, "dropdownOptions");
+          verify(options !== null); compare(options.LayoutMirroring.enabled, !!direction);
+          keyClick(Qt.Key_Escape);
           header.forceActiveFocus(); tryCompare(header, "activeFocus", true);
           keyClick(direction ? Qt.Key_Left : Qt.Key_Right); compare(picker.expanded, true);
           keyClick(direction ? Qt.Key_Right : Qt.Key_Left); compare(picker.expanded, false);
         }
+        title.text = "مرحبا بالعالم"; title.panOffset = 0; wait(50); compare(title.x, -80);
+        title.panOffset = 80; compare(title.x, 0);
+        title.text = "A long English title"; title.panOffset = 0; wait(50); compare(title.x, 0);
+        title.panOffset = 80; compare(title.x, -80);
         translator.rightToLeft = false; wait(100);
         compare(pane.LayoutMirroring.enabled, false);
       }
     }
   }
 }
-''')
+'''
+# Exercise the production marquee binding without starting media discovery.
+expression = re.search(r'x: (horizontalAlignment[^\n]+)', (source / 'Panel.qml').read_text()).group(1)
+qml = qml.replace('MARQUEE_BINDING', expression)
+(app / 'shell.qml').write_text(qml)
 env = dict(os.environ, XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM='offscreen',
            QT_QPA_PLATFORMTHEME='generic', QT_QUICK_BACKEND='software')
 for key in ['WAYLAND_DISPLAY', 'DISPLAY', 'HYPRLAND_INSTANCE_SIGNATURE']:

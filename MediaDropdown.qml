@@ -177,6 +177,9 @@ Item {
 
         contentItem: ListView {
           id: optionList
+          objectName: "dropdownOptions"
+          LayoutMirroring.enabled: FoamyI18n.rightToLeft
+          LayoutMirroring.childrenInherit: true
           spacing: Style.spacing.labelGap
 
           Keys.priority: Keys.BeforeItem
@@ -222,6 +225,7 @@ Item {
               : "transparent"
 
             Text {
+              horizontalAlignment: Text.AlignLeft
               textFormat: Text.PlainText
               anchors.left: parent.left
               anchors.right: parent.right
