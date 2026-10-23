@@ -1,3 +1,4 @@
+const I18n = require('./i18n.cjs');
 const assert = require('node:assert/strict')
 const P = require('../Preferences.js')
 const M = require('../Model.js')
@@ -7,13 +8,8 @@ for (const f of P.fields) {
   assert.equal(P.value({}, f.key), manifest.barWidget.defaults[f.key])
   assert.deepEqual(f, manifest.barWidget.schema.find(s => s.key === f.key))
   assert.equal(P.valid(f.key, null), false)
-  assert.ok(P.norwegian[f.label] || f.key === 'leftClick', f.label)
+  assert.ok(I18n.no[f.label] || f.key === 'leftClick', f.label)
 }
-for (const locale of ['nb_NO','nn-NO','no','NB_no']) assert.equal(P.language('system',locale),'nb')
-for (const locale of ['en_US','de_DE','',undefined]) assert.equal(P.language('system',locale),'en')
-assert.equal(P.language('en','nb_NO'),'en')
-assert.equal(P.language('nb','en_US'),'nb')
-assert.equal(P.language('invalid','nb_NO'),'nb')
 assert.equal(P.valid('language','de'),false)
 for (const value of [-1,0,21,NaN,Infinity,'5',1.5]) assert.equal(P.valid('volumeStep',value),false)
 for (const value of [1,5,20]) assert.equal(P.valid('volumeStep',value),true)

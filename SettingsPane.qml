@@ -22,7 +22,7 @@ Column {
   signal save(string key, var value)
   signal back()
   signal clearError()
-  function tr(text) { return Preferences.text(text, language) }
+  function tr(text) { return FoamyI18n.t(text) }
   function focusBack() { backButton.forceActiveFocus() }
   spacing: Style.space(12)
   padding: Style.space(20)
@@ -63,16 +63,7 @@ Column {
     text: root.error
     Accessible.role: Accessible.AlertMessage
   }
-  MediaDropdown {
-    width: parent.width - root.padding * 2
-    fontFamily: "sans-serif"
-    label: root.tr("Language")
-    value: Preferences.value(root.settings, "language")
-    options: [{value:"system", label:root.tr("Default (system language)")},
-      {value:"nb", label:"Norsk bokmål"}, {value:"en", label:"English"}]
-    enabled: !root.saving
-    onChanged: function(value) { root.save("language", value) }
-  }
+
 
   Repeater {
     model: [

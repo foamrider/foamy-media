@@ -15,7 +15,7 @@ Column {
   readonly property string selectedLabel: settings.youtubeAppId
     ? BrowserSetup.description(settings.youtubeAppId, Preferences.value(settings, "youtubeProfile")) : ""
   signal apply(var values)
-  function tr(text) { return Preferences.text(text, language) }
+  function tr(text) { return FoamyI18n.t(text) }
   function matches(values) {
     return Object.keys(values).every(function(key) { return Preferences.value(root.settings, key) === values[key] })
   }

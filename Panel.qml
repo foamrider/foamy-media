@@ -51,8 +51,8 @@ Panel {
 
   // ---------------------------------------------------------------- settings
   function preference(key) { return Preferences.value(root.settings, key) }
-  readonly property string language: Preferences.language(preference("language"), Qt.locale().name)
-  function tr(value) { return Preferences.text(value, language) }
+  readonly property string language: FoamyI18n.language
+  function tr(value) { return FoamyI18n.t(value) }
   readonly property int maxLabelWidth: Style.space(preference("maxLabelWidth"))
   readonly property bool showArtist: preference("showArtist")
   readonly property bool showProgress: preference("showProgress")
