@@ -118,7 +118,10 @@ PanelKeyCatcher {
   onActivateRequested: activateStop()
   onCloseRequested: media.close()
   onTabRequested: function(direction) { media.switchPanel(direction) }
-  onTextKey: function(text) { if (String(text).toLowerCase() === "s") media.openSettings() }
+  onTextKey: function(text, modifiers) {
+    if (!cursor.plain(modifiers)) return
+    if (String(text).toLowerCase() === "s") media.openSettings()
+  }
 
   // ---- Main view ---------------------------------------------------------
   Column {
@@ -217,7 +220,7 @@ PanelKeyCatcher {
       FoamyHeader {
         id: header
         width: parent.width
-        iconName: "headphones"
+        iconName: "music"
         title: view.media.sourceName
         meta: !view.media.sourceOpen && !view.media.live ? FoamyI18n.t("Not running")
           : !view.media.live ? FoamyI18n.t("Nothing playing")
@@ -395,7 +398,7 @@ PanelKeyCatcher {
         LayoutMirroring.childrenInherit: true
         MediaControl {
           key: "shuffle"
-          iconText: "󰒝"
+          iconName: "shuffle"
           toggledOn: view.media.shuffleOn === true
           tooltipText: FoamyI18n.t(view.media.shuffleOn ? "Shuffle on" : "Shuffle off")
           enabled: view.media.shuffleSupported === true
@@ -403,7 +406,7 @@ PanelKeyCatcher {
         }
         MediaControl {
           key: "previous"
-          iconText: "󰒮"
+          iconName: "skip-back"
           tooltipText: FoamyI18n.t("Previous track")
           enabled: view.media.canGoPrevious === true
           onClicked: view.media.skipPrevious()
@@ -413,25 +416,24 @@ PanelKeyCatcher {
           width: Style.space(48)
           height: width
           radius: FoamyStyle.pillRadius(width)
-          iconText: view.media.playing ? "󰏤" : "󰐊"
-          iconSize: FoamyStyle.font.display
+          iconName: view.media.playing ? "pause" : "play"
+          iconSize: FoamyStyle.headerIconSize
           foreground: Commons.Color.popups.background
-          color: hot ? Commons.Color.accent : FoamyPalette.text
-          borderSpec: Border.none()
+          color: hasCursor || hovered ? Commons.Color.accent : FoamyPalette.text
           tooltipText: FoamyI18n.t(view.media.playing ? "Pause" : "Play")
           enabled: view.media.live === true
           onClicked: view.media.playPause()
         }
         MediaControl {
           key: "next"
-          iconText: "󰒭"
+          iconName: "skip-forward"
           tooltipText: FoamyI18n.t("Next track")
           enabled: view.media.canGoNext === true
           onClicked: view.media.skipNext()
         }
         MediaControl {
           key: "loop"
-          iconText: view.media.loopName === "track" ? "󰑘" : view.media.loopName === "playlist" ? "󰑖" : "󰑗"
+          iconName: view.media.loopName === "track" ? "repeat-1" : "repeat"
           toggledOn: view.media.loopName !== "off"
           tooltipText: FoamyI18n.t(view.media.loopName === "track" ? "Repeat: track"
             : view.media.loopName === "playlist" ? "Repeat: playlist" : "Repeat: off")
@@ -518,7 +520,7 @@ PanelKeyCatcher {
           visible: view.spotifyTabShown
           enabled: view.media.spotifyOpen === true
           label: "Spotify"
-          iconText: ""
+          iconText: "\u{f1bc}"
           accent: view.media.spotifyGreen
           playing: view.media.spotifyPlaying === true
         }
@@ -526,7 +528,7 @@ PanelKeyCatcher {
           kind: "youtube"
           visible: view.media.youtubeOpen === true
           label: "YouTube"
-          iconText: ""
+          iconText: "\u{f16a}"
           accent: view.media.youtubeRed
           playing: view.media.youtubePlaying === true
         }
@@ -557,25 +559,22 @@ PanelKeyCatcher {
   }
 
   // ---- Building blocks ---------------------------------------------------
-  // Transport glyphs (nerd font, the bar's own icon set) on the stock button.
-  component MediaControl: Button {
+  // Transport buttons: kit icons on the foamy action surface, a little larger
+  // than a header action. Mode state (shuffle, repeat) stays filled whatever
+  // has the cursor.
+  component MediaControl: FoamyAction {
     id: control
     property string key: ""
     property bool toggledOn: false
     anchors.verticalCenter: parent ? parent.verticalCenter : undefined
     width: Style.space(36)
     height: Style.space(36)
-    horizontalPadding: 0
-    verticalPadding: 0
-    radius: FoamyStyle.radius
-    fontFamily: FoamyStyle.monoFamily
-    iconSize: FoamyStyle.font.iconLarge
+    iconSize: FoamyStyle.iconSize + Style.space(3)
     hasCursor: view.hasCursor(key)
-    // Mode state (shuffle, repeat) stays visible whatever has the cursor.
     foreground: toggledOn && enabled ? Commons.Color.popups.background : FoamyPalette.secondaryText
-    color: toggledOn && enabled ? Commons.Color.accent : hot && enabled ? FoamyPalette.hoverFill : "transparent"
-    opacity: enabled ? 1 : FoamyStyle.disabledOpacity
-    onHovered: function(isHovered) { if (isHovered) view.hover(control.key) }
+    color: toggledOn && enabled ? Commons.Color.accent
+      : (hasCursor || hovered) && enabled ? FoamyPalette.hoverFill : "transparent"
+    onHoveredChanged: if (hovered) view.hover(control.key)
   }
 
   component SourceTab: FoamyCursorSurface {
