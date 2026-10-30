@@ -31,7 +31,7 @@ Item {
     readonly property bool playing: state === "playing"
     readonly property string sourceKind: youtube ? "youtube" : "spotify"
     readonly property string sourceName: youtube ? "YouTube" : "Spotify"
-    readonly property string sourceIcon: youtube ? "" : ""
+    readonly property string sourceIcon: youtube ? "\u{f16a}" : "\u{f1bc}"
     readonly property bool sourceOpen: !idle
     readonly property bool spotifyOpen: !idle
     readonly property bool youtubeOpen: youtube
@@ -63,8 +63,8 @@ Item {
     readonly property color sourceBrandColor: youtube ? youtubeRed : spotifyGreen
     readonly property var settings: ({ id: "foamy.media", youtubeAppId: "vivaldi-youtube.com__-Default", youtubeProfile: "Default" })
     readonly property bool saving: false
-    property string settingsError: ""
-    readonly property var lastSave: null
+    readonly property string settingsError: ""
+    readonly property bool retryable: false
     readonly property var browserCandidates: browserSettingsOpen ? [{
       id: "vivaldi-youtube.com__-Default", title: "YouTube",
       values: { youtubeAppId: "vivaldi-youtube.com__-Default", youtubeProfile: "Default", youtubeBrowser: "vivaldi", youtubeMprisName: "vivaldi" }
@@ -89,6 +89,7 @@ Item {
     function save(k, v) {}
     function saveMany(v) {}
     function retrySave() {}
+    function showError(m) {}
   }
 
   // The bar widget on the strip, covering the harness anchor icon.

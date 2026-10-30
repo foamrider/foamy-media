@@ -34,7 +34,16 @@ Panel {
   FoamyMember { id: member; scope: "media"; demanding: root.opened }
 
   // ---------------------------------------------------------------- settings
-  function preference(key) { return Prefs.value(Schema.schema, root.settings, key) }
+  // Saved values (and saves not yet reflected back) through the kit queue.
+  FoamyPrefsQueue {
+    id: prefs
+    bar: root.bar
+    moduleName: root.moduleName
+    fields: Schema.schema
+    settings: root.settings
+  }
+  function preference(key) { return prefs.value(key) }
+  readonly property var effectiveSettings: prefs.effectiveSettings
   readonly property int maxLabelWidth: Style.space(preference("maxLabelWidth"))
   readonly property bool showArtist: preference("showArtist")
   readonly property bool showProgress: preference("showProgress")
@@ -49,68 +58,41 @@ Panel {
   readonly property bool youtubeEnabled: preference("youtubeEnabled")
   readonly property int volumeStep: preference("volumeStep")
 
-  property bool editingSettings: false
+  FoamySettingsState {
+    id: settingsState
+    panel: root
+    onHidden: { root.browserSettingsOpen = false; root.localError = "" }
+  }
+  readonly property bool editingSettings: settingsState.editing
   property bool browserSettingsOpen: false
-  property bool saving: false
-  property string settingsError: ""
-  property var lastSave: null
-  property var saveQueue: []
+  // Errors that are not a save (a failed paste, the browser not starting).
+  property string localError: ""
+  readonly property bool saving: prefs.busy
+  readonly property string settingsError: localError !== "" ? localError : prefs.error
+  readonly property bool retryable: localError === "" && prefs.canRetry
 
-  function openSettings() { editingSettings = true; open() }
-  function closeSettings() { editingSettings = false; browserSettingsOpen = false }
+  function openSettings() { settingsState.show() }
+  function closeSettings() { settingsState.hide() }
+  function showError(message) { localError = String(message || "") }
 
-  // One key from the settings page.
   function save(key, value) {
     var values = {}
     values[key] = value
     saveMany(values)
   }
-
-  // Several keys at once (the browser picker writes up to four). Every value
-  // is validated before anything is written; inline saves build on each
-  // other's merged entry, so no key reverts another while shell.json reloads.
+  // Several keys at once (the browser picker writes up to four): every value
+  // is checked before any is written, then the queue saves them in order,
+  // each merged over the ones before.
   function saveMany(values) {
+    localError = ""
     var keys = Object.keys(values)
-    settingsError = ""
-    lastSave = null
     for (var i = 0; i < keys.length; i++) {
-      if (!Prefs.valid(Schema.schema, keys[i], values[keys[i]])) { settingsError = "That value isn't allowed."; return }
+      if (!Prefs.valid(Schema.schema, keys[i], values[keys[i]])) { localError = "That value isn't allowed."; return false }
     }
-    lastSave = values
-    var current = root.settings
-    var commands = []
-    for (var j = 0; j < keys.length; j++) {
-      var result = Prefs.save(root.bar, root.moduleName, Schema.schema, current, keys[j], values[keys[j]])
-      if (!result.ok) { settingsError = result.error; return }
-      current = result.settings
-      if (result.command.length) commands.push(result.command)
-    }
-    if (!commands.length) { lastSave = null; return }
-    saveQueue = saveQueue.concat(commands)
-    runSaveQueue()
+    for (var j = 0; j < keys.length; j++) prefs.save(keys[j], values[keys[j]])
+    return true
   }
-  function retrySave() { if (lastSave) saveMany(lastSave) }
-  function runSaveQueue() {
-    if (saveProcess.running || !saveQueue.length) return
-    saving = true
-    saveProcess.command = saveQueue[0]
-    saveQueue = saveQueue.slice(1)
-    saveProcess.running = true
-  }
-  Process {
-    id: saveProcess
-    stderr: StdioCollector { id: saveErrors; waitForEnd: true }
-    onExited: function(code) {
-      if (code !== 0) {
-        console.warn("foamy-media: saving a setting failed:", saveErrors.text.trim())
-        root.settingsError = "Couldn't save the setting."
-        root.saveQueue = []
-      }
-      root.saving = root.saveQueue.length > 0
-      if (code === 0 && !root.saving) root.lastSave = null
-      Qt.callLater(root.runSaveQueue)
-    }
-  }
+  function retrySave() { localError = ""; prefs.retry() }
 
   readonly property var browserCandidates: editingSettings && browserSettingsOpen
     ? BrowserSetup.candidates(ToplevelManager.toplevels.values || [], players, DesktopEntries.applications.values || []) : []
@@ -165,7 +147,7 @@ Panel {
   readonly property bool bothPlaying: spotifyPlaying && youtubePlaying
   readonly property string sourceKind: selectedSource
   readonly property string sourceName: sourceKind === "youtube" ? "YouTube" : "Spotify"
-  readonly property string sourceIcon: sourceKind === "youtube" ? "" : ""
+  readonly property string sourceIcon: sourceKind === "youtube" ? "\u{f16a}" : "\u{f1bc}"
   readonly property bool sourceOpen: sourceKind === "youtube" ? youtubeOpen : spotifyOpen
   readonly property var player: sourceKind === "youtube" ? youtubePlayer : spotifyPlayer
   readonly property bool live: player !== null && player !== undefined
@@ -278,7 +260,6 @@ Panel {
       imageRelease.stop()
       imagesActive = true
     } else {
-      closeSettings()
       imageRelease.restart()
     }
   }
@@ -363,8 +344,7 @@ Panel {
     onExited: function(exitCode) {
       if (exitCode === 0) return
       console.warn("foamy-media: starting the browser failed:", launchError.text.trim())
-      root.settingsError = "Couldn't start the browser."
-      root.lastSave = null
+      root.localError = "Couldn't start the browser."
       root.openSettings()
       root.browserSettingsOpen = true
     }

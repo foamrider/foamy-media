@@ -125,10 +125,8 @@ ShellRoot {
 
   Component.onCompleted: Qt.callLater(stepOne)
 
-  // 4.5 emits textKey(text, modifiers); 4.0 textKey(text).
-  function key(view, text) {
-    try { view.textKey(text, 0) } catch (error) { view.textKey(text) }
-  }
+  FoamyCursor { id: keys }
+  function key(view, text) { keys.emitTextKey(view, text) }
 
   function leaders() {
     var count = 0
@@ -263,7 +261,8 @@ ShellRoot {
       first.saveMany({ youtubeBrowser: "--evil", youtubeProfile: "Default" })
       eq(mockBar.saved.length, 3, "an invalid suggestion writes nothing")
       check(first.settingsError !== "", "invalid value reported")
-      eq(first.lastSave, null, "an invalid value is not offered for retry")
+      eq(first.retryable, false, "an invalid value is not offered for retry")
+      eq(first.preference("showArtist"), false, "saved value read back before the host reflects it")
       first.closeSettings()
       eq(view.blocked, false, "back from Settings")
       first.close()
@@ -279,6 +278,12 @@ ShellRoot {
       eq(first.member.demanded, false, "closing releases demand")
       eq(first.imagesActive, false, "covers released after closing")
       eq(first.editingSettings, false, "closing leaves Settings")
+      // The settings IPC on a closed popup lands on Settings (reset on close only).
+      first.openSettings()
+      eq(first.opened, true, "settings opens the popup")
+      eq(first.editingSettings, true, "and lands on Settings")
+      first.close()
+      eq(first.editingSettings, false, "closing resets it")
       shell.finish()
     }
   }

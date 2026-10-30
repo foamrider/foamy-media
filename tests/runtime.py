@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Load Foamy Media offscreen under both hosts (4.0.6 installed, 4.5 reference)
 with the foamy-kit harness: isolated HOME/XDG/runtime dirs, no Wayland or
-Hyprland, no session bus (so no MPRIS player) reachable. Checks tests/qml/Runtime.qml plus
+Hyprland, a private session bus (so no live MPRIS player). Checks tests/qml/Runtime.qml plus
 `qs ipc call foamy.media status` answered by the leader.
 
 FOAMY_KIT (default ~/GitHub/Personal/foamy-kit) provides the harness;
@@ -39,8 +39,8 @@ def ipc_status(run):
 def run(host, lang):
     shell = (PLUGIN / "tests/qml/Runtime.qml").read_text()
     r = harness.Run(host, shell, plugin=PLUGIN, language=lang, prefix=f"foamy-media-runtime-{host}-{lang}-")
-    # No session bus: the live MPRIS players (and their covers) stay out of reach.
-    r.env.update(FOAMY_LANG=lang, FOAMY_HOLD_MS="3000", DBUS_SESSION_BUS_ADDRESS=f"unix:path={r.base}/no-session-bus")
+    # The harness gives each run a private session bus: no live MPRIS player.
+    r.env.update(FOAMY_LANG=lang, FOAMY_HOLD_MS="3000")
     log_path = r.base / "qs.log"
     process = subprocess.Popen(["qs", "-p", str(r.root), "--no-color"], env=r.env, stdout=log_path.open("w"),
                                stderr=subprocess.STDOUT, start_new_session=True)

@@ -1,7 +1,7 @@
 const I18n = require('./i18n.cjs')
 const assert = require('node:assert/strict')
 const P = require('../Preferences.js')
-const Prefs = require('./prefs.cjs')
+const Prefs = require('../kit/node-loader.cjs').load('FoamyPrefs', { console: { log() {}, warn() {} } })
 const M = require('../Model.js')
 const manifest = require('../manifest.json')
 const S = P.schema

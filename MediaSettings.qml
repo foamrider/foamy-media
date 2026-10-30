@@ -11,12 +11,12 @@ import "Preferences.js" as Schema
 // The settings page: controls, bar, panel and YouTube browser settings on
 // the foamy settings skeleton. Reads and saves through `media` (the Panel or
 // the preview mock): media.settings, media.save(key, value),
-// media.saveMany(values), media.saving, media.settingsError.
+// media.saveMany(values), media.saving, media.settingsError, media.retryable.
 FoamySettingsPage {
   id: page
 
   required property var media
-  readonly property var settings: media.settings || ({})
+  readonly property var settings: media.effectiveSettings || media.settings || ({})
   function value(key) { return Prefs.value(Schema.schema, page.settings, key) }
   function label(key) { return FoamyI18n.t(Schema.labels[key]) }
 
@@ -26,7 +26,7 @@ FoamySettingsPage {
 
   saving: media.saving === true
   error: media.settingsError ? FoamyI18n.t(media.settingsError) : ""
-  retryable: !!media.settingsError && !!media.lastSave
+  retryable: media.retryable === true
   onBack: media.closeSettings()
   onRetry: media.retrySave()
 
@@ -163,7 +163,7 @@ FoamySettingsPage {
       enabled: !page.saving
       translate: FoamyI18n.t
       Accessible.name: page.label(numberRow.key)
-      onPasteErrorChanged: if (pasteError !== "") page.media.settingsError = pasteError
+      onPasteErrorChanged: if (pasteError !== "") page.media.showError(pasteError)
       onEditingFinished: {
         if (!numberRow.visible) return
         var next = Number(text.trim())
@@ -204,7 +204,7 @@ FoamySettingsPage {
       enabled: !page.saving
       translate: FoamyI18n.t
       Accessible.name: page.label(textRow.key)
-      onPasteErrorChanged: if (pasteError !== "") page.media.settingsError = pasteError
+      onPasteErrorChanged: if (pasteError !== "") page.media.showError(pasteError)
       onEditingFinished: {
         if (!textRow.visible) return
         var next = text.trim()

@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict')
 const B = require('../BrowserSetup.js')
 const P = require('../Preferences.js')
-const Prefs = require('./prefs.cjs')
+const Prefs = require('../kit/node-loader.cjs').load('FoamyPrefs', { console: { log() {}, warn() {} } })
 const window = {appId:'vivaldi-youtube.com__-Default', title:'Example - YouTube'}
 const players = [{dbusName:'org.mpris.MediaPlayer2.vivaldi.instance42', desktopEntry:'vivaldi-stable'}]
 const entries = [{id:'vivaldi-stable', startupClass:'Vivaldi-stable', command:['/usr/bin/vivaldi-stable','%U']}]
