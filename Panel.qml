@@ -41,10 +41,6 @@ Panel {
     moduleName: root.moduleName
     fields: Schema.schema
     settings: root.settings
-    // A host that reflects an inline save at once (4.5) does it inside
-    // Prefs.save(), before the queue marks the value pending, so settle again:
-    // a value the settings already show must not mask a later outside change.
-    onSaved: prefs.pending = Prefs.settle(prefs.settings, prefs.pending)
   }
   function preference(key) { return prefs.value(key) }
   readonly property var effectiveSettings: prefs.effectiveSettings
@@ -77,7 +73,6 @@ Panel {
 
   function openSettings() { settingsState.show() }
   function closeSettings() { settingsState.hide() }
-  function showError(message) { localError = String(message || "") }
 
   function save(key, value) {
     var values = {}

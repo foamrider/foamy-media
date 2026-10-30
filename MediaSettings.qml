@@ -146,10 +146,6 @@ FoamySettingsPage {
     stepSize: spec.step || 1
     enabled: !page.saving
     onCommitted: function(next) { page.media.save(numberRow.key, next) }
-    Connections {
-      target: numberRow.field
-      function onPasteErrorChanged() { if (numberRow.field.pasteError !== "") page.media.showError(numberRow.field.pasteError) }
-    }
   }
 
   // A string setting, same rules; the draft is checked against the schema
@@ -163,9 +159,5 @@ FoamySettingsPage {
     validate: function(text) { return Prefs.valid(Schema.schema, textRow.key, text) }
     enabled: !page.saving
     onCommitted: function(next) { page.media.save(textRow.key, next) }
-    Connections {
-      target: textRow.field
-      function onPasteErrorChanged() { if (textRow.field.pasteError !== "") page.media.showError(textRow.field.pasteError) }
-    }
   }
 }

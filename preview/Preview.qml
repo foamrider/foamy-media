@@ -89,7 +89,6 @@ Item {
     function save(k, v) {}
     function saveMany(v) {}
     function retrySave() {}
-    function showError(m) {}
   }
 
   // The bar widget on the strip, covering the harness anchor icon.
