@@ -126,6 +126,13 @@ ShellRoot {
   Component.onCompleted: Qt.callLater(stepOne)
 
   FoamyCursor { id: keys }
+  function findKey(item, key) {
+    if (!item) return null
+    if (item.key === key && item.commitEdit !== undefined) return item
+    var kids = item.children || []
+    for (var i = 0; i < kids.length; i++) { var hit = findKey(kids[i], key); if (hit) return hit }
+    return null
+  }
   function key(view, text) { keys.emitTextKey(view, text) }
 
   function leaders() {
@@ -218,8 +225,15 @@ ShellRoot {
     player.artSource = "file:///tmp/foamy-media-cover.png"
     eq(playerView.band.imageSource.toString(), gpu ? "" : "file:///tmp/foamy-media-cover.png", "cover is the band picture")
     eq(playerView.band.background !== null, gpu, "blurred cover only on the GPU renderer")
+    // Regression (kit 0.3.2): the band holds only the current cover.
+    for (var n = 1; n <= 5; n++) player.artSource = "file:///tmp/foamy-media-cover-" + n + ".png"
+    eq(playerView.band.loadedImage, gpu ? "" : "file:///tmp/foamy-media-cover-5.png", "only the current cover is held after cycling")
+    player.artSource = ""
+    eq(playerView.band.loadedImage, "", "cleared cover (popup closed) is unloaded")
+    player.artSource = "file:///tmp/foamy-media-cover.png"
     player.artBackground = false
     eq(playerView.band.imageSource.toString(), "", "Artwork background off keeps the foamy wash")
+    eq(playerView.band.loadedImage, "", "and holds no picture")
     player.artBackground = true
     player.artSource = ""
     // Short screen: the player scrolls and keeps the cursor row in view.
@@ -292,6 +306,36 @@ ShellRoot {
       check(first.settingsError !== "", "invalid value reported")
       eq(first.retryable, false, "an invalid value is not offered for retry")
       eq(first.preference("showArtist"), false, "saved value read back before the host reflects it")
+      // Regression: a settings field follows a change made elsewhere (another
+      // monitor, the bar editor) after being focused and left unchanged, and
+      // leaving it again doesn't save the stale value back.
+      var width = shell.findKey(view.settingsPage, "maxLabelWidth")
+      check(width !== null, "label width field")
+      if (width) {
+        var before = mockBar.saved.length
+        width.commitEdit(true)                       // tabbed through, unchanged
+        first.settings = ({ id: "foamy.media", hideWhenClosed: false, extra: "kept", maxLabelWidth: 320 })
+        eq(width.field.text, width.format(320), "field shows the external change")
+        width.commitEdit(true)
+        eq(mockBar.saved.length, before, "leaving it unchanged saves nothing")
+        width.field.text = "abc"; width.dirty = true
+        check(width.handleKey(Qt.Key_Escape), "Escape is taken by the field")
+        eq(width.field.text, width.format(320), "Escape restores the value")
+        eq(first.editingSettings, true, "and the page stays")
+        width.field.text = "250"; width.dirty = true
+        width.commitEdit(false)
+        eq(mockBar.saved.length, before + 1, "a changed value commits once")
+        eq(mockBar.saved[mockBar.saved.length - 1].settings.maxLabelWidth, 250, "saved value")
+      }
+      var browser = shell.findKey(view.settingsPage, "youtubeBrowser")
+      check(browser !== null, "browser field")
+      if (browser) {
+        browser.field.text = "--evil"; browser.dirty = true
+        browser.commitEdit(false)
+        check(browser.error !== "", "an invalid browser name is refused in the field")
+        browser.commitEdit(true)
+        eq(browser.field.text, browser.value, "focus-out restores the saved name")
+      }
       first.closeSettings()
       eq(view.blocked, false, "back from Settings")
       first.close()

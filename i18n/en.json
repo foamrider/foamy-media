@@ -64,7 +64,6 @@
   "Play/pause": "Play/pause",
   "%1 is not running": "%1 is not running",
   "%1%": "%1%",
-  "%1–%2": "%1–%2",
   "Bar": "Bar",
   "Paused tracks stay visible.": "Paused tracks stay visible.",
   "Playing": "Playing",
@@ -87,5 +86,6 @@
   "Paste": "Paste",
   "Redo": "Redo",
   "Select all": "Select all",
-  "Undo": "Undo"
+  "Undo": "Undo",
+  "Enter a number from %1 to %2": "Enter a number from %1 to %2"
 }

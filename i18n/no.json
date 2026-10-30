@@ -64,7 +64,6 @@
   "Play/pause": "Spill av / pause",
   "%1 is not running": "%1 er ikke startet",
   "%1%": "%1 %",
-  "%1–%2": "%1–%2",
   "Bar": "Linje",
   "Paused tracks stay visible.": "Pausede spor forblir synlige.",
   "Playing": "Spiller",
@@ -87,5 +86,6 @@
   "Paste": "Lim inn",
   "Redo": "Gjør om",
   "Select all": "Merk alt",
-  "Undo": "Angre"
+  "Undo": "Angre",
+  "Enter a number from %1 to %2": "Skriv inn et tall fra %1 til %2"
 }

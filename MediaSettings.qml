@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Layouts
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
@@ -131,90 +130,42 @@ FoamySettingsPage {
     onClicked: page.media.save(key, !checked)
   }
 
-  component SettingLabel: Text {
-    textFormat: Text.PlainText
-    horizontalAlignment: Text.AlignLeft
-    wrapMode: Text.WordWrap
-    color: Commons.Color.popups.text
-    font.family: FoamyStyle.fontFamily
-    font.pixelSize: FoamyStyle.font.subtitle
-  }
-
-  // An integer setting: label and a short field; Enter or leaving saves.
-  component NumberRow: RowLayout {
+  // An integer setting. The kit field shows the saved value (following
+  // changes made elsewhere: another monitor, the bar editor), keeps a draft
+  // while you type and commits a valid, changed number once on Enter or
+  // focus-out; the first Escape restores the value and stays on the page.
+  component NumberRow: FoamyNumberField {
     id: numberRow
     required property string key
     readonly property var spec: Prefs.field(Schema.schema, key)
-    readonly property var current: page.value(key)
     width: parent ? parent.width : 0
-    spacing: FoamyStyle.gapLarge
-    SettingLabel {
-      Layout.fillWidth: true
-      text: page.label(numberRow.key)
-    }
-    SafeTextField {
-      id: numberInput
-      Layout.preferredWidth: Style.space(72)
-      implicitHeight: FoamyStyle.controlHeight
-      text: String(numberRow.current)
-      horizontalAlignment: Text.AlignHCenter
-      font.family: FoamyStyle.fontFamily
-      font.pixelSize: FoamyStyle.font.body
-      enabled: !page.saving
-      translate: FoamyI18n.t
-      Accessible.name: page.label(numberRow.key)
-      onPasteErrorChanged: if (pasteError !== "") page.media.showError(pasteError)
-      onEditingFinished: {
-        if (!numberRow.visible) return
-        var next = Number(text.trim())
-        if (text.trim() === "" || next === numberRow.current) { text = String(numberRow.current); return }
-        page.media.save(numberRow.key, next)
-        if (!Prefs.valid(Schema.schema, numberRow.key, next)) text = String(numberRow.current)
-      }
-      onKeyPressed: function(event) {
-        if (event.key === Qt.Key_Escape) { text = String(numberRow.current); page.back(); event.accepted = true }
-      }
-      HoverHandler { id: numberHover }
-      PanelToolTip {
-        visible: numberHover.hovered || numberInput.inputActiveFocus
-        text: FoamyI18n.t("%1–%2", [FoamyI18n.number(numberRow.spec.min), FoamyI18n.number(numberRow.spec.max)])
-        fontFamily: FoamyStyle.fontFamily
-      }
+    label: page.label(key)
+    value: page.value(key)
+    from: spec.min
+    to: spec.max
+    stepSize: spec.step || 1
+    enabled: !page.saving
+    onCommitted: function(next) { page.media.save(numberRow.key, next) }
+    Connections {
+      target: numberRow.field
+      function onPasteErrorChanged() { if (numberRow.field.pasteError !== "") page.media.showError(numberRow.field.pasteError) }
     }
   }
 
-  // A string setting: label and a field; Enter or leaving saves.
-  component TextRow: RowLayout {
+  // A string setting, same rules; the draft is checked against the schema
+  // (the browser and MPRIS name must be bare program names).
+  component TextRow: FoamyTextSettingField {
     id: textRow
     required property string key
-    readonly property string current: String(page.value(key))
     width: parent ? parent.width : 0
-    spacing: FoamyStyle.gapLarge
-    SettingLabel {
-      Layout.preferredWidth: Style.space(96)
-      text: page.label(textRow.key)
-    }
-    SafeTextField {
-      id: valueInput
-      Layout.fillWidth: true
-      implicitHeight: FoamyStyle.controlHeight
-      text: textRow.current
-      font.family: FoamyStyle.fontFamily
-      font.pixelSize: FoamyStyle.font.body
-      enabled: !page.saving
-      translate: FoamyI18n.t
-      Accessible.name: page.label(textRow.key)
-      onPasteErrorChanged: if (pasteError !== "") page.media.showError(pasteError)
-      onEditingFinished: {
-        if (!textRow.visible) return
-        var next = text.trim()
-        if (next === textRow.current) return
-        page.media.save(textRow.key, next)
-        if (!Prefs.valid(Schema.schema, textRow.key, next)) text = textRow.current
-      }
-      onKeyPressed: function(event) {
-        if (event.key === Qt.Key_Escape) { text = textRow.current; page.back(); event.accepted = true }
-      }
+    label: page.label(key)
+    value: String(page.value(key))
+    validate: function(text) { return Prefs.valid(Schema.schema, textRow.key, text) }
+    enabled: !page.saving
+    onCommitted: function(next) { page.media.save(textRow.key, next) }
+    Connections {
+      target: textRow.field
+      function onPasteErrorChanged() { if (textRow.field.pasteError !== "") page.media.showError(textRow.field.pasteError) }
     }
   }
 }
