@@ -1,6 +1,6 @@
 // Tests for everything the widget knows that is not painting. Model.js has no
 // Qt in it, so player matching, the label, and the whole album-colour pipeline
-// run here: `node test/model-test.js`.
+// run here: `node tests/model-test.js`.
 
 const assert = require("assert")
 const M = require("../Model.js")
@@ -123,10 +123,6 @@ const M = require("../Model.js")
   assert.ok(!M.shouldShowWidget(null, emptyPlayer, true, 0))
   assert.ok(M.shouldShowWidget(null, null, false, 0))
 
-  assert.ok(M.tooltipText(player).indexOf("Instant Crush") !== -1)
-  assert.ok(M.tooltipText(Object.assign({}, player, { isPlaying: false })).indexOf("Paused") === 0)
-  assert.ok(M.tooltipText(null).indexOf("not running") !== -1)
-  assert.strictEqual(M.tooltipText(null, "YouTube"), "YouTube — not running")
 }
 
 // ------------------------------------------------------------------- run time
@@ -230,7 +226,7 @@ const M = require("../Model.js")
   // And the decode is bounded, since a tiny file can declare a huge image.
   // The width and height caps are the ones that refuse — the area limit only
   // decides where the pixel cache lives, so it is not a defence by itself.
-  // test/probe-test.sh is what shows this actually holding.
+  // tests/probe-test.sh is what shows this actually holding.
   assert.ok(script.indexOf("MAGICK_WIDTH_LIMIT=8KP") !== -1)
   assert.ok(script.indexOf("MAGICK_HEIGHT_LIMIT=8KP") !== -1)
   ;["MAGICK_AREA_LIMIT", "MAGICK_MEMORY_LIMIT", "MAGICK_MAP_LIMIT",
@@ -250,29 +246,31 @@ const M = require("../Model.js")
   // Everything shown now comes from the file the probe wrote, so this asserts
   // the property directly against the QML rather than trusting it to stay so.
   const fs = require("fs")
-  const panel = fs.readFileSync(require("path").join(__dirname, "..", "Panel.qml"), "utf8")
-
-  const loaders = panel
+  const path = require("path")
+  const read = (name) => fs.readFileSync(path.join(__dirname, "..", name), "utf8")
+  const sources = (name) => read(name)
     .split("\n")
-    .map(function (line, index) { return { line: line.trim(), number: index + 1 } })
+    .map(function (line, index) { return { line: line.trim(), number: index + 1, file: name } })
     .filter(function (entry) { return /^source\s*:/.test(entry.line) })
 
-  assert.ok(loaders.length >= 2, "expected the panel to have image sources to check")
+  const loaders = [].concat(sources("Panel.qml"), sources("MediaView.qml"), sources("BarContent.qml"))
+  assert.ok(loaders.length >= 2, "expected the popup to have image sources to check")
 
   // No source of any kind may name the raw URL. This is the invariant that
-  // was broken; `source: artSource` naming a sibling item is fine, an art URL
-  // is not.
+  // was broken; `source: artBlurSource` naming a sibling item is fine, an
+  // art URL is not.
   loaders.forEach(function (entry) {
-    assert.ok(
-      !/\bartUrl\b/.test(entry.line),
-      "Panel.qml:" + entry.number + " loads the raw art URL: " + entry.line,
-    )
+    assert.ok(!/\bartUrl\b/.test(entry.line), entry.file + ":" + entry.number + " loads the raw art URL: " + entry.line)
   })
 
-  // And the covers that are displayed come from the probed file, both of them:
-  // the panel's thumbnail and the blurred backdrop.
-  const probed = loaders.filter(function (entry) { return /artSourceUrl/.test(entry.line) })
+  // The covers that are displayed come from the probed file, both of them:
+  // the thumbnail and the blurred backdrop. `artSource` is the Panel's URL of
+  // the file the probe wrote (MediaService.artFile), and only while it
+  // belongs to the current track.
+  const probed = loaders.filter(function (entry) { return /media\.artSource\b/.test(entry.line) })
   assert.strictEqual(probed.length, 2, "expected exactly two loads of the probed cover")
+  assert.ok(/readonly property string artSource: artShown && imagesActive \? Model\.fileUrl\(MediaService\.artFile\) : ""/
+    .test(read("Panel.qml")), "Panel.artSource must come from the probed file of the current track")
 }
 
 // ------------------------------------------------------ the file it hands over
@@ -400,6 +398,41 @@ const M = require("../Model.js")
       assert.ok(Math.abs(((a >> shift) & 255) - ((b >> shift) & 255)) <= 1, hex + " -> " + back)
     }
   })
+}
+
+// ------------------------------------------------------- source selection
+{
+  // Startup: a playing source first (the focused YouTube window wins a tie).
+  assert.strictEqual(M.initialSource(true, true, true, true, true, true, true), "youtube")
+  assert.strictEqual(M.initialSource(true, false, true, true, true, true, true), "spotify")
+  assert.strictEqual(M.initialSource(false, false, true, true, false, true, true), "youtube")
+  assert.strictEqual(M.initialSource(false, false, false, false, true, true, true), "youtube")
+  assert.strictEqual(M.initialSource(false, false, false, false, false, false, true), "youtube")
+  assert.strictEqual(M.initialSource(false, false, false, false, false, false, false), "")
+
+  const state = (o) => Object.assign({ spotifyPlaying: false, youtubePlaying: false, spotifyHasTrack: false,
+    youtubeHasTrack: false, spotifyOpen: false, youtubeOpen: false }, o)
+  assert.strictEqual(M.reconcileSource("spotify", state({ youtubePlaying: true })), "youtube")
+  assert.strictEqual(M.reconcileSource("youtube", state({ spotifyPlaying: true })), "spotify")
+  // Both playing: keep the user's choice.
+  assert.strictEqual(M.reconcileSource("youtube", state({ spotifyPlaying: true, youtubePlaying: true, spotifyHasTrack: true, youtubeHasTrack: true, spotifyOpen: true, youtubeOpen: true })), "youtube")
+  // A paused track beats an open but empty app.
+  assert.strictEqual(M.reconcileSource("youtube", state({ spotifyHasTrack: true, youtubeOpen: true })), "spotify")
+  assert.strictEqual(M.reconcileSource("youtube", state({ youtubeHasTrack: true, spotifyHasTrack: true, youtubeOpen: true, spotifyOpen: true })), "youtube")
+  // The selected app closed: fall back to an open one.
+  assert.strictEqual(M.reconcileSource("spotify", state({ youtubeOpen: true })), "youtube")
+  assert.strictEqual(M.reconcileSource("youtube", state({})), "spotify")
+}
+
+// ------------------------------------------------------------ position tick
+{
+  // About one re-read per pixel the underline gains, between 1 s and 5 s.
+  assert.strictEqual(M.progressTickInterval(240, 188), 1277)
+  assert.strictEqual(M.progressTickInterval(60, 200), 1000)
+  assert.strictEqual(M.progressTickInterval(3600, 200), 5000)
+  assert.strictEqual(M.progressTickInterval(0, 200), 5000)
+  assert.strictEqual(M.progressTickInterval(240, 0), 5000)
+  assert.strictEqual(M.progressTickInterval(NaN, NaN), 5000)
 }
 
 console.log("ok — model tests passed")

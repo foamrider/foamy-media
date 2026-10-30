@@ -120,16 +120,6 @@ function shouldShowWidget(spotifyPlayer, youtubePlayer, hideWhenStopped, stopped
     || hasDisplayableTrack(youtubePlayer, stoppedState)
 }
 
-function tooltipText(player, sourceName) {
-  var name = String(sourceName || "Spotify")
-  if (!player) return name + " — not running"
-
-  var label = barLabel(player, true)
-  if (!label) return name
-  return (player.isPlaying ? "" : "Paused — ") + label
-}
-
-// MPRIS positions come through Quickshell as seconds.
 function formatTime(seconds) {
   var total = Math.floor(Number(seconds) || 0)
   if (total < 0) total = 0
@@ -306,9 +296,10 @@ function artProbeScript() {
     'mkdir -p "$dir" || exit 1',
     'chmod 700 "$dir" 2>/dev/null || :',
     '',
-    '# Named for the source so a track change is a new path, which is what lets',
-    '# the panel cross-fade rather than reload the same file in place.',
-    'stamp=$(printf %s "$src" | sha256sum | cut -c1-32) || exit 1',
+    '# Named for the bytes, not the URL: a player that rewrites one file:// path',
+    '# for every track still gets a new cover, and a new cover is a new path,',
+    '# which is what lets the panel cross-fade rather than reload in place.',
+    'stamp=$(sha256sum < "$tmp" | cut -c1-32) || exit 1',
     'art="$dir/$stamp.png"',
     '',
     'if [ ! -f "$art" ]; then',
@@ -457,7 +448,7 @@ function toRgb(hex) {
 
 function normalizeHex(hex) {
   var rgb = toRgb(hex)
-  if (!rgb) return "#000000"
+  if (!rgb) return "#000000" // foamy-lint: allow hex-colour — parse fallback for an invalid input, never drawn as a theme colour
   return "#" + hexPair(rgb.r) + hexPair(rgb.g) + hexPair(rgb.b)
 }
 
@@ -522,8 +513,44 @@ function clamp(value, low, high) {
   return number < low ? low : number > high ? high : number
 }
 
+// The source to show when the widget starts: a playing source first (the
+// focused YouTube window wins a tie), then one holding a track, then an open
+// one. "" keeps the current choice.
+function initialSource(bothPlaying, youtubeActivated, youtubePlaying, spotifyHasTrack, youtubeHasTrack, spotifyOpen, youtubeOpen) {
+  if (bothPlaying) return youtubeActivated ? "youtube" : "spotify"
+  if (youtubePlaying) return "youtube"
+  if (spotifyHasTrack) return "spotify"
+  if (youtubeHasTrack) return "youtube"
+  if (spotifyOpen) return "spotify"
+  if (youtubeOpen) return "youtube"
+  return ""
+}
+
+// The source to keep after a player appears, disappears or changes state.
+// A single playing source wins; otherwise a paused track stays selected over
+// an open-but-empty app, so the bar never falls back to a lonely launcher icon.
+function reconcileSource(current, state) {
+  if (state.youtubePlaying && !state.spotifyPlaying) return "youtube"
+  if (state.spotifyPlaying && !state.youtubePlaying) return "spotify"
+  var currentHasTrack = current === "youtube" ? state.youtubeHasTrack : state.spotifyHasTrack
+  if (!currentHasTrack && state.spotifyHasTrack) return "spotify"
+  if (!currentHasTrack && state.youtubeHasTrack) return "youtube"
+  var currentOpen = current === "youtube" ? state.youtubeOpen : state.spotifyOpen
+  if (currentOpen) return current
+  return state.spotifyOpen ? "spotify" : state.youtubeOpen ? "youtube" : "spotify"
+}
+
+// How often (ms) the bar re-reads the playback position: about once per
+// pixel the progress underline gains, at most once a second and at least
+// every five seconds.
+function progressTickInterval(lengthSeconds, widthPixels) {
+  var length = Number(lengthSeconds), width = Number(widthPixels)
+  if (!isFinite(length) || length <= 0 || !isFinite(width) || width <= 0) return 5000
+  return Math.round(clamp(length * 1000 / width, 1000, 5000))
+}
+
 // Nothing here touches Qt, so the whole file also loads under node and the
-// tests in test/model-test.js exercise it directly. QML's .js import ignores
+// tests in tests/model-test.js exercise it directly. QML's .js import ignores
 // this block.
 if (typeof module !== "undefined") {
   module.exports = {
@@ -541,7 +568,6 @@ if (typeof module !== "undefined") {
     hasTrackInformation: hasTrackInformation,
     hasDisplayableTrack: hasDisplayableTrack,
     shouldShowWidget: shouldShowWidget,
-    tooltipText: tooltipText,
     formatTime: formatTime,
     artHostAllowed: artHostAllowed,
     artProbeTarget: artProbeTarget,
@@ -555,6 +581,9 @@ if (typeof module !== "undefined") {
     luminance: luminance,
     toHsl: toHsl,
     fromHsl: fromHsl,
-    normalizeHex: normalizeHex
+    normalizeHex: normalizeHex,
+    initialSource: initialSource,
+    reconcileSource: reconcileSource,
+    progressTickInterval: progressTickInterval
   }
 }

@@ -4,7 +4,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
 
-const qml = fs.readFileSync(path.join(__dirname, "../Panel.qml"), "utf8");
+const qml = fs.readFileSync(path.join(__dirname, "../MediaService.qml"), "utf8");
 function controller(values, functions) {
   const context = vm.createContext(values);
   context.root = context;
@@ -31,10 +31,10 @@ function timer() {
 
 const Model = require("../Model.js");
 function fixture() {
-  return controller({ Model, artWanted:true, artUrl:"https://i.scdn.co/image/fixture",
-    remoteArt:true, networkReady:false, artProbed:"", artFile:"", artDominant:"", artMean:"", artLuma:0,
-    artProbe:{running:false,pending:""}, artProbeDelay:timer(),artRetry:timer(),artRetries:0,
-  }, ["probeArt", "forgetArt", "applyArtProbe"]);
+  return controller({ Model, artUrl:"https://i.scdn.co/image/fixture",
+    remoteArt:true, networkReady:false, artProbed:"", artFile:"", artDominant:"", artLuma:0, artSettling:false,
+    artProbe:{running:false,pending:""}, artProbeDelay:timer(),artRetry:timer(),settleCap:timer(),artRetries:0,
+  }, ["probeArt", "forgetArt", "applyArtProbe", "finishAttempt", "artFor", "request"]);
 }
 test("remote artwork waits, but a local file can load offline", () => {
   const c=fixture();c.probeArt(false);assert.equal(c.artProbe.running,false);
@@ -56,4 +56,29 @@ test("successful artwork clears retries; late results cannot replace the current
 test("disallowed remote hosts still never start a probe", () => {
   const c=fixture();c.networkReady=true;c.artUrl="https://example.invalid/cover.png";
   c.probeArt(false);assert.equal(c.artProbe.running,false);
+});
+test("a failed fetch for the new track never leaves the previous cover showing", () => {
+  const c=fixture();c.networkReady=true;
+  c.applyArtProbe(c.artUrl,"MEAN 445566\nART /tmp/a.png");
+  const first=c.artUrl;assert.equal(c.artFor(first),true);
+  c.request("https://i.scdn.co/image/next");
+  // While the next cover settles, the old one may cross-fade out...
+  assert.equal(c.artSettling,true);assert.equal(c.artFor(c.artUrl),true);assert.equal(c.settleCap.running,true);
+  // ...but a failure (404, timeout, unsupported format) drops it at once.
+  c.finishAttempt(c.artUrl,1);
+  assert.equal(c.artFor(c.artUrl),false);assert.equal(c.artFile,"");assert.equal(c.artDominant,"");
+});
+test("unreadable probe output clears the cover instead of keeping the old one", () => {
+  const c=fixture();c.applyArtProbe(c.artUrl,"MEAN 445566\nART /tmp/a.png");
+  c.request("file:///tmp/next.png");c.applyArtProbe(c.artUrl,"nothing useful");
+  assert.equal(c.artFor(c.artUrl),false);assert.equal(c.artFile,"");
+});
+test("a successful probe for an older URL does not clear the current one", () => {
+  const c=fixture();c.applyArtProbe(c.artUrl,"MEAN 445566\nART /tmp/a.png");
+  c.finishAttempt("https://i.scdn.co/image/older",1);assert.equal(c.artFile,"/tmp/a.png");
+  c.finishAttempt(c.artUrl,1);assert.equal(c.artFile,"/tmp/a.png");
+});
+test("requesting the same URL again is a no-op (every bar may ask)", () => {
+  const c=fixture();c.request(c.artUrl);assert.equal(c.artProbeDelay.starts,0);
+  c.request("file:///tmp/x.png");c.request("file:///tmp/x.png");assert.equal(c.artProbeDelay.starts,1);
 });

@@ -3,7 +3,7 @@
 # script contains a flag is not the same as showing what it does. Everything
 # here is local: no network, and nothing that needs a Spotify.
 #
-#   sh test/probe-test.sh
+#   sh tests/probe-test.sh
 #
 # Skips if ImageMagick is missing, which is also the case where the plugin
 # quietly does without a cover backdrop.
@@ -78,7 +78,7 @@ expect_refused "$work/big.jpg" "a 9MB file past the size bound"
 # 410KB on disk, 144 megapixels decoded — roughly 430MB of pixels if nothing
 # stops it. This is the case the byte bounds cannot catch, so it is the one
 # that shows the area limit doing the work.
-node test/make-bomb.js "$work/bomb.png" 12000
+node tests/make-bomb.js "$work/bomb.png" 12000
 expect_refused "$work/bomb.png" "a 12000x12000 decompression bomb"
 
 expect_refused "$work/does-not-exist.png" "a path that is not there"
@@ -106,6 +106,21 @@ else
     echo "FAIL     the written cover is ${1}x${2}, past the 640 cap"
     failures=$((failures + 1))
   fi
+fi
+
+# The cache is keyed by the cover's bytes, not its URL: a player that writes
+# every track's cover to one file:// path still gets the new cover.
+same="$work/same-path.png"
+magick -size 64x64 xc:'#1db954' "$same"
+first=$(sh -c "$script" sh "$same" | sed -n 's/^ART //p')
+magick -size 64x64 xc:'#b2313a' "$same"
+second=$(sh -c "$script" sh "$same" | sed -n 's/^ART //p')
+again=$(sh -c "$script" sh "$same" | sed -n 's/^ART //p')
+if [ -n "$first" ] && [ -n "$second" ] && [ "$first" != "$second" ] && [ "$second" = "$again" ]; then
+  echo "ok       a rewritten cover at the same path is a new cached cover"
+else
+  echo "FAIL     the cover cache reused a stale cover for a rewritten path ($first, $second, $again)"
+  failures=$((failures + 1))
 fi
 
 if [ "$failures" -gt 0 ]; then
