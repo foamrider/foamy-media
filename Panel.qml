@@ -1,64 +1,43 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Effects
-import QtQuick.Controls as Controls
 import Quickshell
 import Quickshell.Io
-import Quickshell.Networking
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
-import qs.Ui
 import qs.Commons
+import qs.Commons as Commons
+import qs.Ui
+import "kit"
+import "kit/FoamyPrefs.js" as Prefs
 import "Model.js" as Model
-import "Preferences.js" as Preferences
+import "Preferences.js" as Schema
 import "BrowserSetup.js" as BrowserSetup
 
+// The media bar widget (one per monitor on 4.5). State every bar shares (the
+// selected source, the album-art probe) lives in the MediaService singleton;
+// the leader (FoamyMember) runs the source reconciliation, the art request,
+// the position tick and IPC. This file owns the bar entry, the player API the
+// popup reads, and settings saving. MediaView draws the popup body from the
+// API below (preview/Preview.qml feeds a mock of it).
 Panel {
   id: root
-  LayoutMirroring.enabled: FoamyI18n.rightToLeft
-  LayoutMirroring.childrenInherit: true
-  readonly property SettingsPane settingsPane: settingsLoader.item
-  function open() { preparePopup(); controller.show() }
-
-  // Keep the window and shaders warm; release the heavier sections after the fade.
-  property bool popupContentActive: false
-  property bool settingsContentActive: false
-  function preparePopup() { popupUnload.stop(); popupContentActive = true }
-  Connections {
-    target: root
-    function onEditingSettingsChanged() {
-      if (root.editingSettings) root.settingsContentActive = true
-    }
-    function onOpenedChanged() {
-      if (root.opened) root.preparePopup()
-      else popupUnload.restart()
-    }
-  }
-  Timer {
-    id: popupUnload
-    interval: 1000
-    onTriggered: {
-      if (!root.opened && !popup.visible) {
-        root.popupContentActive = false
-        root.settingsContentActive = false
-      }
-    }
-  }
 
   moduleName: "foamy.media"
   ipcTarget: "foamy.media"
-  // The base only wires open/close/toggle; this widget adds transport calls
-  // on the same target, so it owns the whole handler.
+  // The base only wires open/close/toggle; the transport calls live on the
+  // same target, so FoamyIpc below owns the whole handler.
   manageIpc: false
 
+  readonly property alias popup: popup
+  readonly property alias member: member
+
+  FoamyMember { id: member; scope: "media"; demanding: root.opened }
+
   // ---------------------------------------------------------------- settings
-  function preference(key) { return Preferences.value(root.settings, key) }
-  readonly property string language: FoamyI18n.language
-  function tr(value) { return FoamyI18n.t(value) }
+  function preference(key) { return Prefs.value(Schema.schema, root.settings, key) }
   readonly property int maxLabelWidth: Style.space(preference("maxLabelWidth"))
   readonly property bool showArtist: preference("showArtist")
   readonly property bool showProgress: preference("showProgress")
-  readonly property bool showOpenPanelIndicator: !progressLine.visible
   readonly property bool hideWhenStopped: preference("hideWhenClosed")
   readonly property string scrollAction: preference("scrollAction")
   readonly property string leftClick: preference("leftClick")
@@ -69,108 +48,101 @@ Panel {
   readonly property bool showEqualizer: preference("showEqualizer")
   readonly property bool youtubeEnabled: preference("youtubeEnabled")
   readonly property int volumeStep: preference("volumeStep")
-  property bool editingSettings: false
-  property string settingsError: ""
-  property var pendingPreferences: ({})
 
-  function openSettings() {
-    root.editingSettings = true
-    root.open()
-    mediaScroll.contentY = 0
-    Qt.callLater(function() { if (root.opened && settingsPane) settingsPane.focusBack() })
+  property bool editingSettings: false
+  property bool browserSettingsOpen: false
+  property bool saving: false
+  property string settingsError: ""
+  property var lastSave: null
+  property var saveQueue: []
+
+  function openSettings() { editingSettings = true; open() }
+  function closeSettings() { editingSettings = false; browserSettingsOpen = false }
+
+  // One key from the settings page.
+  function save(key, value) {
+    var values = {}
+    values[key] = value
+    saveMany(values)
   }
-  function closeSettings() {
-    root.editingSettings = false
-    mediaScroll.contentY = 0
-    Qt.callLater(function() { settingsButton.forceActiveFocus() })
-  }
-  function savePreference(key, value) {
-    if (!Preferences.valid(key, value)) {
-      var field = Preferences.field(key)
-      settingsError = tr("Invalid setting.") + (field ? " " + tr(field.label) : "")
-      return
-    }
-    settingsError = ""
-    // Coalesce rapid edits to a key while Omarchy persists the previous one.
-    pendingPreferences[key] = value
-    flushPreferences()
-  }
-  function saveBrowserSetup(values) {
+
+  // Several keys at once (the browser picker writes up to four). Every value
+  // is validated before anything is written; inline saves build on each
+  // other's merged entry, so no key reverts another while shell.json reloads.
+  function saveMany(values) {
     var keys = Object.keys(values)
-    // Validate the whole suggestion before queuing any writes.
+    settingsError = ""
+    lastSave = null
     for (var i = 0; i < keys.length; i++) {
-      if (["youtubeBrowser", "youtubeProfile", "youtubeAppId", "youtubeMprisName"].indexOf(keys[i]) === -1
-          || !Preferences.valid(keys[i], values[keys[i]])) {
-        root.settingsError = root.tr("Invalid setting.")
-        return
-      }
+      if (!Prefs.valid(Schema.schema, keys[i], values[keys[i]])) { settingsError = "That value isn't allowed."; return }
     }
-    root.settingsError = ""
-    for (var j = 0; j < keys.length; j++) pendingPreferences[keys[j]] = values[keys[j]]
-    flushPreferences()
+    lastSave = values
+    var current = root.settings
+    var commands = []
+    for (var j = 0; j < keys.length; j++) {
+      var result = Prefs.save(root.bar, root.moduleName, Schema.schema, current, keys[j], values[keys[j]])
+      if (!result.ok) { settingsError = result.error; return }
+      current = result.settings
+      if (result.command.length) commands.push(result.command)
+    }
+    if (!commands.length) { lastSave = null; return }
+    saveQueue = saveQueue.concat(commands)
+    runSaveQueue()
   }
-  function flushPreferences() {
-    if (preferencesSave.running) return
-    var keys = Object.keys(pendingPreferences)
-    if (!keys.length) return
-    var key = keys[0]
-    var value = pendingPreferences[key]
-    delete pendingPreferences[key]
-    preferencesSave.command = ["omarchy-shell", "shell", "setBarWidget", root.moduleName,
-      key, " " + JSON.stringify(value), "{}"]
-    preferencesSave.running = true
+  function retrySave() { if (lastSave) saveMany(lastSave) }
+  function runSaveQueue() {
+    if (saveProcess.running || !saveQueue.length) return
+    saving = true
+    saveProcess.command = saveQueue[0]
+    saveQueue = saveQueue.slice(1)
+    saveProcess.running = true
   }
   Process {
-    id: preferencesSave
-    stdout: StdioCollector { id: preferencesOutput; waitForEnd: true }
-    stderr: StdioCollector { id: preferencesError; waitForEnd: true }
-    onExited: function(exitCode) {
-      if (exitCode !== 0 || preferencesOutput.text.trim() !== "ok")
-        root.settingsError = root.tr("Could not save settings.") + " "
-          + String(preferencesError.text || preferencesOutput.text).trim()
-      Qt.callLater(root.flushPreferences)
+    id: saveProcess
+    stderr: StdioCollector { id: saveErrors; waitForEnd: true }
+    onExited: function(code) {
+      if (code !== 0) {
+        console.warn("foamy-media: saving a setting failed:", saveErrors.text.trim())
+        root.settingsError = "Couldn't save the setting."
+        root.saveQueue = []
+      }
+      root.saving = root.saveQueue.length > 0
+      if (code === 0 && !root.saving) root.lastSave = null
+      Qt.callLater(root.runSaveQueue)
     }
   }
-  onOpenedChanged: {
-    if (!opened) { editingSettings = false; mediaScroll.contentY = 0 }
-    else Qt.callLater(function() { if (!root.editingSettings) mediaScroll.forceActiveFocus() })
-  }
+
+  readonly property var browserCandidates: editingSettings && browserSettingsOpen
+    ? BrowserSetup.candidates(ToplevelManager.toplevels.values || [], players, DesktopEntries.applications.values || []) : []
 
   // ------------------------------------------------------------------- theme
-  readonly property color spotifyGreen: "#1DB954"
-  readonly property color youtubeRed: "#FF0033"
+  // Source brand colours: the default accent is the source's own colour.
+  readonly property color spotifyGreen: "#1DB954" // foamy-lint: allow hex-colour — Spotify brand colour, the widget's "Source color" accent
+  readonly property color youtubeRed: "#FF0033" // foamy-lint: allow hex-colour — YouTube brand colour, the widget's "Source color" accent
   readonly property color sourceBrandColor: sourceKind === "youtube" ? youtubeRed : spotifyGreen
   readonly property color accentColor: accentChoice === "Album art" ? artAccent
-    : accentChoice === "Theme accent" ? Color.accent
+    : accentChoice === "Theme accent" ? Commons.Color.accent
     : accentChoice === "Bar foreground" ? barForeground
     : sourceBrandColor
-  // Optional hint for bars that support source-coloured widget borders.
-  readonly property color islandBorderColor: sourceBrandColor
-  // The cover's own colour, lifted until it is bright enough to read as an
-  // accent. Falls back to the source colour until the probe answers, so nothing ever
-  // flashes an unstyled colour on the first track of a session.
+  // The cover's own colour, lifted until it reads as an accent. The source
+  // colour stands in until the probe answers for this track.
   readonly property color artAccent: artDominant === "" ? sourceBrandColor : Model.ensureContrast(artDominant, 0.48)
-  readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
-  readonly property color foreground: bar ? bar.foreground : Color.foreground
-  readonly property string panelFontFamily: "sans-serif"
-  readonly property color panelMuted: Qt.tint(Color.popups.background, Qt.rgba(foreground.r, foreground.g, foreground.b, 0.76))
-  readonly property color panelOutline: Qt.tint(Color.popups.background, Qt.rgba(foreground.r, foreground.g, foreground.b, 0.22))
-  readonly property color panelFill: Qt.tint(Color.popups.background, Qt.rgba(foreground.r, foreground.g, foreground.b, 0.055))
-  readonly property bool compactPanel: popup.availableCardHeight > 0 && popup.availableCardHeight < Style.space(500)
   readonly property bool vertical: bar ? bar.vertical : false
-  readonly property int barSize: bar ? bar.barSize : Style.bar.sizeHorizontal
+  // Short screens (or a tall bar) get the smaller cover and title.
+  readonly property bool compactPanel: popup.availableCardHeight > 0 && popup.availableCardHeight < Style.space(500)
 
   // ------------------------------------------------------------------ player
   readonly property var players: Mpris.players ? Mpris.players.values : []
   property int toplevelGeneration: 0
-  property string selectedSource: "spotify"
+  readonly property string selectedSource: MediaService.selectedSource
 
   readonly property var youtubeWindow: {
     if (!root.youtubeEnabled) return null
     var generation = root.toplevelGeneration
+    var appId = root.preference("youtubeAppId")
     var values = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
     for (var i = 0; i < values.length; i++) {
-      if (String(values[i].appId || "") === root.preference("youtubeAppId")) return values[i]
+      if (String(values[i].appId || "") === appId) return values[i]
     }
     return null
   }
@@ -183,7 +155,7 @@ Panel {
     youtubeWindow ? String(youtubeWindow.title || "") : "",
     MprisPlaybackState.Stopped, root.preference("youtubeMprisName"))
   // The MPRIS service is shared by the whole browser profile. Requiring the
-  // exact web-app toplevel and Model's URL or exact title correlation prevent
+  // exact web-app toplevel and Model's URL or exact title correlation keeps
   // an ordinary browser media tab from being treated as this YouTube app.
   readonly property var youtubePlayer: youtubeWindow ? youtubeCandidate : null
   readonly property bool youtubeHasTrack: Model.hasDisplayableTrack(youtubePlayer, MprisPlaybackState.Stopped)
@@ -191,9 +163,6 @@ Panel {
   readonly property bool spotifyPlaying: spotifyOpen && spotifyPlayer.isPlaying === true
   readonly property bool youtubePlaying: youtubeHasTrack && youtubePlayer.isPlaying === true
   readonly property bool bothPlaying: spotifyPlaying && youtubePlaying
-  // Player-change handlers reconcile this imperative selection whenever a
-  // source appears or disappears. Keeping this as a simple alias avoids a
-  // binding loop while those handlers update selectedSource.
   readonly property string sourceKind: selectedSource
   readonly property string sourceName: sourceKind === "youtube" ? "YouTube" : "Spotify"
   readonly property string sourceIcon: sourceKind === "youtube" ? "" : ""
@@ -209,8 +178,8 @@ Panel {
   readonly property string label: Model.barLabel(player, showArtist)
 
   readonly property real trackLength: live && player.lengthSupported ? Math.max(0, player.length) : 0
-  // Quickshell keeps extrapolating position between polls, so it can overshoot
-  // the track length by a fraction of a second right before a track change.
+  // Quickshell extrapolates position between polls, so it can overshoot the
+  // track length by a fraction of a second right before a track change.
   readonly property real trackPosition: {
     if (!live || !player.positionSupported) return 0
     var pos = Math.max(0, player.position)
@@ -219,495 +188,105 @@ Panel {
   readonly property real progress: trackLength > 0 ? Math.max(0, Math.min(1, trackPosition / trackLength)) : 0
 
   readonly property bool canSeek: live && player.canSeek && trackLength > 0
+  readonly property bool canGoPrevious: live && player.canGoPrevious === true
+  readonly property bool canGoNext: live && player.canGoNext === true
+  // Shuffle and repeat are Spotify-only: the browser reports them but ignores writes.
+  readonly property bool shuffleSupported: sourceKind === "spotify" && live && player.shuffleSupported === true
+  readonly property bool loopSupported: sourceKind === "spotify" && live && player.loopSupported === true
+  readonly property bool volumeSupported: live && player.volumeSupported === true
+  readonly property real volume: volumeSupported ? player.volume : 0
   readonly property bool shuffleOn: live && player.shuffleSupported && player.shuffle === true
   readonly property int loopState: live && player.loopSupported ? player.loopState : MprisLoopState.None
-  readonly property string loopIcon: loopState === MprisLoopState.Track ? "󰑘"
-    : loopState === MprisLoopState.Playlist ? "󰑖"
-    : "󰑗"
   readonly property string loopName: loopState === MprisLoopState.Track ? "track"
-    : loopState === MprisLoopState.Playlist ? "playlist"
-    : "off"
+    : loopState === MprisLoopState.Playlist ? "playlist" : "off"
 
-  readonly property bool shown: Model.shouldShowWidget(
-    spotifyPlayer,
-    youtubePlayer,
-    hideWhenStopped,
-    MprisPlaybackState.Stopped)
+  readonly property bool shown: Model.shouldShowWidget(spotifyPlayer, youtubePlayer, hideWhenStopped, MprisPlaybackState.Stopped)
 
+  // Source selection is shared; the leader keeps it in step with the players.
   function chooseInitialSource() {
-    if (root.bothPlaying) {
-      root.selectedSource = root.youtubeWindow && root.youtubeWindow.activated ? "youtube" : "spotify"
-    } else if (root.youtubePlaying) {
-      root.selectedSource = "youtube"
-    } else if (root.spotifyHasTrack) {
-      root.selectedSource = "spotify"
-    } else if (root.youtubeHasTrack) {
-      root.selectedSource = "youtube"
-    } else if (root.spotifyOpen) {
-      root.selectedSource = "spotify"
-    } else if (root.youtubeOpen) {
-      root.selectedSource = "youtube"
-    }
+    var next = Model.initialSource(root.bothPlaying, !!(root.youtubeWindow && root.youtubeWindow.activated),
+      root.youtubePlaying, root.spotifyHasTrack, root.youtubeHasTrack, root.spotifyOpen, root.youtubeOpen)
+    if (next) MediaService.selectedSource = next
   }
-
   function reconcileSource() {
-    if (root.youtubePlaying && !root.spotifyPlaying) {
-      root.selectedSource = "youtube"
-      return
-    }
-    if (root.spotifyPlaying && !root.youtubePlaying) {
-      root.selectedSource = "spotify"
-      return
-    }
-
-    // Keep a paused track selected over an open-but-empty app, regardless of
-    // source, so the bar never falls back to a lonely launcher icon.
-    var currentHasTrack = root.selectedSource === "youtube" ? root.youtubeHasTrack : root.spotifyHasTrack
-    if (!currentHasTrack && root.spotifyHasTrack) {
-      root.selectedSource = "spotify"
-      return
-    }
-    if (!currentHasTrack && root.youtubeHasTrack) {
-      root.selectedSource = "youtube"
-      return
-    }
-
-    var currentOpen = root.selectedSource === "youtube" ? root.youtubeOpen : root.spotifyOpen
-    if (currentOpen) return
-    root.selectedSource = root.spotifyOpen ? "spotify" : root.youtubeOpen ? "youtube" : "spotify"
-  }
-
-  function selectSource(kind) {
-    if (kind === "spotify" && root.spotifyOpen) root.selectedSource = "spotify"
-    else if (kind === "youtube" && root.youtubeOpen) root.selectedSource = "youtube"
-  }
-
-  // MPRIS and toplevel changes can arrive while QML is evaluating `player`.
-  // Apply the selection after that update finishes so the newest transition
-  // still wins without mutating one of the binding's inputs mid-evaluation.
-  function deferPlaybackTransition(kind, becamePlaying) {
-    Qt.callLater(function() {
-      var stillPlaying = kind === "youtube" ? root.youtubePlaying : root.spotifyPlaying
-      if (becamePlaying && stillPlaying) {
-        root.selectedSource = kind
-      } else if (!becamePlaying && root.selectedSource === kind) {
-        root.reconcileSource()
-      }
+    if (!member.isLeader) return
+    MediaService.selectedSource = Model.reconcileSource(MediaService.selectedSource, {
+      spotifyPlaying: root.spotifyPlaying, youtubePlaying: root.youtubePlaying,
+      spotifyHasTrack: root.spotifyHasTrack, youtubeHasTrack: root.youtubeHasTrack,
+      spotifyOpen: root.spotifyOpen, youtubeOpen: root.youtubeOpen
     })
   }
-
-  onSpotifyPlayingChanged: {
-    deferPlaybackTransition("spotify", spotifyPlaying)
+  function selectSource(kind) {
+    if ((kind === "spotify" && root.spotifyOpen) || (kind === "youtube" && root.youtubeOpen))
+      MediaService.selectedSource = kind
   }
-  onYoutubePlayingChanged: {
-    deferPlaybackTransition("youtube", youtubePlaying)
+  // MPRIS and toplevel changes can arrive while QML is evaluating `player`.
+  // Apply the selection after that update so the newest transition still
+  // wins without mutating one of the binding's inputs mid-evaluation.
+  function deferPlaybackTransition(kind, becamePlaying) {
+    if (!member.isLeader) return
+    Qt.callLater(function() {
+      var stillPlaying = kind === "youtube" ? root.youtubePlaying : root.spotifyPlaying
+      if (becamePlaying && stillPlaying) MediaService.selectedSource = kind
+      else if (!becamePlaying && MediaService.selectedSource === kind) root.reconcileSource()
+    })
   }
-  onSpotifyPlayerChanged: Qt.callLater(function() { root.reconcileSource() })
-  onYoutubePlayerChanged: Qt.callLater(function() { root.reconcileSource() })
-  onYoutubeHasTrackChanged: Qt.callLater(function() { root.reconcileSource() })
-  onSpotifyOpenChanged: Qt.callLater(function() { root.reconcileSource() })
-  onYoutubeOpenChanged: Qt.callLater(function() { root.reconcileSource() })
+  function deferReconcile() { if (member.isLeader) Qt.callLater(root.reconcileSource) }
+  onSpotifyPlayingChanged: deferPlaybackTransition("spotify", spotifyPlaying)
+  onYoutubePlayingChanged: deferPlaybackTransition("youtube", youtubePlaying)
+  onSpotifyPlayerChanged: deferReconcile()
+  onYoutubePlayerChanged: deferReconcile()
+  onYoutubeHasTrackChanged: deferReconcile()
+  onSpotifyOpenChanged: deferReconcile()
+  onYoutubeOpenChanged: deferReconcile()
 
   Connections {
     target: ToplevelManager.toplevels
     function onValuesChanged() { root.toplevelGeneration++ }
   }
 
-  component PlaybackEqualizer: Item {
-    id: equalizer
+  // ------------------------------------------------------------- album art
+  // The leader asks the shared service for the current cover; every bar
+  // reads the answer. artShown is false as soon as the cover on file is not
+  // this track's (a failed or pending fetch), so a previous track's cover,
+  // colour and scrim never sit next to a new title.
+  readonly property bool artShown: MediaService.artFor(artUrl)
+  readonly property string artDominant: artShown ? MediaService.artDominant : ""
+  readonly property real artLuma: artShown ? MediaService.artLuma : 0
+  // Covers are decoded only while the popup is open (and briefly after, so
+  // reopening does not flash); the bar never shows one.
+  property bool imagesActive: false
+  readonly property string artSource: artShown && imagesActive ? Model.fileUrl(MediaService.artFile) : ""
 
-    required property color accent
-    required property bool playing
-    property bool showIdle: false
-    readonly property int idleHeight: Style.space(3)
-
-    implicitWidth: Style.space(10)
-    implicitHeight: Style.space(9)
-    width: implicitWidth
-    height: implicitHeight
-    opacity: playing || showIdle ? 1 : 0
-
-    // An animation may stop between keyframes. Settle every stem at the
-    // baseline after playback stops so the bar reads as idle, not frozen.
-    function settleIdleBars() {
-      equalizerOne.height = equalizer.idleHeight
-      equalizerTwo.height = equalizer.idleHeight
-      equalizerThree.height = equalizer.idleHeight
-    }
-
-    onPlayingChanged: if (!playing) Qt.callLater(equalizer.settleIdleBars)
-    Component.onCompleted: if (!playing) settleIdleBars()
-
-    Behavior on opacity { NumberAnimation { duration: 120 } }
-
-    Row {
-      anchors.horizontalCenter: parent.horizontalCenter
-      anchors.bottom: parent.bottom
-      width: Style.space(8)
-      height: parent.height
-      spacing: Style.space(1)
-
-      Item {
-        width: Style.space(2)
-        height: parent.height
-
-        Rectangle {
-          id: equalizerOne
-          anchors.bottom: parent.bottom
-          width: parent.width
-          height: Style.space(3)
-          radius: width / 2
-          color: equalizer.accent
-        }
-      }
-
-      Item {
-        width: Style.space(2)
-        height: parent.height
-
-        Rectangle {
-          id: equalizerTwo
-          anchors.bottom: parent.bottom
-          width: parent.width
-          height: Style.space(7)
-          radius: width / 2
-          color: equalizer.accent
-        }
-      }
-
-      Item {
-        width: Style.space(2)
-        height: parent.height
-
-        Rectangle {
-          id: equalizerThree
-          anchors.bottom: parent.bottom
-          width: parent.width
-          height: Style.space(5)
-          radius: width / 2
-          color: equalizer.accent
-        }
-      }
-    }
-
-    SequentialAnimation {
-      running: equalizer.playing && equalizer.visible
-      loops: Animation.Infinite
-
-      NumberAnimation {
-        target: equalizerOne
-        property: "height"
-        from: Style.space(3)
-        to: Style.space(8)
-        duration: 240
-        easing.type: Easing.InOutSine
-      }
-      NumberAnimation {
-        target: equalizerOne
-        property: "height"
-        from: Style.space(8)
-        to: Style.space(2)
-        duration: 300
-        easing.type: Easing.InOutSine
-      }
-    }
-
-    SequentialAnimation {
-      running: equalizer.playing && equalizer.visible
-      loops: Animation.Infinite
-
-      NumberAnimation {
-        target: equalizerTwo
-        property: "height"
-        from: Style.space(7)
-        to: Style.space(2)
-        duration: 280
-        easing.type: Easing.InOutSine
-      }
-      NumberAnimation {
-        target: equalizerTwo
-        property: "height"
-        from: Style.space(2)
-        to: Style.space(8)
-        duration: 220
-        easing.type: Easing.InOutSine
-      }
-    }
-
-    SequentialAnimation {
-      running: equalizer.playing && equalizer.visible
-      loops: Animation.Infinite
-
-      NumberAnimation {
-        target: equalizerThree
-        property: "height"
-        from: Style.space(5)
-        to: Style.space(8)
-        duration: 200
-        easing.type: Easing.InOutSine
-      }
-      NumberAnimation {
-        target: equalizerThree
-        property: "height"
-        from: Style.space(8)
-        to: Style.space(3)
-        duration: 320
-        easing.type: Easing.InOutSine
-      }
+  function requestArt() { if (member.isLeader) MediaService.request(root.artUrl) }
+  onArtUrlChanged: requestArt()
+  Connections {
+    target: member
+    function onIsLeaderChanged() {
+      root.requestArt()
+      root.reconcileSource()
     }
   }
+  Component.onCompleted: Qt.callLater(function() {
+    if (!member.isLeader) return
+    root.chooseInitialSource()
+    root.requestArt()
+  })
 
-  component SourceTab: Item {
-    id: tab
-
-    required property string label
-    required property string iconText
-    required property color accent
-    required property bool selected
-    required property bool playing
-
-    signal clicked()
-
-    readonly property int horizontalPadding: Style.space(8)
-
-    implicitWidth: tabContent.implicitWidth + horizontalPadding * 2
-    implicitHeight: Style.space(28)
-    activeFocusOnTab: true
-    Keys.onReturnPressed: tab.clicked()
-    Keys.onEnterPressed: tab.clicked()
-    Keys.onSpacePressed: tab.clicked()
-
-    Rectangle {
-      anchors.fill: parent
-      radius: Style.cornerRadius * 2
-      color: tabMouse.containsMouse || tab.activeFocus ? root.panelFill : "transparent"
-
-      Behavior on color { ColorAnimation { duration: 120 } }
+  onOpenedChanged: {
+    if (opened) {
+      imageRelease.stop()
+      imagesActive = true
+    } else {
+      closeSettings()
+      imageRelease.restart()
     }
-
-    Row {
-      id: tabContent
-      anchors.centerIn: parent
-      spacing: Style.space(5)
-
-      Text {
-        textFormat: Text.PlainText
-        text: tab.iconText
-        color: tab.accent
-        font.family: root.fontFamily
-        font.pixelSize: Style.space(14)
-        anchors.verticalCenter: parent.verticalCenter
-      }
-
-      Text {
-        textFormat: Text.PlainText
-        text: tab.label
-        color: tab.selected ? root.foreground : root.panelMuted
-        font.family: root.panelFontFamily
-        font.pixelSize: Style.space(11)
-        anchors.verticalCenter: parent.verticalCenter
-      }
-
-      PlaybackEqualizer {
-        anchors.verticalCenter: parent.verticalCenter
-        accent: tab.accent
-        visible: root.showEqualizer
-        playing: root.showEqualizer && tab.playing
-        showIdle: true
-      }
-    }
-
-    Rectangle {
-      anchors.bottom: parent.bottom
-      anchors.horizontalCenter: parent.horizontalCenter
-      width: parent.width - Style.space(14)
-      height: Style.space(2)
-      radius: height / 2
-      color: Color.accent
-      visible: tab.selected
-    }
-
-    MouseArea {
-      id: tabMouse
-      anchors.fill: parent
-      hoverEnabled: true
-      cursorShape: Qt.PointingHandCursor
-      onClicked: { tab.forceActiveFocus(); tab.clicked() }
-    }
-  }
-
-
-  // ------------------------------------------------------------ album colour
-  //
-  // The panel wears the cover as its background, and "adaptive" is the whole
-  // point: a scrim strong enough for a Daft Punk sleeve of near-white beige
-  // would bury a dark one, so the cover is measured and the scrim answers.
-  // Two numbers come back — the mean luminance, which sets how hard the scrim
-  // has to work, and the dominant colour, which tints it so the panel reads
-  // as part of the artwork instead of a window parked on top of it.
-  //
-  // Qt can show the image but cannot tell us what colour it is, so an
-  // ImageMagick probe does the reading. Everything downstream falls back to
-  // the plain theme panel while that is unanswered or has failed, which is
-  // also what happens on a machine with no ImageMagick at all.
-  property string artDominant: ""
-  property string artMean: ""
-  property real artLuma: 0
-  // The URL the three values above describe — not necessarily the current
-  // one, which is what stops a stale answer from repainting a new track.
-  property string artProbed: ""
-  property string artProbeError: ""
-  // The normalised copy the probe wrote. Everything the panel displays comes
-  // from here and never from `artUrl`: a QML Image handed a raw art URL would
-  // repeat none of the probe's checks, and Qt would fetch any origin, follow
-  // redirects, and decode whatever its image plugins handle -- SVG and PDF
-  // included -- inside the shell process.
-  property string artFile: ""
-  readonly property string artSourceUrl: Model.fileUrl(artFile)
-
-  // Once the displayed cover comes from the probe, there is no configuration
-  // in which it is skippable -- turning the backdrop off still leaves the
-  // panel's own thumbnail to produce.
-  readonly property bool artWanted: true
-  // Only true once a cover has actually been measured and drawn.
-  readonly property bool backdropActive: artBackground && artFile !== "" && artProbed === artUrl
-  readonly property real scrimStrength: Model.scrimAlpha(artLuma, artIntensity)
-  readonly property real artBrightness: Model.artBrightness(artLuma)
-
-  // Theme panel colour pushed a fifth of the way towards the cover, at
-  // whatever opacity the cover's brightness demands. Tinting the theme colour
-  // rather than replacing it is what keeps a dark theme dark and a light one
-  // light while still letting the album through.
-  readonly property color scrimColor: {
-    var base = Color.popups.background
-    if (artDominant === "" || !artBackground) return Qt.rgba(base.r, base.g, base.b, artBackground ? scrimStrength : 1.0)
-    var dominant = Qt.color(artDominant)
-    var mixed = Qt.tint(base, Qt.rgba(dominant.r, dominant.g, dominant.b, 0.20))
-    return Qt.rgba(mixed.r, mixed.g, mixed.b, scrimStrength)
-  }
-
-  readonly property bool networkConnected: Networking.connectivity === NetworkConnectivity.Full
-    || Networking.connectivity === NetworkConnectivity.Limited
-  property bool networkSettled: false
-  readonly property bool networkReady: networkConnected && networkSettled
-  readonly property bool remoteArt: /^https?:\/\//i.test(root.artUrl)
-  property int artRetries: 0
-  onNetworkConnectedChanged: networkSettled = false
-  onNetworkReadyChanged: {
-    artRetry.stop()
-    artRetries = 0
-    if (networkReady && remoteArt) artProbeDelay.restart()
   }
   Timer {
-    // Local artwork remains available while DNS and routes settle.
-    interval: 2000
-    running: root.networkConnected && !root.networkSettled
-    onTriggered: root.networkSettled = true
+    id: imageRelease
+    interval: 1000
+    onTriggered: if (!root.opened) root.imagesActive = false
   }
-  onArtUrlChanged: {
-    artRetry.stop()
-    artRetries = 0
-    artProbeDelay.restart()
-  }
-  onArtWantedChanged: if (artWanted) probeArt(false)
-  Component.onCompleted: {
-    Qt.callLater(function() { root.chooseInitialSource() })
-    probeArt(false)
-  }
-
-  function probeArt(force) {
-    if (!artWanted) return
-
-    var target = Model.artProbeTarget(root.artUrl)
-    if (!target) {
-      root.forgetArt()
-      return
-    }
-    if (!force && root.artProbed === root.artUrl) return
-    if (remoteArt && !networkReady) {
-      if (root.artProbed !== root.artUrl) root.forgetArt()
-      return
-    }
-    artRetry.stop()
-
-    // Wait for the cancelled process to exit before assigning a new request URL.
-    if (artProbe.running) {
-      if (artProbe.pending === root.artUrl) return
-      artProbe.running = false
-      artProbeDelay.restart()
-      return
-    }
-    artProbe.pending = root.artUrl
-    artProbe.command = ["/bin/sh", "-c", Model.artProbeScript(), "sh", target]
-    artProbe.running = true
-  }
-
-  function forgetArt() {
-    root.artFile = ""
-    root.artDominant = ""
-    root.artMean = ""
-    root.artLuma = 0
-    root.artProbed = ""
-  }
-
-  function applyArtProbe(url, text) {
-    // A probe that finished after the track already moved on describes the
-    // wrong cover, so drop it and let the newer one land.
-    if (url !== root.artUrl) return
-
-    var probe = Model.parseArtProbe(text)
-    if (!probe) {
-      root.artProbeError = "no colour in probe output"
-      return
-    }
-
-    root.artProbeError = ""
-    root.artRetries = 0
-    artRetry.stop()
-    root.artFile = probe.file
-    root.artDominant = probe.dominant
-    root.artMean = probe.mean
-    root.artLuma = probe.luma
-    root.artProbed = url
-  }
-
-  // Track changes arrive in bursts while skipping; only the settled one is
-  // worth a subprocess and a download.
-  Timer {
-    id: artProbeDelay
-    interval: 250
-    onTriggered: root.probeArt(false)
-  }
-
-  Timer {
-    id: artRetry
-    onTriggered: root.probeArt(false)
-  }
-
-  Process {
-    id: artProbe
-    property string pending: ""
-
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: root.applyArtProbe(artProbe.pending, text)
-    }
-
-    onExited: function(exitCode) {
-      // The collector still fires on failure, with nothing in it; this is
-      // only here so the reason survives for `artDebug`.
-      if (pending !== root.artUrl) return
-      if (exitCode !== 0) root.artProbeError = "probe exited " + exitCode
-      // Allow the stdout collector to apply a successful result before retrying.
-      Qt.callLater(function() {
-        if (artProbe.pending !== root.artUrl || root.artProbed === root.artUrl
-            || !root.remoteArt || !root.networkReady || root.artRetries >= 3) return
-        artRetry.interval = 2500 * Math.pow(2, root.artRetries++)
-        artRetry.restart()
-      })
-    }
-  }
-
 
   // ----------------------------------------------------------------- actions
   function playPause() {
@@ -729,39 +308,35 @@ Panel {
     }
     return false
   }
-
   function skipNext() {
-    if (!live || !player.canGoNext) return false
+    if (!canGoNext) return false
     player.next()
     return true
   }
-
   function skipPrevious() {
-    if (!live || !player.canGoPrevious) return false
+    if (!canGoPrevious) return false
     player.previous()
     return true
   }
-
   function seekTo(seconds) {
     if (!canSeek) return false
     player.position = Math.max(0, Math.min(trackLength, seconds))
     return true
   }
-
-  function nudgeVolume(delta) {
-    if (!live || !player.volumeSupported) return false
-    player.volume = Math.max(0, Math.min(1, player.volume + delta))
+  function seekBy(seconds) { return seekTo(trackPosition + seconds) }
+  function setVolume(value) {
+    if (!volumeSupported) return false
+    player.volume = Math.max(0, Math.min(1, value))
     return true
   }
-
+  function nudgeVolume(delta) { return volumeSupported && setVolume(player.volume + delta) }
   function toggleShuffle() {
-    if (!live || !player.shuffleSupported) return false
+    if (!shuffleSupported) return false
     player.shuffle = !player.shuffle
     return true
   }
-
   function cycleLoop() {
-    if (!live || !player.loopSupported) return false
+    if (!loopSupported) return false
     player.loopState = loopState === MprisLoopState.None ? MprisLoopState.Playlist
       : loopState === MprisLoopState.Playlist ? MprisLoopState.Track
       : MprisLoopState.None
@@ -775,27 +350,28 @@ Panel {
       if (root.youtubeWindow) {
         root.youtubeWindow.activate()
       } else {
-        youtubeLaunch.command = Preferences.youtubeLaunch(root.settings)
+        youtubeLaunch.command = Schema.youtubeLaunch(root.preference("youtubeBrowser"), root.preference("youtubeProfile"))
         youtubeLaunch.running = true
       }
       return
     }
     if (bar) bar.run("omarchy launch spotify")
   }
-
   Process {
     id: youtubeLaunch
     stderr: StdioCollector { id: launchError; waitForEnd: true }
     onExited: function(exitCode) {
-      if (exitCode !== 0) {
-        root.settingsError = root.tr("Could not start browser.") + " " + launchError.text.trim()
-        root.openSettings()
-      }
+      if (exitCode === 0) return
+      console.warn("foamy-media: starting the browser failed:", launchError.text.trim())
+      root.settingsError = "Couldn't start the browser."
+      root.lastSave = null
+      root.openSettings()
+      root.browserSettingsOpen = true
     }
   }
 
-  function statusJson() {
-    return JSON.stringify({
+  function statusObject() {
+    return {
       running: root.sourceOpen,
       controllable: root.live,
       playing: root.playing,
@@ -807,149 +383,86 @@ Panel {
       artist: root.trackArtist,
       album: root.trackAlbum,
       artUrl: root.artUrl,
+      artShown: root.artShown,
       position: root.trackPosition,
       length: root.trackLength,
       shuffle: root.shuffleOn,
       loop: root.loopName,
       leftClick: root.leftClick,
-      language: root.language,
+      language: FoamyI18n.language,
+      open: root.opened,
       editingSettings: root.editingSettings,
-      artDominant: root.artDominant,
-      artLuma: root.artLuma,
-      revision: 10
-    })
+      leader: member.isLeader,
+      revision: 11
+    }
+  }
+
+  // ---- IPC (one handler per shell) ---------------------------------------
+  FoamyIpc {
+    target: "foamy.media"
+    enabled: member.isLeader
+    function settings(): void { root.openSettings() }
+    function open(): void { root.open() }
+    function close(): void { root.close() }
+    function toggle(): void { root.toggle() }
+    function playPause(): string { return root.playPause() ? "ok" : "unhandled" }
+    function next(): string { return root.skipNext() ? "ok" : "unhandled" }
+    function previous(): string { return root.skipPrevious() ? "ok" : "unhandled" }
+    function shuffle(): string { return root.toggleShuffle() ? "ok" : "unhandled" }
+    function loop(): string { return root.cycleLoop() ? "ok" : "unhandled" }
+    function launch(): void { root.launch() }
+    function status(): string { return JSON.stringify(root.statusObject()) }
+  }
+
+  // MPRIS position is only re-read when something asks for it. One tick per
+  // shell (every bar reads the same player): as often as the underline gains
+  // a pixel while it shows, every half second while a popup shows the time.
+  Timer {
+    running: member.isLeader && root.playing && (member.demanded || (root.showProgress && !root.vertical))
+    interval: member.demanded ? 500 : Model.progressTickInterval(root.trackLength, barContent.progressWidth)
+    repeat: true
+    onTriggered: if (root.player) root.player.positionChanged()
   }
 
   // ---------------------------------------------------------------- bar entry
   visible: shown
-  readonly property real labelSlot: labelClip.visible ? labelClip.width + Style.space(6) : 0
-  readonly property real equalizerSlot: barEqualizer.visible
-    ? barEqualizer.implicitWidth + Style.space(6)
-    : 0
-  implicitWidth: !shown ? 0 : (vertical
-    ? barSize
-    : Math.round(glyph.implicitWidth + labelSlot + equalizerSlot + Style.space(12)))
-  implicitHeight: !shown ? 0 : (vertical ? Math.round(glyph.implicitHeight + Style.space(10)) : barSize)
+  implicitWidth: shown ? barContent.implicitWidth : 0
+  implicitHeight: shown ? barContent.implicitHeight : 0
 
-  Row {
-    id: content
-    anchors.centerIn: parent
-    spacing: root.vertical ? 0 : Style.space(6)
-
-    Text {
-      textFormat: Text.PlainText
-      id: glyph
-      anchors.verticalCenter: parent.verticalCenter
-      text: root.sourceIcon
-      color: !root.live ? Qt.darker(root.barForeground, 1.9)
-        : root.playing ? root.accentColor
-        : Qt.darker(root.accentColor, 1.5)
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.body
-
-      Behavior on color {
-        enabled: !root.bar || root.bar.foregroundAnimationEnabled
-        ColorAnimation { duration: 160 }
-      }
-    }
-
-    Item {
-      id: labelClip
-      visible: !root.vertical && root.label !== ""
-      width: visible ? Math.min(root.maxLabelWidth, labelText.implicitWidth) : 0
-      height: glyph.height
-      clip: true
-      anchors.verticalCenter: parent.verticalCenter
-
-      // The title sits at the start and stays readable. Only a title too long
-      // for the slot pans, and it rests at both ends before turning around,
-      // so glancing at the bar always catches the beginning of a track.
-      Text {
-        textFormat: Text.PlainText
-        id: labelText
-        text: root.label
-        color: root.barForeground
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.body
-        anchors.verticalCenter: parent.verticalCenter
-        // Text direction determines which end contains the beginning of the title.
-        x: horizontalAlignment === Text.AlignRight ? panOffset-overflow : -panOffset
-
-        property real panOffset: 0
-        readonly property real overflow: Math.max(0, implicitWidth - labelClip.width)
-
-        onTextChanged: {
-          panOffset = 0
-          if (marquee.running) marquee.restart()
-        }
-      }
-
-      SequentialAnimation {
-        id: marquee
-        running: root.animateTitle && labelText.overflow > 0 && labelClip.visible && !root.opened
-        loops: Animation.Infinite
-        onRunningChanged: if (!running) labelText.panOffset = 0
-
-        PauseAnimation { duration: 2600 }
-        NumberAnimation {
-          target: labelText
-          property: "panOffset"
-          from: 0
-          to: labelText.overflow
-          duration: Math.max(1600, labelText.overflow * 45)
-          easing.type: Easing.InOutQuad
-        }
-        PauseAnimation { duration: 2200 }
-        NumberAnimation {
-          target: labelText
-          property: "panOffset"
-          from: labelText.overflow
-          to: 0
-          duration: Math.max(900, labelText.overflow * 20)
-          easing.type: Easing.InOutQuad
-        }
-      }
-    }
-
-    PlaybackEqualizer {
-      id: barEqualizer
-      anchors.verticalCenter: parent.verticalCenter
-      visible: root.showEqualizer && !root.vertical && root.live
-      accent: root.accentColor
-      playing: root.showEqualizer && root.playing
-      showIdle: true
-    }
-  }
-
-  // Thin now-playing underline along the bottom of the widget.
-  Rectangle {
-    id: progressLine
-    visible: root.showProgress && root.live && root.trackLength > 0 && !root.vertical
-    x: Style.space(6)
-    width: Math.max(0, (root.width - Style.space(12)) * root.progress)
-    height: Math.max(1, Style.space(2))
-    radius: height / 2
-    color: root.accentColor
-    opacity: root.playing ? 0.95 : 0.5
-    anchors.bottom: parent.bottom
-    anchors.bottomMargin: Style.space(2)
-
-    Behavior on width { NumberAnimation { duration: 380; easing.type: Easing.OutCubic } }
-    Behavior on opacity { NumberAnimation { duration: 160 } }
+  BarContent {
+    id: barContent
+    anchors.fill: parent
+    vertical: root.vertical
+    barSize: root.bar ? root.bar.barSize : Style.bar.sizeHorizontal
+    fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+    glyph: root.sourceIcon
+    glyphColor: !root.live ? Qt.darker(root.barForeground, 1.9)
+      : root.playing ? root.accentColor : Qt.darker(root.accentColor, 1.5)
+    colorAnimation: !root.bar || root.bar.foregroundAnimationEnabled
+    label: root.label
+    labelColor: root.barForeground
+    maxLabelWidth: root.maxLabelWidth
+    animateTitle: root.animateTitle
+    live: root.live
+    playing: root.playing
+    showEqualizer: root.showEqualizer
+    accent: root.accentColor
+    showProgress: root.showProgress && root.trackLength > 0
+    progress: root.progress
+    popupOpen: root.opened
   }
 
   // The bar overlays every widget slot with its own pointer handler for
-  // drag-to-reorder. It forwards a left click only to a slot that exposes
+  // drag-to-reorder. It forwards a click only to a slot that exposes
   // triggerPress(), and that same check drives the pointer cursor and the
-  // open-panel indicator, so the click policy has to live here rather than in
-  // a MouseArea of our own. Buttons the bar does not accept still fall
-  // through to the MouseArea below, which routes them back to this function.
+  // open-panel indicator, so the click policy lives here rather than in a
+  // MouseArea of our own. Buttons the bar does not forward still reach the
+  // MouseArea below, which routes them back to this function.
   function triggerPress(button) {
     if (bar) bar.hideTooltip(root)
-
     var name = button === Qt.LeftButton ? "left" : button === Qt.RightButton ? "right"
       : button === Qt.MiddleButton ? "middle" : ""
-    var action = Preferences.clickAction(name, root.leftClick)
+    var action = Schema.clickAction(name, root.leftClick)
     if (action === "next") { if (live) skipNext(); return }
     if (action === "panel") toggle()
     else if (action === "playPause") playPause()
@@ -974,25 +487,10 @@ Panel {
     // gesture-based: one skip per swipe, no matter how far the fingers travel.
     property real wheelAccumulator: 0
     property bool gestureSkipped: false
-
     // How far a swipe must travel before it counts, so resting fingers or a
     // stray brush while reaching for the bar do not change the track.
     readonly property real gestureThreshold: 50
     readonly property real notch: 120
-
-    property var wheelTrace: []
-
-    function recordWheel(wheel, outcome) {
-      var trace = pointer.wheelTrace.slice(-11)
-      trace.push({
-        phase: wheel.phase,
-        angle: wheel.angleDelta.y,
-        pixel: wheel.pixelDelta.y,
-        accumulated: Math.round(pointer.wheelAccumulator),
-        outcome: outcome
-      })
-      pointer.wheelTrace = trace
-    }
 
     function endGesture() {
       pointer.wheelAccumulator = 0
@@ -1002,20 +500,11 @@ Panel {
     onClicked: function(mouse) { root.triggerPress(mouse.button) }
 
     onWheel: function(wheel) {
-      if (!root.live || root.scrollAction === "Nothing") {
-        pointer.recordWheel(wheel, "ignored")
-        return
-      }
-
+      if (!root.live || root.scrollAction === "Nothing") return
       // Kinetic scrolling after the fingers lift is not a deliberate request.
-      if (wheel.phase === pointer.phaseMomentum) {
-        pointer.recordWheel(wheel, "momentum")
-        return
-      }
-
+      if (wheel.phase === pointer.phaseMomentum) return
       if (wheel.phase === pointer.phaseBegin) pointer.endGesture()
       if (wheel.phase === pointer.phaseEnd) {
-        pointer.recordWheel(wheel, "gesture-end")
         pointer.endGesture()
         return
       }
@@ -1033,660 +522,69 @@ Panel {
       gestureIdle.restart()
 
       if (root.scrollAction === "Volume") {
-        // Volume is meant to be continuous, so every step counts on both kinds
-        // of device — just scaled so a swipe is not a jump to the extremes.
+        // Volume is continuous, so every step counts on both kinds of device,
+        // scaled so a swipe is not a jump to the extremes.
         var volumeStep = continuous ? pointer.notch * 2 : pointer.notch
         while (Math.abs(pointer.wheelAccumulator) >= volumeStep) {
           var volumeUp = pointer.wheelAccumulator > 0
           pointer.wheelAccumulator += volumeUp ? -volumeStep : volumeStep
           root.nudgeVolume((volumeUp ? 1 : -1) * root.volumeStep / 100)
         }
-        pointer.recordWheel(wheel, "volume")
         return
       }
 
       if (continuous) {
-        if (pointer.gestureSkipped || Math.abs(pointer.wheelAccumulator) < pointer.gestureThreshold) {
-          pointer.recordWheel(wheel, pointer.gestureSkipped ? "gesture-consumed" : "accumulating")
-          return
-        }
-
+        if (pointer.gestureSkipped || Math.abs(pointer.wheelAccumulator) < pointer.gestureThreshold) return
         pointer.gestureSkipped = true
-        var swipeUp = pointer.wheelAccumulator > 0
-        pointer.recordWheel(wheel, swipeUp ? "previous" : "next")
-        if (swipeUp) root.skipPrevious()
+        if (pointer.wheelAccumulator > 0) root.skipPrevious()
         else root.skipNext()
         return
       }
 
       // Discrete wheel: one skip per notch, rate limited so a fast spin does
       // not tear through the queue.
-      if (Math.abs(pointer.wheelAccumulator) < pointer.notch) {
-        pointer.recordWheel(wheel, "accumulating")
-        return
-      }
-
+      if (Math.abs(pointer.wheelAccumulator) < pointer.notch) return
       var up = pointer.wheelAccumulator > 0
       pointer.wheelAccumulator = 0
-
-      if (skipCooldown.running) {
-        pointer.recordWheel(wheel, "cooldown")
-        return
-      }
-
+      if (skipCooldown.running) return
       skipCooldown.restart()
-      pointer.recordWheel(wheel, up ? "previous" : "next")
       if (up) root.skipPrevious()
       else root.skipNext()
     }
 
-    onEntered: if (root.bar) root.bar.showTooltip(root, root.live ? ((root.playing ? "" : root.tr("Paused") + " — ") + Model.barLabel(root.player, true)) : root.sourceName + " — " + root.tr("Not running"))
+    onEntered: if (root.bar) root.bar.showTooltip(root, root.live
+      ? (root.playing ? "" : FoamyI18n.t("Paused") + " — ") + Model.barLabel(root.player, true)
+      : FoamyI18n.t("%1 is not running", root.sourceName))
     onExited: if (root.bar) root.bar.hideTooltip(root)
   }
 
   Timer {
     id: gestureIdle
     interval: 220
-    repeat: false
     onTriggered: pointer.endGesture()
   }
-
   Timer {
     id: skipCooldown
     interval: 350
-    repeat: false
   }
 
-  // MPRIS position is only re-read when something asks for it, so drive a
-  // re-read while there is a progress display that would otherwise go stale.
-  Timer {
-    running: root.playing && (root.opened || progressLine.visible)
-    interval: root.opened ? 500 : 1000
-    repeat: true
-    onTriggered: if (root.player) root.player.positionChanged()
-  }
-
-  // Use a card-width anchor to align the popup with the widget's left edge.
-  // Vertical bars keep the stock centring geometry.
+  // ------------------------------------------------------------------ popup
+  // A card-width anchor that starts at the widget's leading edge lines the
+  // popup up with the widget. Vertical bars keep the stock centring.
   Item {
     id: popupLeftAnchor
-    x: 0
-    y: 0
     width: popup.contentWidth
     height: root.height
   }
 
-  // ------------------------------------------------------------------ popup
-  component MediaLabel: Text {
-    textFormat: Text.PlainText
-    color: root.foreground
-    font.family: root.panelFontFamily
-    font.pixelSize: Style.space(13)
-  }
-
-  component MediaControl: Button {
-    width: Style.space(36)
-    height: Style.space(36)
-    horizontalPadding: 0
-    verticalPadding: 0
-    radius: Style.cornerRadius * 2
-    fontFamily: root.fontFamily
-    iconSize: Style.space(18)
-    foreground: root.foreground
-    accent: Color.accent
-    focusable: true
-    opacity: enabled ? 1 : 0.35
-  }
-
-  component MediaToggle: MediaControl {
-    property bool toggledOn: false
-
-    // Mode state stays visible independently of pointer and keyboard focus.
-    foreground: toggledOn && enabled ? Color.popups.background : root.panelMuted
-    color: toggledOn && enabled ? Color.accent : hot && enabled ? root.panelFill : "transparent"
-    borderSpec: activeFocus && enabled
-      ? Border.flat(root.foreground, Math.max(1, Style.space(1))) : Border.none()
-  }
-
-  MediaPopup {
+  FoamyPopup {
     id: popup
     anchorItem: root.vertical ? root : popupLeftAnchor
     bar: root.bar
     owner: root
     open: root.opened
-    focusTarget: root.editingSettings ? (settingsPane ? settingsPane.backTarget : null) : mediaScroll
-    padding: 0
-    borderSpec: Border.flat(root.panelOutline, 1)
-    contentWidth: popup.fittedContentWidth(Style.space(420))
-    contentHeight: popup.fittedContentHeight(column.implicitHeight, root.editingSettings ? Style.space(620) : 0)
-
-    // Settings and short displays share the same bounded scrolling surface.
-    Flickable {
-      id: mediaScroll
-      Connections {
-        target: mediaScroll.Window.window
-        function onActiveFocusItemChanged() {
-          var item = target.activeFocusItem
-          if (!root.editingSettings || !item) return
-          var point = item.mapToItem(mediaScroll.contentItem, 0, 0)
-          if (point.y < mediaScroll.contentY) mediaScroll.contentY = Math.max(0, point.y - Style.space(8))
-          else if (point.y + item.height > mediaScroll.contentY + mediaScroll.height)
-            mediaScroll.contentY = Math.min(mediaScroll.contentHeight - mediaScroll.height,
-              point.y + item.height - mediaScroll.height + Style.space(8))
-        }
-      }
-      Keys.onEscapePressed: root.editingSettings ? root.closeSettings() : root.close()
-      anchors.fill: parent
-      contentWidth: width
-      contentHeight: column.implicitHeight
-      clip: true
-      interactive: contentHeight > height + 1
-      boundsBehavior: Flickable.StopAtBounds
-      flickableDirection: Flickable.VerticalFlick
-      // A source can lose its track while the compact player is scrolled.
-      onContentHeightChanged: contentY = Math.max(0, Math.min(contentY, contentHeight - height))
-      onHeightChanged: contentY = Math.max(0, Math.min(contentY, contentHeight - height))
-      Controls.ScrollBar.vertical: Controls.ScrollBar {
-        visible: mediaScroll.interactive
-        width: Style.space(4)
-        padding: 0
-        contentItem: Rectangle { implicitWidth: Style.space(4); radius: width / 2; color: root.panelMuted }
-        background: Item {}
-      }
-
-      Column {
-        id: column
-        width: parent.width
-
-        Loader {
-          id: settingsLoader
-
-          width: parent.width
-          active: root.settingsContentActive
-          visible: root.editingSettings
-
-          sourceComponent: Component {
-            SettingsPane {
-              id: settingsPane
-
-              visible: root.editingSettings
-              width: parent.width
-              settings: root.settings
-              browserCandidates: root.editingSettings && settingsPane.browserSettingsOpen ? BrowserSetup.candidates(ToplevelManager.toplevels.values || [], root.players, DesktopEntries.applications.values || []) : []
-              onApplyBrowser: function(values) {
-                root.saveBrowserSetup(values);
-              }
-              language: root.language
-              saving: preferencesSave.running
-              error: root.settingsError
-              onClearError: root.settingsError = ""
-              onSave: function(key, value) {
-                root.savePreference(key, value);
-              }
-              onBack: root.closeSettings()
-            }
-
-          }
-
-        }
-
-        Item {
-          id: header
-          visible: !root.editingSettings
-          width: parent.width
-          height: headerContent.implicitHeight + Style.space(root.compactPanel ? 30 : 42)
-          // Confine the blur to the header, with only the outer top corners rounded.
-          layer.enabled: true
-          layer.effect: MultiEffect { maskEnabled: true; maskSource: headerClipMask }
-          Item {
-            id: headerClipMask
-            anchors.fill: parent
-            visible: false
-            layer.enabled: true
-            Rectangle { anchors.fill: parent; radius: Math.max(0, popup.cornerRadius - Border.top(popup.borderSpec)); color: "white" }
-            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: parent.height / 2; color: "white" }
-          }
-
-          // The measured cover supplies only the header wash. Controls below
-          // stay on the same plain surface as the clock and weather panels.
-          Item {
-            id: backdrop
-            z: -1
-            anchors.fill: parent
-            visible: root.artBackground
-
-            // The card is rounded outside its border; inside it, the corner is
-            // that much tighter. Zero on a theme with square corners, which is
-            // also where the mask below turns itself off.
-            readonly property real corner: Math.max(0, popup.cornerRadius - Border.top(popup.borderSpec))
-
-            // Blurring samples past the edges of its source, so an image stopping
-            // at the card would fade to nothing around the rim. The cover is drawn
-            // larger than the card instead and the mask below cuts it back, which
-            // puts the fade safely outside.
-            readonly property real bleed: Style.space(32)
-
-            Image {
-              id: artSource
-              anchors.fill: parent
-              anchors.margins: -backdrop.bleed
-              source: root.artBackground ? root.artSourceUrl : ""
-              fillMode: Image.PreserveAspectCrop
-              asynchronous: true
-              cache: true
-              // Drawn only through the effect below, never directly.
-              visible: false
-              // A fixed decode size, not one bound to the item's own width, which
-              // would re-decode the image every time the popup resizes. The blur
-              // erases anything finer than this long before it reaches the screen.
-              sourceSize.width: 384
-              sourceSize.height: 384
-            }
-
-            // Blurred hard, desaturated a little, and dimmed by however bright the
-            // cover measured. The blur is what turns a photograph into a texture:
-            // no edge in it competes with the text sitting on top.
-            MultiEffect {
-              anchors.fill: artSource
-              source: artSource
-              blurEnabled: true
-              blur: 1.0
-              blurMax: 48
-              blurMultiplier: 1.6
-              saturation: 0.2
-              // Flattening the cover's own contrast a little is worth more to the
-              // text on top than it costs the artwork underneath: it is the bright
-              // patches, not the average, that swallow a caption.
-              contrast: -0.1
-              brightness: root.artBrightness
-              maskEnabled: true
-              maskSource: cornerMask
-              // Without a threshold the mask's transparent margin still passes, and
-              // the blur spills out over the card's border.
-              maskThresholdMin: 0.5
-              maskSpreadAtMin: 0.05
-              // Fades out while the next cover loads and back in when it is ready,
-              // so a track change is a crossfade rather than a flash of theme.
-              opacity: artSource.status === Image.Ready ? 1 : 0
-              visible: opacity > 0
-
-              Behavior on opacity {
-                NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
-              }
-            }
-
-            // Matches the effect's geometry exactly, and marks the card-sized
-            // rectangle inside it as the only part that survives. The lower
-            // corners meet the controls inside the card and must stay square.
-            Item {
-              id: cornerMask
-              anchors.fill: artSource
-              layer.enabled: true
-              visible: false
-
-              Rectangle {
-                anchors.fill: parent
-                anchors.margins: backdrop.bleed
-                radius: backdrop.corner
-                bottomLeftRadius: 0
-                bottomRightRadius: 0
-                color: "black"
-              }
-            }
-
-            // The legibility scrim, and the adaptive half of this whole feature:
-            // theme panel colour, tinted towards the cover, at the opacity the
-            // cover's brightness calls for. Text contrast stays where the theme
-            // put it no matter what is playing.
-            Rectangle {
-              anchors.fill: parent
-              radius: backdrop.corner
-              bottomLeftRadius: 0
-              bottomRightRadius: 0
-              color: root.scrimColor
-
-              Behavior on color {
-                ColorAnimation { duration: 280; easing.type: Easing.OutCubic }
-              }
-            }
-          }
-
-          MediaAction {
-            id: settingsButton
-            anchors.top: parent.top
-            anchors.right: parent.right
-            anchors.topMargin: Style.space(13)
-            anchors.rightMargin: Style.space(16)
-            implicitWidth: Style.space(32)
-            implicitHeight: Style.space(32)
-            radius: Style.cornerRadius * 2
-            iconSize: Style.space(16)
-            iconName: "settings"
-            foreground: root.panelMuted
-            tooltipText: root.tr("Settings")
-            keyTarget: mediaScroll
-            onClicked: root.openSettings()
-          }
-
-          Column {
-            id: headerContent
-            anchors.centerIn: parent
-            width: parent.width - Style.space(40)
-            spacing: Style.space(root.compactPanel ? 20 : 30)
-
-
-            Row {
-              width: parent.width
-              // Keep long metadata below the top-right settings button.
-              height: Math.max(art.height, headerMetadata.implicitHeight + settingsButton.height)
-              spacing: Style.space(18)
-
-              Rectangle {
-                id: art
-                width: Math.min(Style.space(root.compactPanel ? 96 : 128), parent.width * 0.34)
-                height: width
-                radius: Style.cornerRadius * 2
-                color: root.panelFill
-                layer.enabled: true
-                layer.effect: MultiEffect { maskEnabled: true; maskSource: artworkMask }
-
-                Image {
-                  id: coverImage
-                  // Decode only the physical pixels painted by the thumbnail.
-                  sourceSize.width: Math.max(1, Math.ceil(width * Screen.devicePixelRatio))
-                  sourceSize.height: Math.max(1, Math.ceil(height * Screen.devicePixelRatio))
-                  anchors.fill: parent
-                  fillMode: Image.PreserveAspectCrop
-                  asynchronous: true
-                  cache: true
-                  source: root.popupContentActive ? root.artSourceUrl : ""
-                  visible: status === Image.Ready
-                }
-                MediaLabel {
-                  anchors.centerIn: parent
-                  visible: coverImage.status !== Image.Ready
-                  text: root.sourceIcon
-                  color: root.sourceBrandColor
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.space(36)
-                }
-              }
-              Item {
-                id: artworkMask
-                width: art.width
-                height: art.height
-                visible: false
-                layer.enabled: true
-                layer.textureSize: Qt.size(art.width, art.height)
-                Rectangle { width: art.width; height: art.height; radius: art.radius; color: "white" }
-              }
-
-              Column {
-                id: headerMetadata
-                width: parent.width - art.width - parent.spacing
-                anchors.bottom: parent.bottom
-                spacing: Style.space(5)
-                MediaLabel {
-                  width: parent.width
-                  text: root.live ? (root.trackTitle || root.tr("Nothing playing"))
-                    : root.sourceOpen ? root.tr("Nothing playing") : root.sourceName + " — " + root.tr("Not running")
-                  font.pixelSize: Style.space(root.compactPanel ? 20 : 24)
-                  wrapMode: Text.WordWrap
-                  maximumLineCount: 2
-                  elide: Text.ElideRight
-                }
-                MediaLabel {
-                  width: parent.width
-                  text: root.trackArtist
-                  font.pixelSize: Style.space(14)
-                  color: root.panelMuted
-                  wrapMode: Text.WordWrap
-                  maximumLineCount: 2
-                  elide: Text.ElideRight
-                  visible: text !== ""
-                }
-                MediaLabel {
-                  width: parent.width
-                  text: root.trackAlbum
-                  font.pixelSize: Style.space(12)
-                  color: root.panelMuted
-                  elide: Text.ElideRight
-                  visible: text !== ""
-                }
-              }
-            }
-          }
-        }
-
-        Column {
-          id: controlBody
-          visible: !root.editingSettings
-          width: parent.width - Style.space(40)
-          anchors.horizontalCenter: parent.horizontalCenter
-          spacing: Style.space(12)
-          Item { width: 1; height: Style.space(8) }
-
-          Column {
-            width: parent.width
-            spacing: Style.space(1)
-            visible: root.live && root.trackLength > 0
-            // Playback time and transport retain their conventional physical direction.
-            LayoutMirroring.enabled: false
-            LayoutMirroring.childrenInherit: true
-            PanelSlider {
-              id: seekSlider
-              width: parent.width
-              bar: root.bar
-              minimum: 0
-              maximum: Math.max(1, root.trackLength)
-              value: root.trackPosition
-              step: 5
-              trackColor: root.panelFill
-              fillColor: Color.accent
-              knobColor: Color.accent
-              knobSize: Style.space(10)
-              enabled: root.canSeek
-              opacity: root.canSeek ? 1 : 0.5
-              onReleased: function(value) { root.seekTo(value) }
-            }
-            Item {
-              width: parent.width
-              height: elapsedText.implicitHeight
-              MediaLabel {
-                id: elapsedText
-                anchors.left: parent.left
-                text: Model.formatTime(seekSlider.dragging ? seekSlider.liveValue : root.trackPosition)
-                font.pixelSize: Style.space(11)
-                color: root.panelMuted
-              }
-              MediaLabel {
-                anchors.right: parent.right
-                text: Model.formatTime(root.trackLength)
-                font.pixelSize: Style.space(11)
-                color: root.panelMuted
-              }
-            }
-          }
-
-          Row {
-            id: transportControls
-            LayoutMirroring.enabled: false
-            LayoutMirroring.childrenInherit: true
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: Math.max(Style.space(8), (controlBody.width - Style.space(216)) / 4)
-            visible: root.live
-            MediaToggle {
-              anchors.verticalCenter: parent.verticalCenter
-              iconText: "󰒝"
-              toggledOn: root.shuffleOn
-              tooltipText: root.tr(root.shuffleOn ? "Shuffle on" : "Shuffle off")
-              enabled: root.sourceKind === "spotify" && root.live && root.player.shuffleSupported
-              onClicked: root.toggleShuffle()
-            }
-            MediaControl {
-              anchors.verticalCenter: parent.verticalCenter
-              iconText: "󰒮"
-              tooltipText: root.tr("Previous track")
-              enabled: root.live && root.player.canGoPrevious
-              onClicked: root.skipPrevious()
-            }
-            MediaControl {
-              id: playPauseButton
-              width: Style.space(48)
-              height: width
-              radius: width / 2
-              iconText: root.playing ? "󰏤" : "󰐊"
-              iconSize: Style.space(23)
-              foreground: Color.popups.background
-              background: root.foreground
-              color: hot || activeFocus ? Color.accent : root.foreground
-              tooltipText: root.tr(root.playing ? "Pause" : "Play")
-              enabled: root.live
-              onClicked: root.playPause()
-            }
-            MediaControl {
-              anchors.verticalCenter: parent.verticalCenter
-              iconText: "󰒭"
-              tooltipText: root.tr("Next track")
-              enabled: root.live && root.player.canGoNext
-              onClicked: root.skipNext()
-            }
-            MediaToggle {
-              anchors.verticalCenter: parent.verticalCenter
-              iconText: root.loopIcon
-              toggledOn: root.loopState !== MprisLoopState.None
-              tooltipText: root.tr(root.loopState === MprisLoopState.Track ? "Repeat: track" : root.loopState === MprisLoopState.Playlist ? "Repeat: playlist" : "Repeat: off")
-              enabled: root.sourceKind === "spotify" && root.live && root.player.loopSupported
-              onClicked: root.cycleLoop()
-            }
-          }
-
-          Row {
-            width: parent.width
-            spacing: Style.space(10)
-            visible: root.live && root.player.volumeSupported
-            MediaLabel {
-              width: Style.space(20)
-              anchors.verticalCenter: parent.verticalCenter
-              text: root.live && root.player.volume < 0.01 ? "󰝟" : "󰕾"
-              font.family: root.fontFamily
-              color: root.panelMuted
-              horizontalAlignment: Text.AlignHCenter
-            }
-            PanelSlider {
-              id: volumeSlider
-              // The host slider uses absolute pointer coordinates and a left-origin fill.
-              LayoutMirroring.enabled: false
-              LayoutMirroring.childrenInherit: true
-              width: parent.width - Style.space(71)
-              anchors.verticalCenter: parent.verticalCenter
-              bar: root.bar
-              minimum: 0
-              maximum: 1
-              step: 0.05
-              value: root.live ? root.player.volume : 0
-              trackColor: root.panelFill
-              fillColor: Color.accent
-              knobColor: Color.accent
-              knobSize: Style.space(10)
-              onMoved: function(value) { if (root.live) root.player.volume = value }
-            }
-            MediaLabel {
-              width: Style.space(31)
-              anchors.verticalCenter: parent.verticalCenter
-              text: Math.round(volumeSlider.liveValue * 100) + "%"
-              font.pixelSize: Style.space(11)
-              color: root.panelMuted
-              horizontalAlignment: Text.AlignRight
-            }
-          }
-
-          Rectangle { width: parent.width; height: 1; color: root.panelOutline }
-          Item {
-            id: mediaFooter
-            width: parent.width
-            height: Style.space(28)
-            Row {
-              id: sourceTabRow
-              spacing: Style.space(4)
-              anchors.left: parent.left
-              anchors.verticalCenter: parent.verticalCenter
-              SourceTab {
-                visible: root.spotifyOpen || !root.anySourceOpen
-                enabled: root.spotifyOpen
-                label: "Spotify"
-                iconText: ""
-                selected: root.sourceKind === "spotify"
-                accent: root.spotifyGreen
-                playing: root.spotifyPlaying
-                onClicked: root.selectSource("spotify")
-              }
-              SourceTab {
-                visible: root.youtubeOpen
-                label: "YouTube"
-                iconText: ""
-                selected: root.sourceKind === "youtube"
-                accent: root.youtubeRed
-                playing: root.youtubePlaying
-                onClicked: root.selectSource("youtube")
-              }
-            }
-
-            PanelActionButton {
-
-              radius: Style.cornerRadius * 2
-              id: launchButton
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              size: Style.space(26)
-              iconText: "󰏌"
-              fontFamily: root.fontFamily
-              fontSize: Style.space(14)
-              foreground: root.panelMuted
-              focusable: true
-              tooltipText: root.tr(root.sourceOpen ? "Show" : "Start") + " " + root.sourceName
-              onClicked: { root.launch(); root.close() }
-            }
-          }
-
-          Item { width: 1; height: Style.space(1) }
-        }
-      }
+    body: Component {
+      MediaView { media: root }
     }
-  }
-
-  IpcHandler {
-    target: "foamy.media"
-
-    function settings(): void { root.openSettings() }
-    function open(): void { root.open() }
-    function close(): void { root.close() }
-    function toggle(): void { root.toggle() }
-    function playPause(): string { return root.playPause() ? "ok" : "unhandled" }
-    function next(): string { return root.skipNext() ? "ok" : "unhandled" }
-    function previous(): string { return root.skipPrevious() ? "ok" : "unhandled" }
-    function shuffle(): string { return root.toggleShuffle() ? "ok" : "unhandled" }
-    function loop(): string { return root.cycleLoop() ? "ok" : "unhandled" }
-    function launch(): void { root.launch() }
-    function status(): string { return root.statusJson() }
-    function wheelDebug(): string { return JSON.stringify(pointer.wheelTrace) }
-    function artDebug(): string {
-      return JSON.stringify({
-        wanted: root.artWanted,
-        file: root.artFile,
-        url: root.artUrl,
-        target: Model.artProbeTarget(root.artUrl),
-        probed: root.artProbed,
-        running: artProbe.running,
-        error: root.artProbeError,
-        mean: root.artMean,
-        dominant: root.artDominant,
-        luma: root.artLuma,
-        scrim: root.scrimStrength,
-        brightness: root.artBrightness,
-        imageStatus: artSource.status
-      })
-    }
-    function reprobeArt(): void { root.probeArt(true) }
   }
 }

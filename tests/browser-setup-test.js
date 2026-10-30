@@ -1,13 +1,14 @@
 const assert = require('node:assert/strict')
 const B = require('../BrowserSetup.js')
 const P = require('../Preferences.js')
+const Prefs = require('./prefs.cjs')
 const window = {appId:'vivaldi-youtube.com__-Default', title:'Example - YouTube'}
 const players = [{dbusName:'org.mpris.MediaPlayer2.vivaldi.instance42', desktopEntry:'vivaldi-stable'}]
 const entries = [{id:'vivaldi-stable', startupClass:'Vivaldi-stable', command:['/usr/bin/vivaldi-stable','%U']}]
 const row = B.suggestion(window, players, entries)
 assert.deepEqual(row.values, {youtubeAppId:window.appId, youtubeProfile:'Default', youtubeMprisName:'vivaldi', youtubeBrowser:'vivaldi-stable'})
 assert.deepEqual(row.missing, [])
-for (const [key,value] of Object.entries(row.values)) assert.equal(P.valid(key,value),true)
+for (const [key,value] of Object.entries(row.values)) assert.equal(Prefs.valid(P.schema,key,value),true)
 assert.equal(B.suggestion({appId:'vivaldi-stable',title:'Example - YouTube'},players,entries),null)
 assert.equal(B.webApp('vivaldi-youtube.com.evil.test__-Default'),null)
 assert.equal(B.webApp('vivaldi-music.youtube.com__-Default'),null)

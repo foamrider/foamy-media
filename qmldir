@@ -1,10 +1,7 @@
 singleton MediaService 1.0 MediaService.qml
-singleton FoamyI18n 1.0 FoamyI18n.qml
+BarContent 1.0 BarContent.qml
 BrowserPicker 1.0 BrowserPicker.qml
-MediaAction 1.0 MediaAction.qml
-MediaDropdown 1.0 MediaDropdown.qml
-MediaIcon 1.0 MediaIcon.qml
-MediaPopup 1.0 MediaPopup.qml
+Equalizer 1.0 Equalizer.qml
+MediaSettings 1.0 MediaSettings.qml
+MediaView 1.0 MediaView.qml
 Panel 1.0 Panel.qml
-SafeTextField 1.0 SafeTextField.qml
-SettingsPane 1.0 SettingsPane.qml

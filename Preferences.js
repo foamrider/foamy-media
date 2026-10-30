@@ -1,4 +1,5 @@
-// Shared settings validation and English/Norwegian labels.
+// Settings schema for the media widget: `fields` mirrors manifest.json
+// barWidget.schema; validation and saving are foamy-kit FoamyPrefs.js.
 var fields = [
   {
     "key": "maxLabelWidth",
@@ -133,16 +134,17 @@ var fields = [
     "defaultValue": "vivaldi"
   }
 ]
+// Short labels for the settings page (the manifest labels are for the bar editor).
 var labels = {
   "leftClick": "Left-click plays/pauses",
   "hideWhenClosed": "Hide when stopped",
   "scrollAction": "Mouse wheel",
   "volumeStep": "Volume step (%)",
   "maxLabelWidth": "Label width (px)",
-  "showArtist": "Show artist",
-  "showProgress": "Show progress",
+  "showArtist": "Show the artist in the bar",
+  "showProgress": "Show progress in the bar",
   "animateTitle": "Scroll long titles",
-  "showEqualizer": "Show equalizer",
+  "showEqualizer": "Show the equalizer",
   "accent": "Accent",
   "artBackground": "Artwork background",
   "artIntensity": "Artwork intensity (%)",
@@ -153,34 +155,36 @@ var labels = {
   "youtubeMprisName": "MPRIS name"
 }
 
-function field(key) {
-  for (var i = 0; i < fields.length; i++) if (fields[i].key === key) return fields[i]
-  return null
+// Extra constraints for foamy-kit's FoamyPrefs engine. The browser value is
+// launched (uwsm-app -- <browser>), so it and the MPRIS name are bare program
+// names that cannot start with "-"; profiles and app IDs are any non-blank
+// single line. Kept out of `fields`, which mirrors manifest.json exactly.
+var namePattern = "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+var linePattern = "^(?=.*\\S)[^\\x00-\\x1f\\x7f]+$"
+var constraints = {
+  "youtubeBrowser": { pattern: namePattern, maxLength: 200 },
+  "youtubeMprisName": { pattern: namePattern, maxLength: 200 },
+  "youtubeProfile": { pattern: linePattern, maxLength: 200 },
+  "youtubeAppId": { pattern: linePattern, maxLength: 200 }
 }
-function valid(key, value) {
-  var spec = field(key)
-  if (!spec) return false
-  if (spec.type === "boolean") return typeof value === "boolean"
-  if (spec.type === "integer") return typeof value === "number" && isFinite(value)
-    && Math.floor(value) === value && value >= spec.min && value <= spec.max
-  if (spec.type === "enum") return spec.options.indexOf(value) !== -1
-  if (typeof value !== "string" || !value.trim() || value.length > 200 || /[\x00-\x1f\x7f]/.test(value)) return false
-  if (key === "youtubeBrowser" || key === "youtubeMprisName") return /^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(value)
-  return true
-}
-function value(settings, key) {
-  var spec = field(key)
-  if (!spec) return undefined
-  return settings && valid(key, settings[key]) ? settings[key] : spec.defaultValue
-}
+// The schema handed to FoamyPrefs (validation, defaults, saving).
+var schema = fields.map(function(field) {
+  var extra = constraints[field.key]
+  if (!extra) return field
+  var out = {}
+  for (var key in field) out[key] = field[key]
+  for (var name in extra) out[name] = extra[name]
+  return out
+})
+
 function clickAction(button, leftClick) {
   if (button === "middle") return "next"
   if (button !== "left" && button !== "right") return "none"
   return (button === "left") === (leftClick !== "Play/pause") ? "panel" : "playPause"
 }
-function youtubeLaunch(settings) {
-  return ["uwsm-app", "--", value(settings, "youtubeBrowser"),
-    "--app=https://youtube.com/", "--profile-directory=" + value(settings, "youtubeProfile")]
+// The validated browser and profile (Prefs.value) launch the dedicated web app.
+function youtubeLaunch(browser, profile) {
+  return ["uwsm-app", "--", String(browser), "--app=https://youtube.com/", "--profile-directory=" + String(profile)]
 }
-if (typeof module !== "undefined") module.exports = {labels: labels, fields: fields,
-   field: field, valid: valid, value: value, clickAction: clickAction, youtubeLaunch: youtubeLaunch}
+if (typeof module !== "undefined") module.exports = {labels: labels, fields: fields, schema: schema,
+  constraints: constraints, clickAction: clickAction, youtubeLaunch: youtubeLaunch}
