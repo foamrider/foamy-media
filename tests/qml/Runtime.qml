@@ -209,6 +209,19 @@ ShellRoot {
     playerView.tabRequested(1)
     eq(JSON.stringify(player.calls), JSON.stringify(["previous", "seekBy:5", "volume:55", "select:youtube", "switch:1"]),
       "cursor actions")
+    // The hero band carries the cover as its picture (blurred on the GPU,
+    // cover-fitted under the kit scrim on the software renderer).
+    var gpu = playerView.effectsAvailable
+    eq(gpu, false, "the harness renders in software")
+    eq(playerView.band.title, "Spotify", "band title names the source")
+    eq(playerView.band.imageSource.toString(), "", "no cover, no picture")
+    player.artSource = "file:///tmp/foamy-media-cover.png"
+    eq(playerView.band.imageSource.toString(), gpu ? "" : "file:///tmp/foamy-media-cover.png", "cover is the band picture")
+    eq(playerView.band.background !== null, gpu, "blurred cover only on the GPU renderer")
+    player.artBackground = false
+    eq(playerView.band.imageSource.toString(), "", "Artwork background off keeps the foamy wash")
+    player.artBackground = true
+    player.artSource = ""
     // Short screen: the player scrolls and keeps the cursor row in view.
     var scroll = null
     for (var c = 0; c < playerView.children.length; c++)

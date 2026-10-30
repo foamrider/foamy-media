@@ -2,16 +2,17 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls as Controls
 import QtQuick.Effects
+import QtQuick.Layouts
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 import "kit"
 import "Model.js" as Model
 
-// The popup body: header over the blurred cover, the cover with the track,
-// seek, transport, volume, source tabs and the settings page. Everything
-// comes from `media` (the Panel, or the preview's mock), so this file never
-// touches MPRIS or a process.
+// The popup body: the hero band (the cover as its picture, the track in its
+// hero slot), seek, transport, volume, source tabs and the settings page.
+// Everything comes from `media` (the Panel, or the preview's mock), so this
+// file never touches MPRIS or a process.
 //
 // Keyboard (one cursor, hover moves it too): Up/Down (j/k) move between
 // rows, Left/Right (h/l) move along the transport and source rows and seek
@@ -30,7 +31,9 @@ PanelKeyCatcher {
   readonly property bool effectsAvailable: GraphicsInfo.api !== GraphicsInfo.Software
   // Source brand glyphs come from the bar's (nerd) font, as in the bar.
   readonly property string glyphFamily: media.bar && media.bar.fontFamily ? media.bar.fontFamily : FoamyStyle.monoFamily
-  readonly property bool backdropShown: media.artBackground === true && media.artSource !== "" && effectsAvailable
+  // The cover as the band's picture (Settings → Artwork background).
+  readonly property bool pictureShown: media.artBackground === true && media.artSource !== ""
+  readonly property bool backdropShown: pictureShown && effectsAvailable
 
   implicitWidth: FoamyStyle.popupWidth
   implicitHeight: editing ? settingsPage.implicitHeight : main.implicitHeight
@@ -42,7 +45,7 @@ PanelKeyCatcher {
   }
   // The row holding a cursor stop, to scroll it into view.
   function rowItem(key) {
-    if (key === "settings") return header
+    if (key === "settings") return band
     if (key === "seek") return seekRow
     if (key === "volume") return volumeRow
     if (key.indexOf("tab:") === 0 || key === "launch") return footer
@@ -165,119 +168,37 @@ PanelKeyCatcher {
       id: main
       width: mainScroll.width
 
-      Item {
-        id: hero
+      // The hero band: the cover is the band's picture (blurred on the GPU
+      // renderer, cover-fitted under the kit scrim otherwise), the title row
+      // names the source and its state, the hero slot holds the cover and the
+      // track. Without a cover (or with the artwork background off) the band
+      // keeps the foamy wash.
+      FoamyHeroBand {
+        id: band
         width: parent.width
-        implicitHeight: header.implicitHeight + coverRow.height + (view.compact ? FoamyStyle.gap : FoamyStyle.gapLarge)
+        iconName: "music"
+        title: view.media.sourceName
+        meta: !view.media.sourceOpen && !view.media.live ? FoamyI18n.t("Not running")
+          : !view.media.live ? FoamyI18n.t("Nothing playing")
+          : FoamyI18n.t(view.media.playing ? "Playing" : "Paused")
+        settingsHasCursor: view.hasCursor("settings")
+        onSettingsClicked: view.media.openSettings()
+        onSettingsHovered: function(hovered) { if (hovered) view.hover("settings") }
+        imageSource: view.pictureShown && !view.effectsAvailable ? view.media.artSource : ""
+        background: view.backdropShown ? blurredCover : null
+        // The blurred cover brings its own scrim, measured against the cover.
+        scrim: !view.backdropShown && view.pictureShown
 
-        // The measured cover as a wash behind the header: blurred hard,
-        // desaturated a little and dimmed by its brightness, under a scrim of
-        // the theme surface tinted towards the cover. Text contrast stays
-        // where the theme put it whatever is playing.
-        Item {
-          id: backdrop
-          anchors.fill: parent
-          visible: view.backdropShown
-          // The card is rounded outside its 1px border; inside it, that much tighter.
-          readonly property real corner: FoamyStyle.innerRadius(FoamyStyle.radius, FoamyStyle.borderWidth)
-          // Blurring samples past the edges of its source, so the cover is drawn
-          // larger than the header and the mask cuts it back, which puts the
-          // fade safely outside.
-          readonly property real bleed: Style.space(32)
-          readonly property real scrimStrength: Model.scrimAlpha(view.media.artLuma, view.media.artIntensity)
-          readonly property color scrimColor: {
-            var base = Commons.Color.popups.background
-            if (view.media.artDominant === "") return Qt.rgba(base.r, base.g, base.b, scrimStrength)
-            var dominant = Qt.color(view.media.artDominant)
-            var mixed = Qt.tint(base, Qt.rgba(dominant.r, dominant.g, dominant.b, 0.20))
-            return Qt.rgba(mixed.r, mixed.g, mixed.b, scrimStrength)
-          }
-
-          Image {
-            id: artBlurSource
-            anchors.fill: parent
-            anchors.margins: -backdrop.bleed
-            source: view.backdropShown ? view.media.artSource : ""
-            fillMode: Image.PreserveAspectCrop
-            asynchronous: true
-            cache: true
-            visible: false
-            // A fixed decode size: the blur erases anything finer, and binding
-            // it to the item would re-decode whenever the popup resizes.
-            sourceSize.width: 384
-            sourceSize.height: 384
-          }
-          MultiEffect {
-            anchors.fill: artBlurSource
-            source: artBlurSource
-            blurEnabled: true
-            blur: 1.0
-            blurMax: 48
-            blurMultiplier: 1.6
-            saturation: 0.2
-            // Bright patches, not the average, swallow a caption.
-            contrast: -0.1
-            brightness: Model.artBrightness(view.media.artLuma)
-            maskEnabled: true
-            maskSource: cornerMask
-            maskThresholdMin: 0.5
-            maskSpreadAtMin: 0.05
-            // A track change cross-fades instead of flashing the theme.
-            opacity: artBlurSource.status === Image.Ready ? 1 : 0
-            visible: opacity > 0
-            Behavior on opacity { NumberAnimation { duration: FoamyMotion.slow; easing.type: Easing.OutCubic } }
-          }
-          // The header-sized rectangle inside the bleed is the only part that
-          // survives; its lower corners meet the controls and stay square.
-          Item {
-            id: cornerMask
-            anchors.fill: artBlurSource
-            layer.enabled: view.backdropShown
-            visible: false
-            Rectangle {
-              anchors.fill: parent
-              anchors.margins: backdrop.bleed
-              radius: backdrop.corner
-              bottomLeftRadius: 0
-              bottomRightRadius: 0
-              color: "black" // mask alpha source, never drawn
-            }
-          }
-          Rectangle {
-            anchors.fill: parent
-            radius: backdrop.corner
-            bottomLeftRadius: 0
-            bottomRightRadius: 0
-            color: backdrop.scrimColor
-            Behavior on color { ColorAnimation { duration: FoamyMotion.slow; easing.type: Easing.OutCubic } }
-          }
-        }
-
-        FoamyHeader {
-          id: header
-          width: parent.width
-          iconName: "music"
-          title: view.media.sourceName
-          meta: !view.media.sourceOpen && !view.media.live ? FoamyI18n.t("Not running")
-            : !view.media.live ? FoamyI18n.t("Nothing playing")
-            : FoamyI18n.t(view.media.playing ? "Playing" : "Paused")
-          settingsHasCursor: view.hasCursor("settings")
-          onSettingsClicked: view.media.openSettings()
-          onSettingsHovered: function(hovered) { if (hovered) view.hover("settings") }
-        }
-
-        Row {
+        RowLayout {
           id: coverRow
-          anchors.top: header.bottom
-          x: FoamyStyle.padding
-          width: parent.width - FoamyStyle.padding * 2
-          height: Math.max(cover.height, metadata.implicitHeight)
+          Layout.fillWidth: true
           spacing: FoamyStyle.padding
 
           Rectangle {
             id: cover
-            width: Math.min(Style.space(view.compact ? 96 : 128), parent.width * 0.34)
-            height: width
+            Layout.preferredWidth: Style.space(view.compact ? 72 : 96)
+            Layout.preferredHeight: Layout.preferredWidth
+            Layout.alignment: Qt.AlignVCenter
             radius: FoamyStyle.radius
             color: FoamyPalette.fieldFill
             layer.enabled: view.effectsAvailable && coverImage.status === Image.Ready
@@ -304,23 +225,22 @@ PanelKeyCatcher {
               font.family: view.glyphFamily
               font.pixelSize: FoamyStyle.font.displayLarge
             }
-          }
-          Item {
-            id: coverMask
-            width: cover.width
-            height: cover.height
-            visible: false
-            layer.enabled: view.effectsAvailable
-            Rectangle { anchors.fill: parent; radius: cover.radius; color: "white" }  // mask alpha source, never drawn
+            Item {
+              id: coverMask
+              anchors.fill: parent
+              visible: false
+              layer.enabled: view.effectsAvailable
+              Rectangle { anchors.fill: parent; radius: cover.radius; color: "white" }  // mask alpha source, never drawn
+            }
           }
 
-          Column {
+          ColumnLayout {
             id: metadata
-            width: parent.width - cover.width - parent.spacing
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: FoamyStyle.gapSmall
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignVCenter
+            spacing: FoamyStyle.gapTiny
             Text {
-              width: parent.width
+              Layout.fillWidth: true
               text: view.media.live ? (view.media.trackTitle || FoamyI18n.t("Nothing playing"))
                 : view.media.sourceOpen ? FoamyI18n.t("Nothing playing") : FoamyI18n.t("%1 is not running", view.media.sourceName)
               textFormat: Text.PlainText
@@ -330,35 +250,36 @@ PanelKeyCatcher {
               elide: Text.ElideRight
               color: FoamyPalette.text
               font.family: FoamyStyle.fontFamily
-              font.pixelSize: view.compact ? FoamyStyle.font.heading : FoamyStyle.font.display
+              font.pixelSize: view.compact ? FoamyStyle.font.title : FoamyStyle.font.heading
+              font.weight: Font.DemiBold
             }
             Text {
               visible: text !== ""
-              width: parent.width
+              Layout.fillWidth: true
               text: view.media.trackArtist
               textFormat: Text.PlainText
               horizontalAlignment: Text.AlignLeft
-              wrapMode: Text.WordWrap
-              maximumLineCount: 2
               elide: Text.ElideRight
-              color: FoamyPalette.secondaryText
+              color: FoamyPalette.text
               font.family: FoamyStyle.fontFamily
-              font.pixelSize: FoamyStyle.font.title
+              font.pixelSize: FoamyStyle.font.body
             }
             Text {
               visible: text !== ""
-              width: parent.width
+              Layout.fillWidth: true
               text: view.media.trackAlbum
               textFormat: Text.PlainText
               horizontalAlignment: Text.AlignLeft
               elide: Text.ElideRight
               color: FoamyPalette.secondaryText
               font.family: FoamyStyle.fontFamily
-              font.pixelSize: FoamyStyle.font.body
+              font.pixelSize: FoamyStyle.font.bodySmall
             }
           }
         }
       }
+
+      Item { width: 1; height: FoamyStyle.gap }
 
       Column {
         id: controls
@@ -539,6 +460,8 @@ PanelKeyCatcher {
         width: parent.width
         height: FoamyStyle.controlHeight + FoamyStyle.gapLarge * 2
         Rectangle {
+          // Not under the band's own hairline when there are no controls.
+          visible: view.seekShown || view.media.live === true || view.media.volumeSupported === true
           x: FoamyStyle.padding
           y: FoamyStyle.gap
           width: parent.width - FoamyStyle.padding * 2
@@ -587,12 +510,96 @@ PanelKeyCatcher {
 
   // ---- Settings ----------------------------------------------------------
   readonly property alias settingsPage: settingsPage
+  readonly property alias band: band
   MediaSettings {
     id: settingsPage
     visible: view.editing
     width: parent.width
     height: parent.height
     media: view.media
+  }
+
+  // ---- Blurred cover (GPU renderer) ---------------------------------------
+  // The measured cover as the band's picture: blurred hard, desaturated a
+  // little and dimmed by its brightness, under a scrim of the theme surface
+  // tinted towards the cover at the opacity the cover's brightness calls for
+  // (artIntensity). It keeps to the band's rounded top itself.
+  Component {
+    id: blurredCover
+    Item {
+      id: backdrop
+      // Blurring samples past the edges of its source, so the cover is drawn
+      // larger than the band and the mask cuts it back, which puts the fade
+      // safely outside.
+      readonly property real bleed: Style.space(32)
+      readonly property real corner: band.topRadius
+      readonly property real scrimStrength: Model.scrimAlpha(view.media.artLuma, view.media.artIntensity)
+      readonly property color scrimColor: {
+        var base = Commons.Color.popups.background
+        if (view.media.artDominant === "") return Qt.rgba(base.r, base.g, base.b, scrimStrength)
+        var dominant = Qt.color(view.media.artDominant)
+        var mixed = Qt.tint(base, Qt.rgba(dominant.r, dominant.g, dominant.b, 0.20))
+        return Qt.rgba(mixed.r, mixed.g, mixed.b, scrimStrength)
+      }
+      Image {
+        id: artBlurSource
+        anchors.fill: parent
+        anchors.margins: -backdrop.bleed
+        source: view.media.artSource
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        cache: true
+        visible: false
+        // A fixed decode size: the blur erases anything finer, and binding
+        // it to the item would re-decode whenever the popup resizes.
+        sourceSize.width: 384
+        sourceSize.height: 384
+      }
+      MultiEffect {
+        anchors.fill: artBlurSource
+        source: artBlurSource
+        blurEnabled: true
+        blur: 1.0
+        blurMax: 48
+        blurMultiplier: 1.6
+        saturation: 0.2
+        // Bright patches, not the average, swallow a caption.
+        contrast: -0.1
+        brightness: Model.artBrightness(view.media.artLuma)
+        maskEnabled: true
+        maskSource: cornerMask
+        maskThresholdMin: 0.5
+        maskSpreadAtMin: 0.05
+        // A track change cross-fades instead of flashing the theme.
+        opacity: artBlurSource.status === Image.Ready ? 1 : 0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: FoamyMotion.slow; easing.type: Easing.OutCubic } }
+      }
+      // The band-sized rectangle inside the bleed is the only part that
+      // survives; its lower corners meet the body and stay square.
+      Item {
+        id: cornerMask
+        anchors.fill: artBlurSource
+        layer.enabled: true
+        visible: false
+        Rectangle {
+          anchors.fill: parent
+          anchors.margins: backdrop.bleed
+          radius: backdrop.corner
+          bottomLeftRadius: 0
+          bottomRightRadius: 0
+          color: "black" // mask alpha source, never drawn
+        }
+      }
+      Rectangle {
+        anchors.fill: parent
+        radius: backdrop.corner
+        bottomLeftRadius: 0
+        bottomRightRadius: 0
+        color: backdrop.scrimColor
+        Behavior on color { ColorAnimation { duration: FoamyMotion.slow; easing.type: Easing.OutCubic } }
+      }
+    }
   }
 
   // ---- Building blocks ---------------------------------------------------

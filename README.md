@@ -18,8 +18,8 @@ Built for Omarchy 4.5; it also loads on Omarchy 4.0.
 Requires an MPRIS player (Spotify, spotifyd, spotify-player, or a
 Chromium-family browser for YouTube). Optional:
 
-- Covers and the album-colour backdrop: `curl` and ImageMagick (`magick`).
-  Without them the popup shows the source icon on its plain background.
+- Covers and the album-colour band: `curl` and ImageMagick (`magick`).
+  Without them the popup shows the source icon on the foamy band.
 - YouTube: Hyprland and the configured browser, started through `uwsm-app`.
 - Pasting into the settings fields: `wl-paste` (wl-clipboard), `jq` and
   `timeout` (coreutils), all part of Omarchy. Pastes are capped at 16 KiB and
@@ -95,14 +95,16 @@ Omarchy's `shell.json`.
 | Show the equalizer | on | In the bar and on the source tabs |
 | Label width (px) | 200 | 60–600 |
 | Accent | Source color | Spotify green / YouTube red, Album art, Theme accent or Bar foreground |
-| Artwork background | on | The blurred cover behind the popup header |
+| Artwork background | on | The cover as the popup's header band (blurred) |
 | Artwork intensity (%) | 55 | How much cover shows through, 0–100 |
 | Enable YouTube | on | |
 | Browser, Profile | vivaldi, Default | Start the YouTube web app |
 | Window app ID, MPRIS name | Vivaldi web app | Under **Advanced** |
 
-With Omarchy's CPU rendering the popup keeps its plain background and a
-square cover (the blur and the rounded mask need the GPU renderer).
+With Omarchy's CPU rendering the header band shows the cover sharp under a
+readability scrim, and the thumbnail is square (the blur, the adaptive scrim and
+the rounded mask need the GPU renderer). Without a cover the band keeps the
+foamy tinted wash.
 
 Language follows **Omarchy → Setup → Language** on Omarchy 4.5 (English and
 Norwegian catalogs; right-to-left languages mirror the popup and settings,
