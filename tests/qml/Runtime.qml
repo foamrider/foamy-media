@@ -209,6 +209,22 @@ ShellRoot {
     playerView.tabRequested(1)
     eq(JSON.stringify(player.calls), JSON.stringify(["previous", "seekBy:5", "volume:55", "select:youtube", "switch:1"]),
       "cursor actions")
+    // Short screen: the player scrolls and keeps the cursor row in view.
+    var scroll = null
+    for (var c = 0; c < playerView.children.length; c++)
+      if (playerView.children[c].objectName === "mediaMainScroll") scroll = playerView.children[c]
+    check(scroll !== null, "main view has a scroll area")
+    if (scroll) {
+      eq(scroll.interactive, false, "no scrolling while the player fits")
+      playerView.height = 220
+      eq(scroll.interactive, true, "the player scrolls when the popup is shorter than it")
+      playerView.place("launch")
+      check(scroll.contentY > 0 && scroll.contentY + scroll.height >= scroll.contentHeight - 1, "cursor on the footer scrolls it into view")
+      playerView.place("settings")
+      eq(scroll.contentY, 0, "cursor on the header scrolls back up")
+      playerView.place("tab:youtube")
+      playerView.height = playerView.implicitHeight
+    }
     player.opened = false
     eq(playerView.cursorKey, "tab:youtube", "cursor kept until reopened")
     player.opened = true
