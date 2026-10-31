@@ -149,6 +149,7 @@ PanelKeyCatcher {
   // ---- Main view ---------------------------------------------------------
   // The popup is capped by the screen (short screens, large UI scale); the
   // player then scrolls, and the cursor row is kept in view.
+  FoamyWheelScroll { id: wheel; target: mainScroll }
   Flickable {
     id: mainScroll
     objectName: "mediaMainScroll"
