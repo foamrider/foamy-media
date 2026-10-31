@@ -139,6 +139,8 @@ FoamySettingsPage {
     required property string key
     readonly property var spec: Prefs.field(Schema.schema, key)
     width: parent ? parent.width : 0
+    // Short numbers (px, %): label, narrow field and unit on one row.
+    compact: true
     label: page.label(key)
     unit: Schema.units[key] || ""
     value: page.value(key)
