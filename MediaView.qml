@@ -289,39 +289,33 @@ PanelKeyCatcher {
         spacing: FoamyStyle.gapSmall
 
         // Playback time, transport and volume keep their physical direction in RTL.
-        FoamyCursorSurface {
+        // The slider rows are cursor stops without a row fill: the cursor
+        // rings the thumb (DESIGN.md "Sliders").
+        Item {
           id: seekRow
           visible: view.seekShown
           width: parent.width
           height: seekColumn.implicitHeight + FoamyStyle.gap * 2
-          foreground: FoamyPalette.text
-          hasCursor: view.hasCursor("seek")
-          onHovered: view.hover("seek")
           LayoutMirroring.enabled: false
           LayoutMirroring.childrenInherit: true
-          Accessible.role: Accessible.Slider
-          Accessible.name: FoamyI18n.t("Position")
+          HoverHandler { onHoveredChanged: if (hovered) view.hover("seek") }
           Column {
             id: seekColumn
             x: FoamyStyle.gap
             y: FoamyStyle.gap
             width: parent.width - FoamyStyle.gap * 2
             spacing: FoamyStyle.gapTiny
-            PanelSlider {
+            MediaSlider {
               id: seekSlider
+              objectName: "mediaSeekSlider"
               width: parent.width
-              bar: view.media.bar
-              minimum: 0
-              maximum: Math.max(1, view.media.trackLength)
-              value: view.media.trackPosition
-              step: 5
-              trackColor: FoamyPalette.fieldFill
-              fillColor: Commons.Color.accent
-              knobColor: Commons.Color.accent
-              knobSize: Style.space(10)
+              label: FoamyI18n.t("Position")
+              to: Math.max(1, view.media.trackLength)
+              stepSize: 5
+              current: view.media.trackPosition
+              hasCursor: view.hasCursor("seek")
               enabled: view.media.canSeek === true
-              opacity: enabled ? 1 : FoamyStyle.disabledOpacity
-              onReleased: function(value) { view.media.seekTo(value) }
+              onCommitted: function(value) { view.media.seekTo(value) }
             }
             Item {
               width: parent.width
@@ -329,7 +323,7 @@ PanelKeyCatcher {
               Text {
                 id: elapsed
                 anchors.left: parent.left
-                text: Model.formatTime(seekSlider.dragging ? seekSlider.liveValue : view.media.trackPosition)
+                text: Model.formatTime(seekSlider.pressed ? seekSlider.value : view.media.trackPosition)
                 textFormat: Text.PlainText
                 color: FoamyPalette.secondaryText
                 font.family: FoamyStyle.monoFamily
@@ -400,18 +394,14 @@ PanelKeyCatcher {
           }
         }
 
-        FoamyCursorSurface {
+        Item {
           id: volumeRow
           visible: view.media.volumeSupported === true
           width: parent.width
           height: FoamyStyle.rowHeight
-          foreground: FoamyPalette.text
-          hasCursor: view.hasCursor("volume")
-          onHovered: view.hover("volume")
           LayoutMirroring.enabled: false
           LayoutMirroring.childrenInherit: true
-          Accessible.role: Accessible.Slider
-          Accessible.name: FoamyI18n.t("Volume")
+          HoverHandler { onHoveredChanged: if (hovered) view.hover("volume") }
           FoamyIcon {
             id: volumeIcon
             anchors.left: parent.left
@@ -422,23 +412,19 @@ PanelKeyCatcher {
             name: view.media.volume < 0.01 ? "volume-x" : "volume-2"
             color: FoamyPalette.secondaryText
           }
-          PanelSlider {
+          MediaSlider {
             id: volumeSlider
+            objectName: "mediaVolumeSlider"
             anchors.left: volumeIcon.right
             anchors.right: volumeText.left
             anchors.leftMargin: FoamyStyle.gapLarge
             anchors.rightMargin: FoamyStyle.gapLarge
             anchors.verticalCenter: parent.verticalCenter
-            bar: view.media.bar
-            minimum: 0
-            maximum: 1
-            step: 0.05
-            value: view.media.volume
-            trackColor: FoamyPalette.fieldFill
-            fillColor: Commons.Color.accent
-            knobColor: Commons.Color.accent
-            knobSize: Style.space(10)
-            onMoved: function(value) { view.media.setVolume(value) }
+            label: FoamyI18n.t("Volume")
+            stepSize: 0.05
+            current: view.media.volume
+            hasCursor: view.hasCursor("volume")
+            onMoved: view.media.setVolume(value)
           }
           Text {
             id: volumeText
@@ -446,7 +432,7 @@ PanelKeyCatcher {
             anchors.rightMargin: FoamyStyle.gap
             anchors.verticalCenter: parent.verticalCenter
             width: Style.space(34)
-            text: FoamyI18n.t("%1%", FoamyI18n.number(Math.round(volumeSlider.liveValue * 100)))
+            text: FoamyI18n.t("%1%", FoamyI18n.number(Math.round(volumeSlider.value * 100)))
             textFormat: Text.PlainText
             horizontalAlignment: Text.AlignRight
             color: FoamyPalette.secondaryText

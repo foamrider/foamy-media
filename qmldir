@@ -5,3 +5,4 @@ Equalizer 1.0 Equalizer.qml
 MediaSettings 1.0 MediaSettings.qml
 MediaView 1.0 MediaView.qml
 Panel 1.0 Panel.qml
+MediaSlider 1.0 MediaSlider.qml

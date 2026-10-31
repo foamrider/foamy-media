@@ -12,7 +12,7 @@ Item {
   id: preview
   required property QtObject bar
   required property Item anchorItem
-  property var previewStates: ["playing", "two-sources", "not-running", "settings", "settings-browser"]
+  property var previewStates: ["playing", "two-sources", "not-running", "settings", "settings-browser", "cursor-seek", "cursor-volume"]
   property string previewState: "playing"
   property int settleMs: 900
   readonly property Item popup: popup
@@ -166,8 +166,17 @@ Item {
     height: barWidget.height
   }
 
-  // Scroll the settings page to the browser picker for that shot.
-  onPreviewStateChanged: if (previewState === "settings-browser") scrollToBrowser.start()
+  // Scroll the settings page to the browser picker for that shot; put the
+  // panel cursor on a slider for the cursor-* shots.
+  onPreviewStateChanged: {
+    if (previewState === "settings-browser") scrollToBrowser.start()
+    if (previewState.indexOf("cursor-") === 0) placeCursor.start()
+  }
+  Timer {
+    id: placeCursor
+    interval: 300
+    onTriggered: if (popup.bodyItem) popup.bodyItem.place(preview.previewState.slice(7))
+  }
   Timer {
     id: scrollToBrowser
     interval: 300

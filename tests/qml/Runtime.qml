@@ -147,6 +147,13 @@ ShellRoot {
     return null
   }
   function key(view, text) { keys.emitTextKey(view, text) }
+  function findNamed(item, name) {
+    if (!item) return null
+    if (item.objectName === name) return item
+    var kids = item.children || []
+    for (var i = 0; i < kids.length; i++) { var hit = findNamed(kids[i], name); if (hit) return hit }
+    return null
+  }
 
   function leaders() {
     var count = 0
@@ -215,11 +222,24 @@ ShellRoot {
     playerView.activateRequested()
     playerView.moveRequested(0, -1)
     eq(playerView.cursorKey, "seek", "up reaches the timeline")
+    // Sliders (DESIGN.md "Sliders"): the cursor rings the thumb, the row
+    // behind it stays unfilled.
+    var seekSlider = findNamed(playerView, "mediaSeekSlider")
+    var volumeSlider = findNamed(playerView, "mediaVolumeSlider")
+    check(seekSlider !== null && volumeSlider !== null, "seek and volume sliders exist")
+    if (seekSlider && volumeSlider) {
+      eq(seekSlider.hasCursor, true, "the cursor on the timeline rings its thumb")
+      eq(volumeSlider.hasCursor, false, "only the slider with the cursor is ringed")
+      var row = seekSlider.parent ? seekSlider.parent.parent : null
+      eq(row && row.color !== undefined, false, "no filled row behind the timeline")
+      eq(volumeSlider.parent && volumeSlider.parent.color !== undefined, false, "no filled row behind the volume")
+    }
     playerView.moveRequested(physical, 0)
     playerView.moveRequested(0, 1)
     eq(playerView.cursorKey, "playPause", "down from the timeline lands on play/pause")
     playerView.moveRequested(0, 1)
     eq(playerView.cursorKey, "volume", "down reaches the volume")
+    if (volumeSlider) eq(volumeSlider.hasCursor, true, "the cursor on the volume rings its thumb")
     playerView.moveRequested(physical, 0)
     playerView.moveRequested(0, 1)
     eq(playerView.cursorKey, "tab:spotify", "down reaches the source tabs")
