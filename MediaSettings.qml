@@ -42,6 +42,7 @@ FoamySettingsPage {
     }
     FoamyDropdown {
       width: parent.width
+      compact: true
       label: page.label("scrollAction")
       value: page.value("scrollAction")
       options: Prefs.field(Schema.schema, "scrollAction").options.map(function(option) { return { value: option, label: FoamyI18n.t(option) } })
@@ -73,7 +74,9 @@ FoamySettingsPage {
     title: FoamyI18n.t("Appearance")
     FoamyDropdown {
       width: parent.width
+      compact: true
       label: page.label("accent")
+      description: FoamyI18n.t("Colors the icon, progress line and controls.")
       value: page.value("accent")
       options: Prefs.field(Schema.schema, "accent").options.map(function(option) { return { value: option, label: FoamyI18n.t(option) } })
       onChanged: function(next) { page.media.save("accent", next) }
