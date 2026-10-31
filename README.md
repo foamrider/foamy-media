@@ -132,6 +132,8 @@ playback and the cover cache (`$XDG_CACHE_HOME/foamy-media`) remain.
 
 ## Development
 
+`kit/` holds shared components copied from [foamy-kit](https://github.com/foamrider/foamy-kit); edit them there, not here.
+
 ```sh
 node tests/model-test.js && node tests/network-test.js && node tests/preferences-test.js
 node tests/browser-setup-test.js && node tests/i18n.test.cjs
