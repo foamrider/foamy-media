@@ -140,6 +140,7 @@ FoamySettingsPage {
     readonly property var spec: Prefs.field(Schema.schema, key)
     width: parent ? parent.width : 0
     label: page.label(key)
+    unit: Schema.units[key] || ""
     value: page.value(key)
     from: spec.min
     to: spec.max

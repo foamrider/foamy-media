@@ -139,20 +139,26 @@ var labels = {
   "leftClick": "Left-click plays/pauses",
   "hideWhenClosed": "Hide when stopped",
   "scrollAction": "Mouse wheel",
-  "volumeStep": "Volume step (%)",
-  "maxLabelWidth": "Label width (px)",
+  "volumeStep": "Volume step",
+  "maxLabelWidth": "Label width",
   "showArtist": "Show the artist in the bar",
   "showProgress": "Show progress in the bar",
   "animateTitle": "Scroll long titles",
   "showEqualizer": "Show the equalizer",
   "accent": "Accent",
   "artBackground": "Artwork background",
-  "artIntensity": "Artwork intensity (%)",
+  "artIntensity": "Artwork intensity",
   "youtubeEnabled": "Enable YouTube",
   "youtubeBrowser": "Browser",
   "youtubeProfile": "Profile",
   "youtubeAppId": "Window app ID",
   "youtubeMprisName": "MPRIS name"
+}
+// Units for the number fields, shown in the kit's fixed unit column.
+var units = {
+  "volumeStep": "%",
+  "maxLabelWidth": "px",
+  "artIntensity": "%"
 }
 
 // Extra constraints for foamy-kit's FoamyPrefs engine. The browser value is
@@ -186,5 +192,5 @@ function clickAction(button, leftClick) {
 function youtubeLaunch(browser, profile) {
   return ["uwsm-app", "--", String(browser), "--app=https://youtube.com/", "--profile-directory=" + String(profile)]
 }
-if (typeof module !== "undefined") module.exports = {labels: labels, fields: fields, schema: schema,
+if (typeof module !== "undefined") module.exports = {labels: labels, units: units, fields: fields, schema: schema,
   constraints: constraints, clickAction: clickAction, youtubeLaunch: youtubeLaunch}
