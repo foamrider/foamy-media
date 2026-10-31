@@ -34,6 +34,7 @@ ShellRoot {
     color: "black"
     ScreenSim { id: sim }
     Row {
+      id: barRow
       y: 4
       x: 1200
       spacing: 40
@@ -391,6 +392,34 @@ ShellRoot {
       eq(first.editingSettings, true, "and lands on Settings")
       first.close()
       eq(first.editingSettings, false, "closing resets it")
+      // A widget hidden by "Hide when stopped" opened through IPC: centred
+      // under the bar, not in the screen corner.
+      var hidden = hiddenPanel.createObject(barRow, { bar: mockBar, moduleName: "foamy.media", settings: ({ id: "foamy.media" }) })
+      eq(hidden.shown, false, "nothing playing hides the widget")
+      eq(hidden.popup.centerOnBar, true, "hidden widget centres its popup")
+      hidden.open()
+      stepFour.hidden = hidden
+      stepFour.start()
+    }
+  }
+
+  Component {
+    id: hiddenPanel
+    Media.Panel {}
+  }
+  Timer {
+    id: stepFour
+    property var hidden: null
+    interval: 600
+    onTriggered: {
+      var popup = hidden.popup
+      check(popup.screenW > 0, "popup knows its screen")
+      eq(popup.cardOrigin.x, Math.round(Math.max(popup.margin, Math.min(popup.screenW / 2 - popup.contentWidth / 2,
+        popup.screenW - popup.contentWidth - popup.margin))), "card centred on the screen")
+      check(popup.cardOrigin.x > popup.margin && popup.cardOrigin.y > 0, "not in the top-left corner")
+      eq(panels.itemAt(0).popup.centerOnBar, false, "a shown widget still hangs from itself")
+      hidden.close()
+      hidden.destroy()
       shell.finish()
     }
   }

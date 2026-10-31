@@ -559,6 +559,10 @@ Panel {
   FoamyPopup {
     id: popup
     anchorItem: root.vertical ? root : popupLeftAnchor
+    // A hidden widget (Hide when stopped) has no place on the bar to hang
+    // from, so a popup opened through IPC is centred under the bar instead
+    // of landing in the screen corner.
+    centerOnBar: !root.shown
     bar: root.bar
     owner: root
     open: root.opened
