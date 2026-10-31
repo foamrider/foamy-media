@@ -1,25 +1,29 @@
 import QtQuick
 import qs.Commons
-import "Preferences.js" as Preferences
+import qs.Commons as Commons
+import "kit"
+import "kit/FoamyPrefs.js" as Prefs
+import "Preferences.js" as Schema
 import "BrowserSetup.js" as BrowserSetup
+
+// "Use an open window": lists the open YouTube web-app windows and offers
+// the browser, profile, app ID and MPRIS name each implies. A settings-form
+// control (Tab, arrows and Enter inside the picker), not a cursor row.
 
 Column {
   id: root
-  LayoutMirroring.enabled: FoamyI18n.rightToLeft
-  LayoutMirroring.childrenInherit: true
   required property var candidates
   required property var settings
-  required property string language
   property bool saving: false
   property bool expanded: false
-  readonly property color secondaryForeground: Qt.tint(Color.popups.background, Qt.alpha(Color.popups.text, 0.7))
+  readonly property color secondaryForeground: FoamyPalette.secondaryText
   // Derive the summary and checks from persisted settings, not the last clicked row.
   readonly property string selectedLabel: settings.youtubeAppId
-    ? BrowserSetup.description(settings.youtubeAppId, Preferences.value(settings, "youtubeProfile")) : ""
+    ? BrowserSetup.description(settings.youtubeAppId, Prefs.value(Schema.schema, settings, "youtubeProfile")) : ""
   signal apply(var values)
   function tr(text) { return FoamyI18n.t(text) }
   function matches(values) {
-    return Object.keys(values).every(function(key) { return Preferences.value(root.settings, key) === values[key] })
+    return Object.keys(values).every(function(key) { return Prefs.value(Schema.schema, root.settings, key) === values[key] })
   }
   function collapse() {
     expanded = false
@@ -41,10 +45,10 @@ Column {
     objectName: "browserPickerHeader"
     width: parent.width
     height: headerText.implicitHeight + Style.space(18)
-    radius: Style.cornerRadius * 2
-    color: headerMouse.containsMouse || activeFocus ? Qt.alpha(Color.popups.text, 0.08) : "transparent"
+    radius: FoamyStyle.radius
+    color: headerMouse.containsMouse || activeFocus ? FoamyPalette.hoverFill : "transparent"
     border.width: activeFocus ? 1 : 0
-    border.color: Color.accent
+    border.color: Commons.Color.accent
     activeFocusOnTab: true
     Accessible.role: Accessible.Button
     Accessible.name: root.tr("Use an open window") + (root.selectedLabel ? ": " + root.selectedLabel : "")
@@ -79,14 +83,14 @@ Column {
       anchors.right: chevron.left
       anchors.verticalCenter: parent.verticalCenter
       anchors.leftMargin: Style.spacing.rowPaddingX
-      anchors.rightMargin: Style.space(12)
+      anchors.rightMargin: FoamyStyle.gapLarge
       spacing: Style.space(3)
       Text {
         width: parent.width
         text: root.tr("Use an open window")
-        color: Color.popups.text
-        font.family: "sans-serif"
-        font.pixelSize: Style.space(13)
+        color: FoamyPalette.text
+        font.family: FoamyStyle.fontFamily
+        font.pixelSize: FoamyStyle.font.subtitle
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
       }
@@ -95,23 +99,23 @@ Column {
         width: parent.width
         text: root.selectedLabel
         color: root.secondaryForeground
-        font.family: "sans-serif"
-        font.pixelSize: Style.space(12)
+        font.family: FoamyStyle.fontFamily
+        font.pixelSize: FoamyStyle.font.body
         textFormat: Text.PlainText
         elide: Text.ElideRight
       }
     }
-    MediaIcon {
+    FoamyIcon {
       id: chevron
       anchors.right: parent.right
       anchors.rightMargin: Style.spacing.rowPaddingX
       anchors.verticalCenter: parent.verticalCenter
-      width: Style.space(16)
+      width: FoamyStyle.iconSize
       height: width
       color: root.secondaryForeground
       name: "chevron-right"
       rotation: root.expanded ? (FoamyI18n.rightToLeft ? -90 : 90) : 0
-      Behavior on rotation { NumberAnimation { duration: 160; easing.type: Easing.InOutQuad } }
+      Behavior on rotation { NumberAnimation { duration: FoamyMotion.press; easing.type: Easing.InOutQuad } }
     }
     MouseArea {
       id: headerMouse
@@ -129,24 +133,24 @@ Column {
     // Remove collapsed rows from keyboard navigation immediately, including during animation.
     enabled: root.expanded && !root.saving
     visible: root.expanded || height > 0
-    Behavior on height { NumberAnimation { duration: 160; easing.type: Easing.InOutQuad } }
+    Behavior on height { NumberAnimation { duration: FoamyMotion.press; easing.type: Easing.InOutQuad } }
     Column {
       id: windowColumn
       objectName: "browserWindowList"
       anchors.left: parent.left
-      anchors.leftMargin: Style.space(20)
+      anchors.leftMargin: FoamyStyle.padding
       anchors.right: parent.right
-      spacing: Style.space(2)
-      topPadding: Style.space(4)
+      spacing: FoamyStyle.gapTiny
+      topPadding: FoamyStyle.gapSmall
       bottomPadding: Style.space(5)
       Text {
         visible: root.candidates.length === 0
         width: parent.width
-        padding: Style.space(10)
+        padding: FoamyStyle.rowPadding
         text: root.tr("No open YouTube windows")
         color: root.secondaryForeground
-        font.family: "sans-serif"
-        font.pixelSize: Style.space(12)
+        font.family: FoamyStyle.fontFamily
+        font.pixelSize: FoamyStyle.font.body
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
       }
@@ -161,10 +165,10 @@ Column {
           readonly property string description: BrowserSetup.description(modelData.id, modelData.values.youtubeProfile)
           width: windowColumn.width
           height: Style.space(54)
-          radius: Style.cornerRadius * 2
-          color: windowMouse.containsMouse || activeFocus || selected ? Qt.alpha(Color.popups.text, 0.08) : "transparent"
+          radius: FoamyStyle.radius
+          color: windowMouse.containsMouse || activeFocus || selected ? FoamyPalette.hoverFill : "transparent"
           border.width: activeFocus ? 1 : 0
-          border.color: Color.accent
+          border.color: Commons.Color.accent
           activeFocusOnTab: true
           Accessible.role: Accessible.Button
           Accessible.name: modelData.title + ", " + description
@@ -180,12 +184,12 @@ Column {
           Keys.onEscapePressed: root.collapse()
           Keys.onUpPressed: index === 0 ? header.forceActiveFocus() : root.focusWindow(index - 1)
           Keys.onDownPressed: root.focusWindow(Math.min(windowRows.count - 1, index + 1))
-          MediaIcon {
+          FoamyIcon {
             id: windowIcon
             anchors.left: parent.left
-            anchors.leftMargin: Style.space(10)
+            anchors.leftMargin: FoamyStyle.rowPadding
             anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(16)
+            width: FoamyStyle.iconSize
             height: width
             name: "app-window"
             color: root.secondaryForeground
@@ -194,37 +198,37 @@ Column {
             anchors.left: windowIcon.right
             anchors.right: check.left
             anchors.verticalCenter: parent.verticalCenter
-            anchors.margins: Style.space(10)
+            anchors.margins: FoamyStyle.rowPadding
             spacing: Style.space(3)
             Text {
               width: parent.width
               text: windowRow.modelData.title
-              font.family: "sans-serif"
-              font.pixelSize: Style.space(13)
-              color: Color.popups.text
+              font.family: FoamyStyle.fontFamily
+              font.pixelSize: FoamyStyle.font.subtitle
+              color: FoamyPalette.text
               textFormat: Text.PlainText
               elide: Text.ElideRight
             }
             Text {
               width: parent.width
               text: windowRow.description
-              font.family: "sans-serif"
-              font.pixelSize: Style.space(12)
+              font.family: FoamyStyle.fontFamily
+              font.pixelSize: FoamyStyle.font.body
               color: root.secondaryForeground
               textFormat: Text.PlainText
               elide: Text.ElideRight
             }
           }
-          MediaIcon {
+          FoamyIcon {
             id: check
             visible: windowRow.selected
             anchors.right: parent.right
-            anchors.rightMargin: Style.space(10)
+            anchors.rightMargin: FoamyStyle.rowPadding
             anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(16)
+            width: FoamyStyle.iconSize
             height: width
             name: "check"
-            color: Color.accent
+            color: Commons.Color.accent
           }
           MouseArea {
             id: windowMouse
