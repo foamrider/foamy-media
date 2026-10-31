@@ -350,7 +350,7 @@ PanelKeyCatcher {
           LayoutMirroring.childrenInherit: true
           MediaControl {
             key: "shuffle"
-            iconName: "shuffle"
+            glyph: "shuffle"
             toggledOn: view.media.shuffleOn === true
             tooltipText: FoamyI18n.t(view.media.shuffleOn ? "Shuffle on" : "Shuffle off")
             enabled: view.media.shuffleSupported === true
@@ -358,7 +358,7 @@ PanelKeyCatcher {
           }
           MediaControl {
             key: "previous"
-            iconName: "skip-back"
+            glyph: "skip-back"
             tooltipText: FoamyI18n.t("Previous track")
             enabled: view.media.canGoPrevious === true
             onClicked: view.media.skipPrevious()
@@ -368,7 +368,7 @@ PanelKeyCatcher {
             width: Style.space(48)
             height: width
             radius: FoamyStyle.pillRadius(width)
-            iconName: view.media.playing ? "pause" : "play"
+            glyph: view.media.playing ? "pause" : "play"
             iconSize: FoamyStyle.headerIconSize
             foreground: Commons.Color.popups.background
             color: hasCursor || hovered ? Commons.Color.accent : FoamyPalette.text
@@ -378,14 +378,14 @@ PanelKeyCatcher {
           }
           MediaControl {
             key: "next"
-            iconName: "skip-forward"
+            glyph: "skip-forward"
             tooltipText: FoamyI18n.t("Next track")
             enabled: view.media.canGoNext === true
             onClicked: view.media.skipNext()
           }
           MediaControl {
             key: "loop"
-            iconName: view.media.loopName === "track" ? "repeat-1" : "repeat"
+            glyph: view.media.loopName === "track" ? "repeat-1" : "repeat"
             toggledOn: view.media.loopName !== "off"
             tooltipText: FoamyI18n.t(view.media.loopName === "track" ? "Repeat: track"
               : view.media.loopName === "playlist" ? "Repeat: playlist" : "Repeat: off")
@@ -593,22 +593,59 @@ PanelKeyCatcher {
   }
 
   // ---- Building blocks ---------------------------------------------------
-  // Transport buttons: kit icons on the foamy action surface, a little larger
-  // than a header action. Mode state (shuffle, repeat) stays filled whatever
-  // has the cursor.
+  // Transport buttons: solid glyphs on the foamy action surface, a little
+  // larger than a header action. Mode state (shuffle, repeat) stays filled
+  // whatever has the cursor.
   component MediaControl: FoamyAction {
     id: control
     property string key: ""
+    property string glyph: ""
     property bool toggledOn: false
     anchors.verticalCenter: parent ? parent.verticalCenter : undefined
     width: Style.space(36)
     height: Style.space(36)
+    iconName: ""
     iconSize: FoamyStyle.iconSize + Style.space(3)
     hasCursor: view.hasCursor(key)
     foreground: toggledOn && enabled ? Commons.Color.popups.background : FoamyPalette.secondaryText
     color: toggledOn && enabled ? Commons.Color.accent
       : (hasCursor || hovered) && enabled ? FoamyPalette.hoverFill : "transparent"
     onHoveredChanged: if (hovered) view.hover(control.key)
+    TransportGlyph {
+      anchors.centerIn: parent
+      width: control.iconSize
+      height: width
+      name: control.glyph
+      color: control.foreground
+    }
+  }
+
+  // Solid transport glyphs: Lucide's play, pause, skip, shuffle and repeat
+  // (ISC, kit/LICENSE-LUCIDE) with filled triangles, bars and arrowheads,
+  // drawn like FoamyIcon (inline SVG in the theme colour, same stroke).
+  // FoamyIcon only draws outlines; these stay here until the kit has filled
+  // variants (kit-issues/round6-media.md).
+  component TransportGlyph: Image {
+    id: glyph
+    property string name: ""
+    property color color: FoamyPalette.text
+    readonly property var paths: ({
+      "play": '<path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/>',
+      "pause": '<rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/>',
+      "skip-back": '<path d="M17.971 4.285A2 2 0 0 1 21 6v12a2 2 0 0 1-3.029 1.715l-9.997-5.998a2 2 0 0 1-.003-3.432z"/><path d="M3 20V4"/>',
+      "skip-forward": '<path d="M21 4v16"/><path d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"/>',
+      "shuffle": '<path fill="none" d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H19"/><path fill="none" d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/><path fill="none" d="M19 18h-3.041a4 4 0 0 1-3.3-1.8l-.359-.45"/><path d="M18 14l4 4-4 4z"/><path d="M18 2l4 4-4 4z"/>',
+      "repeat": '<path fill="none" d="M3 11v-1a4 4 0 0 1 4-4h11"/><path d="M17 2l4 4-4 4z"/><path fill="none" d="M21 13v1a4 4 0 0 1-4 4H6"/><path d="M7 22l-4-4 4-4z"/>',
+      "repeat-1": '<path fill="none" d="M3 11v-1a4 4 0 0 1 4-4h11"/><path d="M17 2l4 4-4 4z"/><path fill="none" d="M21 13v1a4 4 0 0 1-4 4H6"/><path d="M7 22l-4-4 4-4z"/><path fill="none" d="M11 10h1v4"/>'
+    })
+    visible: name !== ""
+    sourceSize.width: Math.ceil(width * 2)
+    sourceSize.height: Math.ceil(height * 2)
+    fillMode: Image.PreserveAspectFit
+    source: name === "" ? "" : "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="' + color.toString()
+      + '" stroke="' + color.toString() + '" stroke-width="' + FoamyStyle.iconStroke
+      + '" stroke-linecap="round" stroke-linejoin="round">' + (paths[name] || "") + '</svg>')
   }
 
   component SourceTab: FoamyCursorSurface {
