@@ -92,7 +92,11 @@ FoamySettingsPage {
       iconName: page.media.browserSettingsOpen ? "chevron-down" : "chevron-right"
       label: FoamyI18n.t("Browser settings")
       foreground: FoamyPalette.secondaryText
-      onClicked: page.media.browserSettingsOpen = !page.media.browserSettingsOpen
+      onClicked: {
+        page.media.browserSettingsOpen = !page.media.browserSettingsOpen
+        // Unfolded settings scroll into view (they follow while laid out).
+        if (page.media.browserSettingsOpen) page.ensureVisible(browserColumn)
+      }
     }
     Column {
       id: browserColumn
@@ -100,7 +104,9 @@ FoamySettingsPage {
       width: parent.width
       spacing: FoamyStyle.gap
       BrowserPicker {
+        id: browserPicker
         width: parent.width
+        onExpandedChanged: if (expanded) page.ensureVisible(browserPicker)
         candidates: page.media.browserCandidates || []
         settings: page.settings
         saving: page.saving
@@ -113,10 +119,19 @@ FoamySettingsPage {
         iconName: page.browserAdvancedOpen ? "chevron-down" : "chevron-right"
         label: FoamyI18n.t("Advanced")
         foreground: FoamyPalette.secondaryText
-        onClicked: page.browserAdvancedOpen = !page.browserAdvancedOpen
+        onClicked: {
+          page.browserAdvancedOpen = !page.browserAdvancedOpen
+          if (page.browserAdvancedOpen) page.ensureVisible(advancedColumn)
+        }
       }
-      TextRow { key: "youtubeAppId"; visible: page.browserAdvancedOpen }
-      TextRow { key: "youtubeMprisName"; visible: page.browserAdvancedOpen }
+      Column {
+        id: advancedColumn
+        visible: page.browserAdvancedOpen
+        width: parent.width
+        spacing: FoamyStyle.gap
+        TextRow { key: "youtubeAppId" }
+        TextRow { key: "youtubeMprisName" }
+      }
     }
   }
 
