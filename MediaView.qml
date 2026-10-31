@@ -530,7 +530,10 @@ PanelKeyCatcher {
       id: backdrop
       // Blurring samples past the edges of its source, so the cover is drawn
       // larger than the band and the mask cuts it back, which puts the fade
-      // safely outside.
+      // safely outside. The blur's own padding is drawn beyond the mask on
+      // the GPU renderer, so the band's rectangle clips it too: the picture
+      // never reaches the progress row below the band.
+      clip: true
       readonly property real bleed: Style.space(32)
       readonly property real corner: band.topRadius
       readonly property real scrimStrength: Model.scrimAlpha(view.media.artLuma, view.media.artIntensity)
