@@ -67,10 +67,21 @@ Item {
       id: labelClip
       objectName: "mediaBarLabel"
       visible: !root.vertical && root.label !== ""
-      width: visible ? Math.min(root.maxLabelWidth, labelText.implicitWidth) : 0
+      width: visible ? Math.min(root.maxLabelWidth, labelMetrics.naturalWidth) : 0
       height: glyphText.height
       clip: true
       anchors.verticalCenter: parent.verticalCenter
+
+      // The slot is sized from a separate measurement, not from labelText's
+      // own implicitWidth: that binding loop resized the text in the middle
+      // of its layout, so a title that grew (Spotify sends the artist after
+      // the title) kept the ellipsis of the shorter text.
+      TextMetrics {
+        id: labelMetrics
+        readonly property real naturalWidth: Math.ceil(advanceWidth)
+        font: labelText.font
+        text: root.label
+      }
 
       // The title sits at the start and stays readable. Only a title too long
       // for the slot pans, and it rests at both ends before turning around,
@@ -85,14 +96,14 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         // At rest the label is cut to the slot with an ellipsis; panning it
         // shows the whole title.
-        width: root.panning ? implicitWidth : labelClip.width
+        width: root.panning ? labelMetrics.naturalWidth : labelClip.width
         elide: root.panning ? Text.ElideNone : Text.ElideRight
         // Text direction determines which end contains the beginning of the title.
         readonly property real panX: horizontalAlignment === Text.AlignRight ? panOffset-overflow : -panOffset
         x: root.panning ? panX : 0
 
         property real panOffset: 0
-        readonly property real overflow: Math.max(0, implicitWidth - labelClip.width)
+        readonly property real overflow: Math.max(0, labelMetrics.naturalWidth - labelClip.width)
 
         onTextChanged: {
           panOffset = 0

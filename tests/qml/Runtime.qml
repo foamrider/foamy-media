@@ -61,6 +61,7 @@ ShellRoot {
       showProgress: true
       progress: 0.5
     }
+    Media.BarContent { id: growBar; y: 90; label: "X"; maxLabelWidth: 600; live: true; playing: true }
   }
 
   MockBar { id: mockBar; moduleName: "foamy.media" }
@@ -211,6 +212,8 @@ ShellRoot {
     barContent.popupOpen = true
     eq(barContent.panning, false, "title rests while the popup is open")
     eq(barContent.progressShown, false, "underline hidden under the open-panel mark")
+    // Spotify sends the title before the artist, a frame apart (stepTwo).
+    growBar.label = "Time After Time"
 
     // The cursor over a playing player. Transport and sliders keep their
     // physical direction in RTL, where PanelKeyCatcher reports reading order.
@@ -406,6 +409,12 @@ ShellRoot {
       eq(first.member.demanded, false, "closing releases demand")
       eq(first.imagesActive, false, "covers released after closing")
       eq(first.editingSettings, false, "closing leaves Settings")
+      // The grown label lays out again in its wider slot instead of keeping
+      // the ellipsis of the shorter text.
+      var growText = findNamed(growBar, "mediaBarLabel").children[0]
+      check(growText.width >= growText.implicitWidth, "the slot fits a grown label: " + growText.width + " < " + growText.implicitWidth)
+      eq(growText.truncated, false, "a grown label that fits is not elided")
+      check(growText.contentWidth >= growText.implicitWidth - 1, "the grown label is drawn whole: " + growText.contentWidth)
       // The settings IPC on a closed popup lands on Settings (reset on close only).
       first.openSettings()
       eq(first.opened, true, "settings opens the popup")
