@@ -38,4 +38,10 @@ const chrome=B.suggestion({appId:'chrome-youtube.com__-Default',title:'YouTube'}
 assert.equal(chrome.values.youtubeBrowser,'google-chrome-stable')
 assert.equal(chrome.values.youtubeMprisName,'chrome')
 assert.equal(B.suggestion(window,[{dbusName:'org.mpris.MediaPlayer2.vivaldievil'}],entries).values.youtubeMprisName,undefined)
+// BrowserPicker's summary reads the app ID through the schema: unset or
+// invalid is the default app, the one the widget actually uses.
+const selectedLabel = settings => B.description(Prefs.value(P.schema, settings, 'youtubeAppId'), Prefs.value(P.schema, settings, 'youtubeProfile'))
+assert.equal(selectedLabel({}), 'Vivaldi · Default')
+assert.equal(selectedLabel({youtubeAppId:'  ', youtubeProfile:'Default'}), 'Vivaldi · Default')
+assert.equal(selectedLabel({youtubeAppId:'chromium-youtube.com__-Profile_2', youtubeProfile:'Profile 2'}), 'Chromium · Profile 2')
 console.log('ok — browser setup detection, missing metadata, ambiguity, and lookalike tests passed')

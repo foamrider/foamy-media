@@ -18,8 +18,8 @@ Column {
   property bool expanded: false
   readonly property color secondaryForeground: FoamyPalette.secondaryText
   // Derive the summary and checks from persisted settings, not the last clicked row.
-  readonly property string selectedLabel: settings.youtubeAppId
-    ? BrowserSetup.description(settings.youtubeAppId, Prefs.value(Schema.schema, settings, "youtubeProfile")) : ""
+  readonly property string selectedLabel: BrowserSetup.description(Prefs.value(Schema.schema, settings, "youtubeAppId"),
+    Prefs.value(Schema.schema, settings, "youtubeProfile"))
   signal apply(var values)
   function tr(text) { return FoamyI18n.t(text) }
   function matches(values) {
