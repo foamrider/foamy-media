@@ -83,6 +83,69 @@ expect_refused "$work/bomb.png" "a 12000x12000 decompression bomb"
 
 expect_refused "$work/does-not-exist.png" "a path that is not there"
 
+# 100KB on disk, a valid 1x1 image, and 96MiB of zTXt text that libpng would
+# inflate and keep outside every ImageMagick limit (half of it after the image
+# data). Unstripped, the probe peaks near 300MB here; the real attack scales
+# the same chunks to gigabytes. Stripped, it costs what a plain cover costs,
+# and the cover still shows: the text never reaches the decoder.
+node tests/make-text-bomb.js "$work/text-bomb.png" 96 1024
+expect_ok "$work/text-bomb.png" "a 1x1 PNG carrying 96MiB of zTXt text"
+if command -v python3 >/dev/null 2>&1; then
+  peak=$(python3 -I -c '
+import resource, subprocess, sys
+subprocess.run(sys.argv[1:], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+print(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss // 1024)
+' sh -c "$script" sh "$work/text-bomb.png")
+  if [ "$peak" -lt 64 ]; then
+    echo "ok       the zTXt bomb peaked at ${peak}MiB"
+  else
+    echo "FAIL     the zTXt bomb peaked at ${peak}MiB: its text reached the decoder"
+    failures=$((failures + 1))
+  fi
+else
+  echo "skip     the zTXt bomb's peak memory — python3 not installed"
+fi
+
+# Ordinary text (ImageMagick itself writes tEXt dates) is dropped without
+# changing the cover: the same pixels give the same colour.
+magick -size 64x64 gradient:'#1db954-#b2313a' -set comment 'a cover' "$work/texted.png"
+magick "$work/texted.png" -strip "$work/plain.png"
+with=$(sh -c "$script" sh "$work/texted.png" | sed -n 's/^MEAN //p')
+without=$(sh -c "$script" sh "$work/plain.png" | sed -n 's/^MEAN //p')
+if [ -n "$with" ] && [ "$with" = "$without" ]; then
+  echo "ok       a PNG with text chunks reads as the same cover ($with)"
+else
+  echo "FAIL     a PNG with text chunks read as '$with', the same cover without them as '$without'"
+  failures=$((failures + 1))
+fi
+
+# A text chunk that claims to run past the end of the file, and text between
+# more chunks than any cover has (every gap it leaves is a copy to make).
+node -e '
+const fs = require("fs")
+const { crc32 } = require("zlib")
+const chunk = (type, body) => {
+  const head = Buffer.alloc(4)
+  head.writeUInt32BE(body.length)
+  const typed = Buffer.concat([Buffer.from(type, "latin1"), body])
+  const crc = Buffer.alloc(4)
+  crc.writeUInt32BE(crc32(typed))
+  return Buffer.concat([head, typed, crc])
+}
+const png = fs.readFileSync(process.argv[1])
+const head = png.subarray(0, 33)    // signature and IHDR
+const rest = png.subarray(33)
+const overrun = chunk("zTXt", Buffer.from("k\0\0x", "latin1"))
+overrun.writeUInt32BE(0x100000)
+fs.writeFileSync(process.argv[2], Buffer.concat([head, overrun, rest]))
+const parts = [head]
+for (let i = 0; i < 80; i++) parts.push(chunk("tEXt", Buffer.from("k\0v", "latin1")), chunk("gAMA", Buffer.from([0, 0, 0xb1, 0x8f])))
+parts.push(rest)
+fs.writeFileSync(process.argv[3], Buffer.concat(parts))
+' "$work/plain.png" "$work/overrun.png" "$work/interleaved.png"
+expect_refused "$work/overrun.png" "a PNG chunk that runs past the end of the file"
+expect_refused "$work/interleaved.png" "a PNG with text between 80 other chunks"
+
 # The cover the panel is allowed to display: written here, not fetched by Qt,
 # and capped so that decoding it is bounded too.
 oversized="$work/oversized.png"

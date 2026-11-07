@@ -222,7 +222,56 @@ function artProbeTarget(artUrl) {
 // size, and whatever ImageMagick decides the bytes are. So the fetch does not
 // follow redirects away from the host that was checked, the download is bounded
 // twice, the format is named here from the magic bytes rather than guessed by
-// the decoder, and the decode runs under explicit resource limits.
+// the decoder, a PNG loses its text chunks before the decoder sees it, and the
+// decode runs under explicit resource limits.
+//
+// The PNG chunk walk, as an awk program over `od -An -v -tu1 -j8`: the bytes
+// after the signature, sixteen to a line, so line NR starts at file offset
+// (NR - 1) * 16 + 8. Only the 8-byte header of each chunk (length, type) is
+// read; the lines in between are skipped unsplit, so the walk is one pass
+// whatever the chunk count. It prints the byte ranges ("offset length") that
+// make up the file without its tEXt, zTXt and iTXt chunks, nothing when there
+// are none, and fails on a chunk that runs past the end of the file, a type
+// that is not four ASCII letters, a file with no IEND, or more than 64 ranges
+// (each one is a copy, and no cover interleaves text with its image chunks).
+var artPngWalk = [
+  'BEGIN { hdr = 8; got = 0; start = 0; kept = 8; runs = 0; dropped = 0; done = 0; bad = 0 }',
+  '{',
+  '  base = (NR - 1) * 16 + 8',
+  '  if (got == 0 && base + 16 <= hdr) next',
+  '  i = got ? 1 : hdr - base + 1',
+  '  while (i <= NF) {',
+  '    h[got++] = $i + 0',
+  '    i++',
+  '    if (got < 8) continue',
+  '    got = 0',
+  '    if (h[0] > 127) { bad = 1; exit }',
+  '    end = hdr + 12 + ((h[0] * 256 + h[1]) * 256 + h[2]) * 256 + h[3]',
+  '    if (end > size) { bad = 1; exit }',
+  '    for (k = 4; k < 8; k++)',
+  '      if (!((h[k] >= 65 && h[k] <= 90) || (h[k] >= 97 && h[k] <= 122))) { bad = 1; exit }',
+  '    type = h[4] " " h[5] " " h[6] " " h[7]',
+  '    if (type == "116 69 88 116" || type == "122 84 88 116" || type == "105 84 88 116") {',
+  '      if (kept > start) run[runs++] = start " " (kept - start)',
+  '      if (runs > 64) { bad = 1; exit }',
+  '      start = end',
+  '      dropped++',
+  '    }',
+  '    kept = end',
+  '    hdr = end',
+  '    if (type == "73 69 78 68") { done = 1; exit }',
+  '    i = hdr - base + 1',
+  '  }',
+  '}',
+  'END {',
+  '  if (bad || !done) exit 1',
+  '  if (!dropped) exit 0',
+  '  if (kept > start) run[runs++] = start " " (kept - start)',
+  '  if (runs > 64) exit 1',
+  '  for (r = 0; r < runs; r++) print run[r]',
+  '}'
+].join('\n')
+
 function artProbeScript() {
   return [
     'set -eu',
@@ -232,7 +281,8 @@ function artProbeScript() {
     'max=8000000',
     '',
     'tmp=$(mktemp) || exit 1',
-    'trap \'rm -f "$tmp"\' EXIT',
+    'clean=$(mktemp) || { rm -f "$tmp"; exit 1; }',
+    'trap \'rm -f "$tmp" "$clean"\' EXIT',
     '',
     'case "$src" in',
     '  https://*)',
@@ -266,6 +316,24 @@ function artProbeScript() {
     '  52494646????????57454250*) fmt=WEBP ;;',
     '  *) exit 1 ;;',
     'esac',
+    '',
+    '# libpng inflates every zTXt chunk and keeps it, with every tEXt, until the',
+    '# read is over -- outside all the limits below, which count pixels. A',
+    '# megabyte of crafted chunks can hold a gigabyte of text on a 1x1 image.',
+    '# ImageMagick only turns that text into properties, which -strip drops from',
+    '# the cover it writes, so the chunks go before it reads a byte: the cover',
+    '# decodes to the same pixels without them. A text chunk spells its type in',
+    '# the file, so one that spells none of the three has none, and skips the',
+    '# walk.',
+    'if [ "$fmt" = PNG ] && LC_ALL=C grep -qaE "tEXt|zTXt|iTXt" "$tmp"; then',
+    '  keep=$(od -An -v -tu1 -j8 "$tmp" | awk -v size="$size" \'' + artPngWalk + '\') || exit 1',
+    '  if [ -n "$keep" ]; then',
+    '    printf "%s\\n" "$keep" | while read -r at len; do',
+    '      dd if="$tmp" bs=64K iflag=skip_bytes,count_bytes skip="$at" count="$len" status=none || exit 1',
+    '    done > "$clean" || exit 1',
+    '    mv -f "$clean" "$tmp" || exit 1',
+    '  fi',
+    'fi',
     '',
     '# Bounds for the decode itself, because a small file can still declare an',
     '# enormous image. The width and height limits are the ones that refuse:',
