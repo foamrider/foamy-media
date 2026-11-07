@@ -54,7 +54,8 @@ treated as the web app.
 
 Covers come only from Spotify's and YouTube's image hosts over HTTPS (no
 redirects, 8 MB cap) or from a local file. A probe identifies the format from
-the file's bytes, decodes it under ImageMagick resource limits and writes a
+the file's bytes, drops a PNG's text chunks (metadata no ImageMagick limit
+counts), decodes it under ImageMagick resource limits and writes a
 re-encoded PNG to `$XDG_CACHE_HOME/foamy-media/covers` (mode 0700, named by
 the cover's content, so a player that reuses one file path for every track
 still gets the new cover). The popup only ever loads that copy. Remote covers

@@ -216,6 +216,16 @@ const M = require("../Model.js")
   assert.ok(script.indexOf("89504e470d0a1a0a") !== -1)
   assert.ok(/magick "\$fmt:\$tmp\[0\]"/.test(script))
 
+  // libpng keeps every PNG text chunk it inflates outside ImageMagick's
+  // limits, so a PNG's tEXt, zTXt and iTXt chunks are gone before the first
+  // decode. tests/probe-test.sh shows the memory this saves.
+  const strip = script.indexOf('if [ "$fmt" = PNG ]')
+  assert.ok(strip !== -1, "PNG text must be stripped")
+  assert.ok(strip < script.indexOf("magick "), "PNG text must be stripped before ImageMagick reads it")
+  ;["116 69 88 116", "122 84 88 116", "105 84 88 116"].forEach(function (type) {
+    assert.ok(script.indexOf(type) !== -1, type)
+  })
+
   // The cover the panel displays is written here from bytes that passed every
   // check above, capped at a size no cover needs, which bounds Qt's decode of
   // it as well.
