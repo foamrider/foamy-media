@@ -13,7 +13,7 @@ spotifyd and spotify-player.
 omarchy plugin add https://github.com/foamrider/foamy-media.git --enable
 ```
 
-Built for Omarchy 4.5; it also loads on Omarchy 4.0.
+Requires Omarchy 4.5.
 
 Requires an MPRIS player (Spotify, spotifyd, spotify-player, or a
 Chromium-family browser for YouTube). Optional:
@@ -108,8 +108,7 @@ foamy tinted wash.
 
 Language follows **Omarchy → Setup → Language** on Omarchy 4.5 (English and
 Norwegian catalogs; right-to-left languages mirror the popup and settings,
-while the timeline, transport and volume keep their direction). Omarchy 4.0
-shows English.
+while the timeline, transport and volume keep their direction).
 
 ## IPC
 
