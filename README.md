@@ -5,7 +5,7 @@ progress underline and an equalizer in the bar, and a player popup with the
 cover, seeking, transport, volume and source switching. Also works with
 spotifyd and spotify-player.
 
-![Foamy Media screenshot](preview.png)
+![The Foamy Media player popup playing a sample Spotify track](preview.png)
 
 ## Install
 
