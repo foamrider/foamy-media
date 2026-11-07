@@ -139,9 +139,9 @@ node tests/model-test.js && node tests/network-test.js && node tests/preferences
 node tests/browser-setup-test.js && node tests/i18n.test.cjs
 sh tests/probe-test.sh                 # the real cover probe; needs ImageMagick
 python3 -I tests/test_clipboard.py
-python3 tests/i18n-runtime.py          # OMARCHY_PATH=<4.5 tree> checks 4.5
+python3 tests/i18n-runtime.py          # the installed 4.5 shell; OMARCHY_PATH picks another tree
 bash tests/kit-check.sh
-python3 -I tests/runtime.py            # offscreen, 4.0 and 4.5 hosts; needs foamy-kit (FOAMY_KIT)
+python3 -I tests/runtime.py            # offscreen on the installed 4.5 shell (4.0 only with FOAMY_HOST_40); needs foamy-kit (FOAMY_KIT)
 ```
 
 Shared components live in `kit/`, copied from
