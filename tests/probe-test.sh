@@ -1,7 +1,10 @@
 #!/bin/sh
-# Runs the real probe script against real fixtures, because asserting that the
-# script contains a flag is not the same as showing what it does. Everything
-# here is local: no network, and nothing that needs a Spotify.
+# Runs the real probe, the built helper (bin/<arch>/foamy-media-helper
+# art-probe), against real fixtures, because asserting that the code contains
+# a check is not the same as showing what it does. Everything here is local:
+# no network, and nothing that needs a Spotify. The fetch's bounds (no
+# redirects, the size cap on received bytes, the deadline) are cargo tests in
+# native/src/fetch.rs, against a loopback server.
 #
 #   sh tests/probe-test.sh
 #
@@ -21,7 +24,11 @@ if ! command -v node >/dev/null 2>&1; then
   exit 0
 fi
 
-script=$(node -e 'process.stdout.write(require("./Model.js").artProbeScript())')
+helper="$PWD/bin/$(uname -m)/foamy-media-helper"
+if [ ! -x "$helper" ]; then
+  echo "skip — no helper for $(uname -m) (build it with foamy-kit tools/build-native.sh)"
+  exit 0
+fi
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 export XDG_CACHE_HOME="$work/cache"
@@ -29,7 +36,12 @@ export XDG_CACHE_HOME="$work/cache"
 failures=0
 
 probe() {
-  sh -c "$script" sh "$1" >/dev/null 2>&1
+  "$helper" art-probe "$1" >/dev/null 2>&1
+}
+
+# One field of the helper's JSON reply ("mean", "file").
+field() {
+  sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p"
 }
 
 expect_ok() {
@@ -83,6 +95,18 @@ expect_refused "$work/bomb.png" "a 12000x12000 decompression bomb"
 
 expect_refused "$work/does-not-exist.png" "a path that is not there"
 
+# A FIFO would have blocked a plain read forever; the helper never opens it.
+mkfifo "$work/cover.fifo"
+expect_refused "$work/cover.fifo" "a FIFO in place of a cover"
+expect_refused /dev/zero "a device in place of a cover"
+
+# Every outcome is one JSON line, a refusal included.
+reply=$("$helper" art-probe "$work/text.txt" || :)
+case "$reply" in
+  '{"code":"UNSUPPORTED_FORMAT",'*'"ok":false}') echo "ok       a refusal is a JSON reply ($reply)" ;;
+  *) echo "FAIL     a refusal printed '$reply'"; failures=$((failures + 1)) ;;
+esac
+
 # 100KB on disk, a valid 1x1 image, and 96MiB of zTXt text that libpng would
 # inflate and keep outside every ImageMagick limit (half of it after the image
 # data). Unstripped, the probe peaks near 300MB here; the real attack scales
@@ -95,7 +119,7 @@ if command -v python3 >/dev/null 2>&1; then
 import resource, subprocess, sys
 subprocess.run(sys.argv[1:], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 print(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss // 1024)
-' sh -c "$script" sh "$work/text-bomb.png")
+' "$helper" art-probe "$work/text-bomb.png")
   if [ "$peak" -lt 64 ]; then
     echo "ok       the zTXt bomb peaked at ${peak}MiB"
   else
@@ -110,8 +134,8 @@ fi
 # changing the cover: the same pixels give the same colour.
 magick -size 64x64 gradient:'#1db954-#b2313a' -set comment 'a cover' "$work/texted.png"
 magick "$work/texted.png" -strip "$work/plain.png"
-with=$(sh -c "$script" sh "$work/texted.png" | sed -n 's/^MEAN //p')
-without=$(sh -c "$script" sh "$work/plain.png" | sed -n 's/^MEAN //p')
+with=$("$helper" art-probe "$work/texted.png" | field mean)
+without=$("$helper" art-probe "$work/plain.png" | field mean)
 if [ -n "$with" ] && [ "$with" = "$without" ]; then
   echo "ok       a PNG with text chunks reads as the same cover ($with)"
 else
@@ -150,7 +174,7 @@ expect_refused "$work/interleaved.png" "a PNG with text between 80 other chunks"
 # and capped so that decoding it is bounded too.
 oversized="$work/oversized.png"
 magick -size 3000x2000 gradient:'#204080-#c0f0ff' "$oversized"
-art=$(sh -c "$script" sh "$oversized" | sed -n 's/^ART //p')
+art=$("$helper" art-probe "$oversized" | field file)
 if [ -z "$art" ] || [ ! -f "$art" ]; then
   echo "FAIL     the probe did not write a cover for the panel to show"
   failures=$((failures + 1))
@@ -175,10 +199,10 @@ fi
 # every track's cover to one file:// path still gets the new cover.
 same="$work/same-path.png"
 magick -size 64x64 xc:'#1db954' "$same"
-first=$(sh -c "$script" sh "$same" | sed -n 's/^ART //p')
+first=$("$helper" art-probe "$same" | field file)
 magick -size 64x64 xc:'#b2313a' "$same"
-second=$(sh -c "$script" sh "$same" | sed -n 's/^ART //p')
-again=$(sh -c "$script" sh "$same" | sed -n 's/^ART //p')
+second=$("$helper" art-probe "$same" | field file)
+again=$("$helper" art-probe "$same" | field file)
 if [ -n "$first" ] && [ -n "$second" ] && [ "$first" != "$second" ] && [ "$second" = "$again" ]; then
   echo "ok       a rewritten cover at the same path is a new cached cover"
 else

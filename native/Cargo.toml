@@ -1,0 +1,21 @@
+[package]
+name = "foamy-media-helper"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+# Keep the list short; every entry says why it is here.
+[dependencies]
+# JSON replies (also on failure and panic), bounded ImageMagick runs,
+# atomic cover writes, SHA-256 for the cover names, and HTTPS crypto plus
+# the system trust store (`tls`: Graviola, no C compiled).
+foamy-helper = { path = "../kit/rust/foamy-helper", features = ["tls"] }
+# The reply; already in the tree through foamy-helper.
+serde_json = "1"
+# Blocking HTTP/1.1 with proxies, no redirects and a global deadline (as
+# foamy-train and foamy-zendesk).
+ureq = { version = "3", default-features = false, features = ["rustls-no-provider"] }
+# stat/open/fstat of a local cover without blocking on a FIFO or a device,
+# O_NOFOLLOW and the uid in the cache; already in the tree through foamy-helper.
+rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process"] }

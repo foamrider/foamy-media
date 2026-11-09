@@ -142,15 +142,17 @@ function pad(value) {
 // that: the cover's mean luminance, which sets how heavily the scrim has to
 // cover it for text to stay readable, and its dominant colour, which tints
 // the scrim so the panel reads as part of the artwork rather than a window
-// sitting on top of it. Both come from one ImageMagick probe — see
-// `artProbeScript` — and everything below is the parsing and the maths.
+// sitting on top of it. Both come from one probe — the native helper, which
+// runs ImageMagick (see `artProbeArgs`) — and everything below is the parsing
+// and the maths.
 
 // Album art is metadata published by another process, so the whole of the
 // probe treats it as hostile input: this decides what may be fetched at all,
-// and `artProbeScript` bounds what happens to the bytes that come back.
+// and the helper bounds what happens to the bytes that come back.
 
 // The only hosts whose images are fetched. Matched on a label boundary, so a
-// registered lookalike like "evilscdn.co" is not taken for a subdomain.
+// registered lookalike like "evilscdn.co" is not taken for a subdomain. The
+// helper checks the same list again (native/src/main.rs `HOSTS`).
 var artHosts = ["scdn.co", "ytimg.com"]
 
 function artHostAllowed(host) {
@@ -214,209 +216,61 @@ function artProbeTarget(artUrl) {
   return url
 }
 
-// One shell script, run with the target as $1 so no metadata ever reaches the
-// command line as code.
+// The probe itself is the plugin's native helper, `foamy-media-helper
+// art-probe <target>` (native/src/main.rs has its contract), run with the
+// target as an argument so no metadata ever reaches a command line as code.
 //
 // Clearing the host check is the start of the argument and not the end of it,
 // because everything after it is still attacker-shaped: the response body, its
-// size, and whatever ImageMagick decides the bytes are. So the fetch does not
-// follow redirects away from the host that was checked, the download is bounded
-// twice, the format is named here from the magic bytes rather than guessed by
-// the decoder, a PNG loses its text chunks before the decoder sees it, and the
-// decode runs under explicit resource limits.
-//
-// The PNG chunk walk, as an awk program over `od -An -v -tu1 -j8`: the bytes
-// after the signature, sixteen to a line, so line NR starts at file offset
-// (NR - 1) * 16 + 8. Only the 8-byte header of each chunk (length, type) is
-// read; the lines in between are skipped unsplit, so the walk is one pass
-// whatever the chunk count. It prints the byte ranges ("offset length") that
-// make up the file without its tEXt, zTXt and iTXt chunks, nothing when there
-// are none, and fails on a chunk that runs past the end of the file, a type
-// that is not four ASCII letters, a file with no IEND, or more than 64 ranges
-// (each one is a copy, and no cover interleaves text with its image chunks).
-var artPngWalk = [
-  'BEGIN { hdr = 8; got = 0; start = 0; kept = 8; runs = 0; dropped = 0; done = 0; bad = 0 }',
-  '{',
-  '  base = (NR - 1) * 16 + 8',
-  '  if (got == 0 && base + 16 <= hdr) next',
-  '  i = got ? 1 : hdr - base + 1',
-  '  while (i <= NF) {',
-  '    h[got++] = $i + 0',
-  '    i++',
-  '    if (got < 8) continue',
-  '    got = 0',
-  '    if (h[0] > 127) { bad = 1; exit }',
-  '    end = hdr + 12 + ((h[0] * 256 + h[1]) * 256 + h[2]) * 256 + h[3]',
-  '    if (end > size) { bad = 1; exit }',
-  '    for (k = 4; k < 8; k++)',
-  '      if (!((h[k] >= 65 && h[k] <= 90) || (h[k] >= 97 && h[k] <= 122))) { bad = 1; exit }',
-  '    type = h[4] " " h[5] " " h[6] " " h[7]',
-  '    if (type == "116 69 88 116" || type == "122 84 88 116" || type == "105 84 88 116") {',
-  '      if (kept > start) run[runs++] = start " " (kept - start)',
-  '      if (runs > 64) { bad = 1; exit }',
-  '      start = end',
-  '      dropped++',
-  '    }',
-  '    kept = end',
-  '    hdr = end',
-  '    if (type == "73 69 78 68") { done = 1; exit }',
-  '    i = hdr - base + 1',
-  '  }',
-  '}',
-  'END {',
-  '  if (bad || !done) exit 1',
-  '  if (!dropped) exit 0',
-  '  if (kept > start) run[runs++] = start " " (kept - start)',
-  '  if (runs > 64) exit 1',
-  '  for (r = 0; r < runs; r++) print run[r]',
-  '}'
-].join('\n')
-
-function artProbeScript() {
-  return [
-    'set -eu',
-    'src="$1"',
-    '',
-    '# A cover is a few hundred kilobytes. Anything far past that is not one.',
-    'max=8000000',
-    '',
-    'tmp=$(mktemp) || exit 1',
-    'clean=$(mktemp) || { rm -f "$tmp"; exit 1; }',
-    'trap \'rm -f "$tmp" "$clean"\' EXIT',
-    '',
-    'case "$src" in',
-    '  https://*)',
-    '    # No redirects. The host was checked before this ran, and following a',
-    '    # redirect would move the fetch to one that was not.',
-    '    curl -sf --proto "=https" --max-redirs 0 --max-filesize "$max" \\',
-    '         --max-time 8 -o "$tmp" -- "$src" || exit 1',
-    '    ;;',
-    '  *)',
-    '    [ -f "$src" ] || exit 1',
-    '    [ "$(wc -c < "$src")" -le "$max" ] || exit 1',
-    '    cp -- "$src" "$tmp" || exit 1',
-    '    ;;',
-    'esac',
-    '',
-    '# --max-filesize acts only on a declared Content-Length, so the size that',
-    '# decides is the one on disk.',
-    'size=$(wc -c < "$tmp") || exit 1',
-    '[ "$size" -gt 0 ] && [ "$size" -le "$max" ] || exit 1',
-    '',
-    '# Name the format from the magic bytes instead of letting ImageMagick pick',
-    '# it. Handing unidentified bytes to a decoder that dispatches on content is',
-    '# how a cover URL turns into a delegate; these five raster formats cover',
-    '# every cover a player publishes and none of them reach one.',
-    'sig=$(od -An -v -tx1 -N16 "$tmp" | tr -d " \\n") || exit 1',
-    'case "$sig" in',
-    '  ffd8ff*) fmt=JPEG ;;',
-    '  89504e470d0a1a0a*) fmt=PNG ;;',
-    '  474946383961*|474946383761*) fmt=GIF ;;',
-    '  424d*) fmt=BMP ;;',
-    '  52494646????????57454250*) fmt=WEBP ;;',
-    '  *) exit 1 ;;',
-    'esac',
-    '',
-    '# libpng inflates every zTXt chunk and keeps it, with every tEXt, until the',
-    '# read is over -- outside all the limits below, which count pixels. A',
-    '# megabyte of crafted chunks can hold a gigabyte of text on a 1x1 image.',
-    '# ImageMagick only turns that text into properties, which -strip drops from',
-    '# the cover it writes, so the chunks go before it reads a byte: the cover',
-    '# decodes to the same pixels without them. A text chunk spells its type in',
-    '# the file, so one that spells none of the three has none, and skips the',
-    '# walk.',
-    'if [ "$fmt" = PNG ] && LC_ALL=C grep -qaE "tEXt|zTXt|iTXt" "$tmp"; then',
-    '  keep=$(od -An -v -tu1 -j8 "$tmp" | awk -v size="$size" \'' + artPngWalk + '\') || exit 1',
-    '  if [ -n "$keep" ]; then',
-    '    printf "%s\\n" "$keep" | while read -r at len; do',
-    '      dd if="$tmp" bs=64K iflag=skip_bytes,count_bytes skip="$at" count="$len" status=none || exit 1',
-    '    done > "$clean" || exit 1',
-    '    mv -f "$clean" "$tmp" || exit 1',
-    '  fi',
-    'fi',
-    '',
-    '# Bounds for the decode itself, because a small file can still declare an',
-    '# enormous image. The width and height limits are the ones that refuse:',
-    '# libpng checks them while reading IHDR, so an oversized cover is rejected',
-    '# before a single pixel is allocated. The rest only bound the cost of what',
-    '# gets past them -- in particular the area limit chooses where the pixel',
-    '# cache lives rather than refusing anything, so it is no defence on its own.',
-    '# No real cover comes close to 8000px; Spotify publishes 640.',
-    'MAGICK_WIDTH_LIMIT=8KP',
-    'MAGICK_HEIGHT_LIMIT=8KP',
-    'MAGICK_AREA_LIMIT=128MP',
-    'MAGICK_MEMORY_LIMIT=256MiB',
-    'MAGICK_MAP_LIMIT=512MiB',
-    'MAGICK_TIME_LIMIT=10',
-    'MAGICK_THREAD_LIMIT=2',
-    'export MAGICK_WIDTH_LIMIT MAGICK_HEIGHT_LIMIT MAGICK_AREA_LIMIT \\',
-    '       MAGICK_MEMORY_LIMIT MAGICK_MAP_LIMIT MAGICK_TIME_LIMIT MAGICK_THREAD_LIMIT',
-    '',
-    'mean=$(magick "$fmt:$tmp[0]" -resize 1x1! -depth 8 -format "%[hex:p{0,0}]" info:) || exit 1',
-    '',
-    '# The panel shows the cover as well as measuring it, and a QML Image given',
-    '# a raw art URL would repeat none of the checks above: Qt would fetch any',
-    '# origin, follow redirects, and decode whatever format its plugins handle',
-    '# -- SVG and PDF among them -- inside the shell process. So the cover it',
-    '# displays is this one: re-encoded here from bytes that passed every check,',
-    '# and capped at a size no cover needs, which bounds the decode too.',
-    'dir="${XDG_CACHE_HOME:-$HOME/.cache}/foamy-media/covers"',
-    'mkdir -p "$dir" || exit 1',
-    'chmod 700 "$dir" 2>/dev/null || :',
-    '',
-    '# Named for the bytes, not the URL: a player that rewrites one file:// path',
-    '# for every track still gets a new cover, and a new cover is a new path,',
-    '# which is what lets the panel cross-fade rather than reload in place.',
-    'stamp=$(sha256sum < "$tmp" | cut -c1-32) || exit 1',
-    'art="$dir/$stamp.png"',
-    '',
-    'if [ ! -f "$art" ]; then',
-    '  magick "$fmt:$tmp[0]" -resize "640x640>" -strip "PNG:$art.new" || exit 1',
-    '  mv -f "$art.new" "$art" || exit 1',
-    'fi',
-    '',
-    '# Keep the last handful. Every name here is hex, so the listing is safe to',
-    '# read line by line.',
-    'ls -1t "$dir"/*.png 2>/dev/null | tail -n +9 | while IFS= read -r stale; do',
-    '  rm -f -- "$stale"',
-    'done',
-    '',
-    'printf "MEAN %s\\n" "$mean"',
-    'printf "ART %s\\n" "$art"',
-    'echo HIST',
-    'magick "$fmt:$tmp[0]" -resize 80x80 -depth 8 -colors 8 -format "%c" histogram:info:'
-  ].join('\n')
+// size, and whatever ImageMagick decides the bytes are. So the helper checks
+// the target again, does not follow redirects away from the host that was
+// checked, bounds the download by the declared size and again by the bytes
+// received, names the format from the magic bytes rather than letting the
+// decoder guess, takes a PNG's text chunks out before the decoder sees them,
+// and decodes under explicit resource limits with a deadline.
+function artProbeArgs(target) {
+  return ["art-probe", String(target)]
 }
 
-// Turns the probe's stdout into { mean, dominant, luma } or null.
+// The helper's one JSON line: { ok: true, mean, file, swatches } or
+// { ok: false, code, error }. Null when it is neither.
+function artProbeReply(text) {
+  var reply
+  try {
+    reply = JSON.parse(String(text || "").trim())
+  } catch (e) {
+    return null
+  }
+  return reply !== null && typeof reply === "object" && !Array.isArray(reply) ? reply : null
+}
+
+// The failure code of a reply ("TLS_UNSUPPORTED", "TOO_LARGE", …), "" for a
+// success or for output that is no reply at all.
+function artProbeFailure(text) {
+  var reply = artProbeReply(text)
+  return reply && reply.ok === false && typeof reply.code === "string" ? reply.code : ""
+}
+
+// Turns the helper's reply into { mean, dominant, luma, file } or null.
 function parseArtProbe(text) {
-  var lines = String(text || "").split("\n")
-  var mean = null
-  var file = ""
+  var reply = artProbeReply(text)
+  if (!reply || reply.ok !== true) return null
+
+  var hex = /^#[0-9a-f]{6}$/
+  var mean = typeof reply.mean === "string" && hex.test(reply.mean) ? reply.mean : null
+  // The normalised copy the panel is allowed to display. Only ever a path
+  // the helper just wrote, under the cache directory it just made.
+  var file = typeof reply.file === "string" && reply.file.charAt(0) === "/"
+    && !artControlChars(reply.file) ? reply.file : ""
+
   var swatches = []
-
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i]
-
-    var meanMatch = /^MEAN\s+([0-9A-Fa-f]{6})/.exec(line)
-    if (meanMatch) {
-      mean = "#" + meanMatch[1].toLowerCase()
-      continue
-    }
-
-    // The normalised copy the panel is allowed to display. Only ever a path
-    // the script just wrote, under the cache directory it just made.
-    var artMatch = /^ART\s+(\S.*)$/.exec(line)
-    if (artMatch) {
-      file = artMatch[1]
-      continue
-    }
-
-    // e.g. "   2581: (214,212,206) #D6D4CE srgb(214,212,206)"
-    var histMatch = /^\s*(\d+):\s*\([^)]*\)\s*#([0-9A-Fa-f]{6})/.exec(line)
-    if (histMatch) {
-      swatches.push({ count: Number(histMatch[1]), hex: "#" + histMatch[2].toLowerCase() })
-    }
+  var list = Array.isArray(reply.swatches) ? reply.swatches : []
+  for (var i = 0; i < list.length; i++) {
+    var swatch = list[i]
+    if (!swatch || typeof swatch.hex !== "string" || !hex.test(swatch.hex)) continue
+    var count = Number(swatch.count)
+    if (!isFinite(count) || count < 0) continue
+    swatches.push({ count: count, hex: swatch.hex })
   }
 
   var dominant = pickDominant(swatches)
@@ -639,7 +493,8 @@ if (typeof module !== "undefined") {
     formatTime: formatTime,
     artHostAllowed: artHostAllowed,
     artProbeTarget: artProbeTarget,
-    artProbeScript: artProbeScript,
+    artProbeArgs: artProbeArgs,
+    artProbeFailure: artProbeFailure,
     parseArtProbe: parseArtProbe,
     fileUrl: fileUrl,
     pickDominant: pickDominant,

@@ -30,10 +30,16 @@ function timer() {
 }
 
 const Model = require("../Model.js");
+const FoamyNative = require("../kit/node-loader.cjs").load("FoamyNative");
+// The helper's success reply (native/src/main.rs) for a cover at `file`.
+function reply(mean, file) {
+  return JSON.stringify({ ok:true, mean:"#" + mean, file, swatches:[{ count:10, hex:"#" + mean }] });
+}
 function fixture() {
-  return controller({ Model, artUrl:"https://i.scdn.co/image/fixture",
+  return controller({ Model, FoamyNative, pluginDir:"/plugins/foamy-media", artUrl:"https://i.scdn.co/image/fixture",
     remoteArt:true, networkReady:false, artProbed:"", artFile:"", artDominant:"", artLuma:0, artSettling:false,
-    artProbe:{running:false,pending:""}, artProbeDelay:timer(),artRetry:timer(),settleCap:timer(),artRetries:0,
+    artHelperUnavailable:false,
+    artProbe:{running:false,pending:"",failure:""}, artProbeDelay:timer(),artRetry:timer(),settleCap:timer(),artRetries:0,
   }, ["probeArt", "forgetArt", "applyArtProbe", "finishAttempt", "artFor", "request"]);
 }
 test("remote artwork waits, but a local file can load offline", () => {
@@ -49,8 +55,8 @@ test("track changes serialize cancellation before starting the replacement", () 
 });
 test("successful artwork clears retries; late results cannot replace the current cover", () => {
   const c=fixture();c.artRetries=2;c.artRetry.running=true;
-  c.applyArtProbe("old","MEAN 112233\nART /tmp/old.png");assert.equal(c.artFile,"");
-  c.applyArtProbe(c.artUrl,"MEAN 445566\nART /tmp/new.png");
+  c.applyArtProbe("old",reply("112233","/tmp/old.png"));assert.equal(c.artFile,"");
+  c.applyArtProbe(c.artUrl,reply("445566","/tmp/new.png"));
   assert.equal(c.artFile,"/tmp/new.png");assert.equal(c.artRetries,0);assert.equal(c.artRetry.running,false);
 });
 test("disallowed remote hosts still never start a probe", () => {
@@ -59,7 +65,7 @@ test("disallowed remote hosts still never start a probe", () => {
 });
 test("a failed fetch for the new track never leaves the previous cover showing", () => {
   const c=fixture();c.networkReady=true;
-  c.applyArtProbe(c.artUrl,"MEAN 445566\nART /tmp/a.png");
+  c.applyArtProbe(c.artUrl,reply("445566","/tmp/a.png"));
   const first=c.artUrl;assert.equal(c.artFor(first),true);
   c.request("https://i.scdn.co/image/next");
   // While the next cover settles, the old one may cross-fade out...
@@ -69,16 +75,33 @@ test("a failed fetch for the new track never leaves the previous cover showing",
   assert.equal(c.artFor(c.artUrl),false);assert.equal(c.artFile,"");assert.equal(c.artDominant,"");
 });
 test("unreadable probe output clears the cover instead of keeping the old one", () => {
-  const c=fixture();c.applyArtProbe(c.artUrl,"MEAN 445566\nART /tmp/a.png");
+  const c=fixture();c.applyArtProbe(c.artUrl,reply("445566","/tmp/a.png"));
   c.request("file:///tmp/next.png");c.applyArtProbe(c.artUrl,"nothing useful");
   assert.equal(c.artFor(c.artUrl),false);assert.equal(c.artFile,"");
 });
 test("a successful probe for an older URL does not clear the current one", () => {
-  const c=fixture();c.applyArtProbe(c.artUrl,"MEAN 445566\nART /tmp/a.png");
+  const c=fixture();c.applyArtProbe(c.artUrl,reply("445566","/tmp/a.png"));
   c.finishAttempt("https://i.scdn.co/image/older",1);assert.equal(c.artFile,"/tmp/a.png");
   c.finishAttempt(c.artUrl,1);assert.equal(c.artFile,"/tmp/a.png");
 });
 test("requesting the same URL again is a no-op (every bar may ask)", () => {
   const c=fixture();c.request(c.artUrl);assert.equal(c.artProbeDelay.starts,0);
   c.request("file:///tmp/x.png");c.request("file:///tmp/x.png");assert.equal(c.artProbeDelay.starts,1);
+});
+test("the probe is the bundled helper, launched through FoamyNative with the target as an argument", () => {
+  const c=fixture();c.networkReady=true;c.probeArt(false);
+  assert.equal(c.artProbe.running,true);
+  const command=Array.from(c.artProbe.command);
+  assert.deepEqual(command.slice(0,3),["timeout","--kill-after=2s","60s"]);
+  assert.deepEqual(command.slice(3),Array.from(FoamyNative.command("/plugins/foamy-media","foamy-media-helper",["art-probe",c.artUrl])));
+});
+test("no helper for this CPU: the probe is not launched again", () => {
+  const c=fixture();c.artHelperUnavailable=true;c.networkReady=true;
+  c.probeArt(false);assert.equal(c.artProbe.running,false);assert.equal(c.artFile,"");
+});
+test("a failure reply clears the cover and records its code", () => {
+  const c=fixture();c.applyArtProbe(c.artUrl,reply("445566","/tmp/a.png"));
+  c.request("https://i.scdn.co/image/next");
+  c.applyArtProbe(c.artUrl,'{"ok":false,"code":"TLS_UNSUPPORTED","error":"x"}');
+  assert.equal(c.artFile,"");assert.equal(c.artProbe.failure,"TLS_UNSUPPORTED");
 });

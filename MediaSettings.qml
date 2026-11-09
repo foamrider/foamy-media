@@ -81,7 +81,11 @@ FoamySettingsPage {
       options: Prefs.field(Schema.schema, "accent").options.map(function(option) { return { value: option, label: FoamyI18n.t(option) } })
       onChanged: function(next) { page.media.save("accent", next) }
     }
-    BoolRow { key: "artBackground" }
+    BoolRow {
+      key: "artBackground"
+      // Covers and their colour come from the native helper (MediaService).
+      description: page.media.artHelperUnavailable === true ? FoamyI18n.t("This plugin's helper isn't available for this CPU.") : ""
+    }
     NumberRow { key: "artIntensity"; visible: page.value("artBackground") === true }
   }
 

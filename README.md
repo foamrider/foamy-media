@@ -18,8 +18,14 @@ Requires Omarchy 4.5.
 Requires an MPRIS player (Spotify, spotifyd, spotify-player, or a
 Chromium-family browser for YouTube). Optional:
 
-- Covers and the album-colour band: `curl` and ImageMagick (`magick`).
-  Without them the popup shows the source icon on the foamy band.
+- Covers and the album-colour band: ImageMagick (`magick`), run by the
+  plugin's bundled helper, `bin/<arch>/foamy-media-helper` (static binaries
+  for x86-64 and AArch64 Linux; no `curl`, Python or other runtime). Its
+  HTTPS for remote covers needs AES, carry-less multiply, AVX2, BMI2 and ADX
+  on x86-64 (Intel Broadwell, AMD Zen or newer), or the crypto extensions on
+  ARMv8; local cover files don't. Without ImageMagick, or on another CPU, the
+  popup shows the source icon on the foamy band (and Settings says when the
+  helper isn't available for this CPU).
 - YouTube: Hyprland and the configured browser, started through `uwsm-app`.
 - Pasting into the settings fields: `wl-paste` (wl-clipboard), `jq` and
   `timeout` (coreutils), all part of Omarchy. Pastes are capped at 16 KiB and
@@ -53,12 +59,17 @@ treated as the web app.
 ### Covers
 
 Covers come only from Spotify's and YouTube's image hosts over HTTPS (no
-redirects, 8 MB cap) or from a local file. A probe identifies the format from
-the file's bytes, drops a PNG's text chunks (metadata no ImageMagick limit
-counts), decodes it under ImageMagick resource limits and writes a
-re-encoded PNG to `$XDG_CACHE_HOME/foamy-media/covers` (mode 0700, named by
-the cover's content, so a player that reuses one file path for every track
-still gets the new cover). The popup only ever loads that copy. Remote covers
+redirects, 8 MB cap on the bytes received, 8 seconds) or from a local regular
+file (never a FIFO or a device). The helper (`foamy-media-helper art-probe`;
+its contract is the comment at the top of `native/src/main.rs`) checks the
+target again, identifies the format from the file's bytes (JPEG, PNG, GIF,
+BMP or WebP, and ImageMagick is told which), drops a PNG's text chunks
+(metadata no ImageMagick limit counts) after checking its chunk structure,
+decodes it with ImageMagick under resource limits and a deadline, with no
+shell in between, and writes a re-encoded PNG of at most 640 pixels a side to
+`$XDG_CACHE_HOME/foamy-media/covers` (mode 0700, named by the cover's
+content, so a player that reuses one file path for every track still gets the
+new cover; the newest eight are kept). The popup only ever loads that copy. Remote covers
 wait for the network to settle and are retried up to three times. A cover
 that cannot be fetched or read is never replaced by the previous track's
 cover: the popup shows the source icon until the new one arrives.
@@ -130,14 +141,89 @@ omarchy plugin remove foamy.media
 Removal stops the widget. Spotify, browser profiles, YouTube web apps,
 playback and the cover cache (`$XDG_CACHE_HOME/foamy-media`) remain.
 
+## Verifying the helper binaries
+
+`bin/x86_64/foamy-media-helper` and `bin/aarch64/foamy-media-helper` are compiled from the Rust
+source in this repository: `native/`, the shared crate in
+`kit/rust/foamy-helper/`, the dependencies locked in `Cargo.lock` and the
+toolchain pinned in `rust-toolchain.toml`. The build is reproducible, so you
+can rebuild both binaries yourself and check that they are byte-identical to
+the committed files.
+
+`native/native.pin` records the foamy-kit release that built them (`kit`), the
+Rust toolchain (`toolchain`), a hash of every build input (`source`) and the
+SHA-256 of each binary. The rebuild uses that foamy-kit release's
+`tools/build-native.sh`. You need `git`, `rustup`, Python 3.11 or newer and
+`file`; Omarchy isn't needed.
+
+```sh
+git clone https://github.com/foamrider/foamy-media.git
+cd foamy-media
+pin=native/native.pin
+rustup toolchain install "$(awk '$1 == "toolchain" { print $2 }' $pin)" \
+  --profile minimal --target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl
+# foamy-kit 0.6.0 (`kit` in native.pin), at the commit its v0.6.0 tag names:
+git clone https://github.com/foamrider/foamy-kit.git ../foamy-kit &&
+  git -C ../foamy-kit checkout -q --detach 89659cbc1a9b4303c5f169e513baea5ad4d6c78a &&
+  ../foamy-kit/tools/build-native.sh . --verify
+```
+
+The last command builds both binaries from scratch in `~/.cache/foamy-native/`
+(nothing is written to the checkout) and compares them byte for byte with
+`bin/`. It also checks that the kit files are unmodified copies of that
+foamy-kit release and that `native.pin` matches the source. It ends with
+`verify OK (foamy-media-helper, <toolchain>, both arches reproducible)`; any
+difference is reported with both hashes. `git -C ../foamy-kit describe --tags`
+prints `v0.6.0`, the release `native.pin` names. To check a release the
+marketplace lists, run `git checkout <commit>` right after `cd`.
+
+### Building the helper yourself
+
+To run binaries you built instead of the committed ones, build them in the
+installed plugin (`omarchy plugin add` cloned it to
+`~/.config/omarchy/plugins/foamy.media`), with the same toolchain and
+foamy-kit commit as above. Keep foamy-kit outside
+`~/.config/omarchy/plugins`, which the shell scans for plugins:
+
+```sh
+cd ~/.config/omarchy/plugins/foamy.media
+pin=native/native.pin
+rustup toolchain install "$(awk '$1 == "toolchain" { print $2 }' $pin)" \
+  --profile minimal --target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl
+git clone https://github.com/foamrider/foamy-kit.git ~/.cache/foamy-kit &&
+  git -C ~/.cache/foamy-kit checkout -q --detach 89659cbc1a9b4303c5f169e513baea5ad4d6c78a &&
+  ~/.cache/foamy-kit/tools/build-native.sh .
+```
+
+This replaces `bin/x86_64/foamy-media-helper`, `bin/aarch64/foamy-media-helper`
+and `native/native.pin` with your build; run `omarchy restart shell` so running
+helpers use it. The build is reproducible, so `git status` shows no change
+when your binaries match the release, and `omarchy plugin update` still applies.
+
+<!-- Maintainers: when native.pin's kit changes, set both commits above to
+     `git -C foamy-kit rev-parse v<kit>^{commit}`. -->
+
 ## Development
 
 `kit/` holds shared components copied from [foamy-kit](https://github.com/foamrider/foamy-kit); edit them there, not here.
 
+The helper's source is `native/` (Rust; its contract is the doc comment at the
+top of `native/src/main.rs`). Rebuild both binaries and `native/native.pin`
+with foamy-kit's build tool after any change there, in `kit/rust/` or in
+`Cargo.lock`, and commit them together (foamy-kit cloned next to this plugin, at
+the release `native.pin` names):
+
+```sh
+export CARGO_TARGET_DIR=~/.cache/foamy-native/foamy-media     # never inside the plugin
+../foamy-kit/tools/build-native.sh . --test    # fmt, clippy, unit tests
+../foamy-kit/tools/build-native.sh .           # bin/x86_64, bin/aarch64, native.pin
+../foamy-kit/tools/build-native.sh . --verify  # clean rebuild, byte-identical
+```
+
 ```sh
 node tests/model-test.js && node tests/network-test.js && node tests/preferences-test.js
 node tests/browser-setup-test.js && node tests/i18n.test.cjs
-sh tests/probe-test.sh                 # the real cover probe; needs ImageMagick
+sh tests/probe-test.sh                 # the built helper on real fixtures; needs ImageMagick
 python3 -I tests/test_clipboard.py
 python3 tests/i18n-runtime.py          # the installed 4.5 shell; OMARCHY_PATH picks another tree
 bash tests/kit-check.sh

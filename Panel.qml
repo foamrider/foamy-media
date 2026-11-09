@@ -238,6 +238,8 @@ Panel {
   // reopening does not flash); the bar never shows one.
   property bool imagesActive: false
   readonly property string artSource: artShown && imagesActive ? Model.fileUrl(MediaService.artFile) : ""
+  // No cover helper for this CPU: Settings says so under the artwork toggle.
+  readonly property bool artHelperUnavailable: MediaService.artHelperUnavailable
 
   function requestArt() { if (member.isLeader) MediaService.request(root.artUrl) }
   onArtUrlChanged: requestArt()

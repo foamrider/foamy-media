@@ -192,57 +192,38 @@ const M = require("../Model.js")
   })
 }
 
-// ------------------------------------------- and what the script does with it
+// ------------------------------------------ and how the helper is launched
 {
-  const script = M.artProbeScript()
+  // The probe is the native helper now: no shell script, no awk, no curl.
+  // tests/probe-test.sh runs the real binary against real fixtures, and
+  // `cargo test` in native/ covers its bounds one by one.
+  assert.strictEqual(M.artProbeScript, undefined)
+  assert.deepStrictEqual(M.artProbeArgs("/home/example/a b.png"), ["art-probe", "/home/example/a b.png"])
+  assert.deepStrictEqual(M.artProbeArgs("https://i.scdn.co/image/x"), ["art-probe", "https://i.scdn.co/image/x"])
 
-  // The target arrives as an argument, never spliced into the script.
-  assert.ok(script.indexOf('"$1"') !== -1)
+  const fs = require("fs")
+  const path = require("path")
+  const service = fs.readFileSync(path.join(__dirname, "..", "MediaService.qml"), "utf8")
+  // The target is an argument of the bundled binary, never spliced into code.
+  assert.ok(!/\/bin\/sh|"sh", *"-c"|bash", *"-c"/.test(service), "the probe must not run through a shell script")
+  assert.ok(/FoamyNative\.command\(root\.pluginDir, "foamy-media-helper", Model\.artProbeArgs\(target\)\)/.test(service))
+  // And its exits are read the way DESIGN.md asks: 126/127 mean there is no
+  // helper for this CPU, which is said once and never retried.
+  assert.ok(/FoamyNative\.unavailable\(exitCode\)/.test(service))
+  assert.ok(/root\.artHelperUnavailable = true/.test(service))
+  assert.ok(/!target \|\| root\.artHelperUnavailable/.test(service), "an unavailable helper is not launched again")
+  assert.ok(/failure === "TLS_UNSUPPORTED"/.test(service), "a CPU without HTTPS support is not retried")
+  const settings = fs.readFileSync(path.join(__dirname, "..", "MediaSettings.qml"), "utf8")
+  assert.ok(settings.indexOf("This plugin's helper isn't available for this CPU.") !== -1)
+  const native = require("../kit/node-loader.cjs").load("FoamyNative")
+  assert.strictEqual(native.UNAVAILABLE_TEXT, "This plugin's helper isn't available for this CPU.")
 
-  // Clearing the host check is worth nothing if the fetch then follows a
-  // redirect somewhere else, so it does not follow one.
-  assert.ok(!/curl[^\n]*\s-[A-Za-z]*L/.test(script), "curl must not follow redirects")
-  assert.ok(script.indexOf("--max-redirs 0") !== -1)
-  assert.ok(script.indexOf('--proto "=https"') !== -1)
-
-  // The download is bounded by what the server declares and again by what
-  // actually landed, because the first bound needs a Content-Length.
-  assert.ok(script.indexOf("--max-filesize") !== -1)
-  assert.ok(/wc -c < "\$tmp"/.test(script))
-
-  // The format is decided from the magic bytes here, so ImageMagick is never
-  // the thing choosing a decoder for attacker-supplied content.
-  assert.ok(script.indexOf("ffd8ff") !== -1)
-  assert.ok(script.indexOf("89504e470d0a1a0a") !== -1)
-  assert.ok(/magick "\$fmt:\$tmp\[0\]"/.test(script))
-
-  // libpng keeps every PNG text chunk it inflates outside ImageMagick's
-  // limits, so a PNG's tEXt, zTXt and iTXt chunks are gone before the first
-  // decode. tests/probe-test.sh shows the memory this saves.
-  const strip = script.indexOf('if [ "$fmt" = PNG ]')
-  assert.ok(strip !== -1, "PNG text must be stripped")
-  assert.ok(strip < script.indexOf("magick "), "PNG text must be stripped before ImageMagick reads it")
-  ;["116 69 88 116", "122 84 88 116", "105 84 88 116"].forEach(function (type) {
-    assert.ok(script.indexOf(type) !== -1, type)
-  })
-
-  // The cover the panel displays is written here from bytes that passed every
-  // check above, capped at a size no cover needs, which bounds Qt's decode of
-  // it as well.
-  assert.ok(/-resize "640x640>"/.test(script))
-  assert.ok(script.indexOf('printf "ART %s') !== -1)
-  assert.ok(script.indexOf("XDG_CACHE_HOME") !== -1)
-
-  // And the decode is bounded, since a tiny file can declare a huge image.
-  // The width and height caps are the ones that refuse — the area limit only
-  // decides where the pixel cache lives, so it is not a defence by itself.
-  // tests/probe-test.sh is what shows this actually holding.
-  assert.ok(script.indexOf("MAGICK_WIDTH_LIMIT=8KP") !== -1)
-  assert.ok(script.indexOf("MAGICK_HEIGHT_LIMIT=8KP") !== -1)
-  ;["MAGICK_AREA_LIMIT", "MAGICK_MEMORY_LIMIT", "MAGICK_MAP_LIMIT",
-    "MAGICK_TIME_LIMIT", "MAGICK_THREAD_LIMIT"].forEach(function (limit) {
-    assert.ok(script.indexOf(limit + "=") !== -1, limit)
-  })
+  // The helper checks the host again: its list is this one.
+  const main = fs.readFileSync(path.join(__dirname, "..", "native", "src", "main.rs"), "utf8")
+  const hosts = /const HOSTS: \[&str; \d+\] = \[([^\]]*)\]/.exec(main)
+  assert.ok(hosts, "native/src/main.rs HOSTS")
+  ;["scdn.co", "ytimg.com"].forEach(function (host) { assert.ok(M.artHostAllowed(host)) })
+  assert.deepStrictEqual(JSON.parse("[" + hosts[1] + "]"), ["scdn.co", "ytimg.com"])
 }
 
 // ------------------------------------- nothing else may load the art URL
@@ -285,17 +266,21 @@ const M = require("../Model.js")
 
 // ------------------------------------------------------ the file it hands over
 {
-  const probe = M.parseArtProbe([
-    "MEAN 102030",
-    "ART /home/example/.cache/foamy-media/covers/abc123.png",
-    "HIST",
-    "          2581: (16,32,48) #102030 srgb(16,32,48)"
-  ].join("\n"))
+  const probe = M.parseArtProbe(JSON.stringify({
+    ok: true,
+    mean: "#102030",
+    file: "/home/example/.cache/foamy-media/covers/abc123.png",
+    swatches: [{ count: 2581, hex: "#102030" }]
+  }))
   assert.strictEqual(probe.file, "/home/example/.cache/foamy-media/covers/abc123.png")
 
-  // Output without an ART line still parses; there is simply nothing to show.
-  const colourOnly = M.parseArtProbe("MEAN 102030\nHIST\n  10: (16,32,48) #102030 srgb(16,32,48)")
+  // A reply without a usable file still parses; there is simply nothing to show.
+  const colourOnly = M.parseArtProbe('{"ok":true,"mean":"#102030","swatches":[{"count":10,"hex":"#102030"}]}')
   assert.strictEqual(colourOnly.file, "")
+  ;["relative/x.png", "/a\nb.png", 7, null].forEach(function (file) {
+    const reply = M.parseArtProbe(JSON.stringify({ ok: true, mean: "#102030", file: file, swatches: [] }))
+    assert.strictEqual(reply.file, "", JSON.stringify(file))
+  })
 
   // A path becomes a URL with every segment encoded, so a space or a "#" in it
   // cannot end the path early.
@@ -310,14 +295,19 @@ const M = require("../Model.js")
 {
   // Real output, from Random Access Memories (Drumless Edition) — a cover that
   // is almost entirely pale beige.
-  const beige = [
-    "MEAN D2CFC8",
-    "HIST",
-    "           233: (185,180,169) #B9B4A9 srgb(185,180,169)",
-    "          2581: (214,212,206) #D6D4CE srgb(214,212,206)",
-    "          2531: (216,214,209) #D8D6D1 srgb(216,214,209)",
-    "           167: (217,214,207) #D9D6CF srgb(217,214,207)"
-  ].join("\n")
+  // The helper parses ImageMagick's histogram lines into swatches
+  // (native/src/magick.rs); this is the reply it gives for that cover.
+  const beige = JSON.stringify({
+    ok: true,
+    mean: "#d2cfc8",
+    file: "/home/example/.cache/foamy-media/covers/beige.png",
+    swatches: [
+      { count: 233, hex: "#b9b4a9" },
+      { count: 2581, hex: "#d6d4ce" },
+      { count: 2531, hex: "#d8d6d1" },
+      { count: 167, hex: "#d9d6cf" }
+    ]
+  })
 
   const probe = M.parseArtProbe(beige)
   assert.strictEqual(probe.mean, "#d2cfc8")
@@ -328,6 +318,19 @@ const M = require("../Model.js")
   assert.strictEqual(M.parseArtProbe(""), null)
   assert.strictEqual(M.parseArtProbe("magick: unable to open image"), null)
   assert.strictEqual(M.parseArtProbe(null), null)
+  assert.strictEqual(M.parseArtProbe("[1,2]"), null)
+  assert.strictEqual(M.parseArtProbe('{"ok":true}'), null)
+  assert.strictEqual(M.parseArtProbe('{"ok":true,"mean":"D2CFC8","swatches":[{"count":1,"hex":"red"}]}'), null)
+  // A failure reply is no cover, and its code is what decides a retry.
+  const failed = '{"ok":false,"code":"TLS_UNSUPPORTED","error":"HTTPS isn\'t supported on this CPU"}'
+  assert.strictEqual(M.parseArtProbe(failed), null)
+  assert.strictEqual(M.artProbeFailure(failed), "TLS_UNSUPPORTED")
+  assert.strictEqual(M.artProbeFailure(beige), "")
+  assert.strictEqual(M.artProbeFailure("not json"), "")
+  assert.strictEqual(M.artProbeFailure(""), "")
+  // Only the mean: the colour falls back to it.
+  const meanOnly = M.parseArtProbe('{"ok":true,"mean":"#204080","file":"/c/x.png","swatches":[]}')
+  assert.strictEqual(meanOnly.dominant, "#204080")
 
   // A dark cover with one saturated area: the colour a person would name is
   // the green, not the near-black that covers most of the sleeve.

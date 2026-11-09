@@ -88,5 +88,6 @@
   "Redo": "Redo",
   "Select all": "Select all",
   "Undo": "Undo",
-  "Enter a number from %1 to %2": "Enter a number from %1 to %2"
+  "Enter a number from %1 to %2": "Enter a number from %1 to %2",
+  "This plugin's helper isn't available for this CPU.": "This plugin's helper isn't available for this CPU."
 }
