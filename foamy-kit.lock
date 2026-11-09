@@ -1,9 +1,9 @@
 # foamy-kit.lock: written by foamy-kit sync.sh; do not edit.
 # Hashes are of each file's body (the file without its stamp line);
 # notices are hashed whole. tests/kit-check.sh verifies them.
-version 0.5.2
-source cc3e46f0fae4
-components FoamyAction,FoamyCursor,FoamyDropdown,FoamyHeader,FoamyHeroBand,FoamyI18n,FoamyIcon,FoamyInfoNote,FoamyIpc,FoamyMenu,FoamyMotion,FoamyNumberField,FoamyPalette,FoamyPopup,FoamyPrefs,FoamySettings,FoamyShared,FoamyStyle,FoamyWheelScroll,SafeTextField
+version 0.6.0
+source 1c92748b0b5b
+components FoamyAction,FoamyCursor,FoamyDropdown,FoamyHeader,FoamyHeroBand,FoamyI18n,FoamyIcon,FoamyInfoNote,FoamyIpc,FoamyMenu,FoamyMotion,FoamyNative,FoamyNumberField,FoamyPalette,FoamyPopup,FoamyPrefs,FoamySettings,FoamyShared,FoamyStyle,FoamyWheelScroll,SafeTextField
 31637cf414fddfbc7c18c7d107b4c9a77801568fd78ebb8212791fb66de476a9  kit/FoamyAction.qml
 4488b3dbaa2b0fab78fb66dea979e57bcc0f30e76e6443bb4a0f031fffc44709  kit/FoamyCursor.qml
 322db103ce6d6476aac66858d421c75258365a5a2017188906cce61c8b1610ee  kit/FoamyCursorSurface.qml
@@ -20,6 +20,7 @@ f89145274930cdd9fe3c71970c4c4afa0d6167f4cfc163e69736373aebe4a8ea  kit/FoamyHeroB
 48510e842c22a5e5a4c30eac1dbdea461a8c0e0739eb7eff909c98f6ec93e59f  kit/FoamyMenu.qml
 cfe84fbb27e412da43a3ad4652cd17d0bb071e81119a0e4565fca7fcb1dda488  kit/FoamyMenuItem.qml
 79218200ee2dbe5d1bdfd6ef41768bce029e136f8640f8f5f0833a97d8371d5a  kit/FoamyMotion.qml
+16b017e91ba960a867a1c5cc056f7f8d7bad07c07722714b32765d7c6d53920a  kit/FoamyNative.js
 2927c0c2f4281cc06f6b7b3e837fe8dd97d07c3769e2c9356541891693121aa4  kit/FoamyNumberField.qml
 f54ae05f597de692a3a44514acaeace32396364f9baf9f53b0fe2e9ff4adc2fa  kit/FoamyPalette.qml
 2b8b65d24472788fa4d32a812f77a50f3054daa6d82a484645a00ba75b2f7980  kit/FoamyPopup.qml
@@ -41,4 +42,22 @@ c741d6fcac65bfb155c54c3933addc244163c74642ceae4a28b68cec16367abf  kit/SafeTextFi
 5084c8e33fd38e0ba57b1cf2b732cd04a4985d714583f7445e45419d95ae3118  kit/clipboard.sh
 90b1a10f5f5005c94031f36fef0ad3d8e705cf4e13372dd8362ef4579e0a93df  kit/node-loader.cjs
 b958a469a700235da8730e766034324d01c29dfa49cb5c9d2621c16f98eb18d2  kit/qmldir
+a9b3009e14bc6ada2e83c131678566268d4fd987891925fd75739a61912a36f7  kit/rust/foamy-helper/Cargo.toml
+c63dc35ac197c621d9f2541be5c00fbafe38fb4f5c133ee57ffe19e3c7421f41  kit/rust/foamy-helper/src/child.rs
+45275bb9a332e9ce9aafab9c1df2e9bb388cb0954dea4086bd17016e285d035e  kit/rust/foamy-helper/src/favicon.rs
+d0de5bb002a6af039c90d728bde78e3fb11174388482588561abc0495cd6b81b  kit/rust/foamy-helper/src/favicon/sqlite.rs
+3b092b6e431e128eda90551c6e517778828ed7b80e3ffcfa9d7cb6a3add54ff6  kit/rust/foamy-helper/src/favicon/tests.rs
+2f17136d803e674f7a0576813750d8406680381102023f4669102bbceadc1555  kit/rust/foamy-helper/src/fs.rs
+444eba5d6f73ead3d00fecbe31574cfc3c260cd220d162448a12ac28ef0ca13c  kit/rust/foamy-helper/src/hash.rs
+17d4cde5814661e1eedce8abdb7ea1e46ef8f9a588d3454920e5fdba99b83c0c  kit/rust/foamy-helper/src/io.rs
+34a2d3b505a93d36d0c874c5aa03e105e49ec885e85d941979b5b14aeba9db99  kit/rust/foamy-helper/src/json.rs
+2031c896c17cb22f18bf68cedd06b6e6db13ddeea700850d743f7de891e80797  kit/rust/foamy-helper/src/lib.rs
+b5f018d5c973f1115da2ae6c35c7eb8700e6cc24d97cb7b917a04ca05560d45c  kit/rust/foamy-helper/src/lock.rs
+6e036b32a765a1adf8110629db1fca3c7d476d4f85f8ed7d3d44735222e2daab  kit/rust/foamy-helper/src/net.rs
+0db730b49aa8ea779d896f40d055549a3090ec7c5d7915f1c48d101542d7eb46  kit/rust/foamy-helper/src/process.rs
+0a9ef7791d77077b52e4b34a54eb7a2abe5fba29beb7bcda6aa05fd91edfecd6  kit/rust/foamy-helper/src/sandbox.rs
+142ab84d9c2b5e899e60da9b94881e08196e4722af86835cf8388d6d95dffe88  kit/rust/foamy-helper/src/sandbox/tests.rs
+1f90a4df7260b1c57e6dd972ca68fc82191f94cc8a1e47082e4f26154c0e24aa  kit/rust/foamy-helper/src/tls.rs
+0aab5b4b47dd8c8530849b0c9540e4c945789e58661f12480d832348786aee6e  kit/rust/release.toml
+868af8f99d78154f4ab510eaa594ed9833639b763939a7f47fb38a0070ea6f6e  rust-toolchain.toml
 59c3505e9a3a16728a521626b705613826f74569871c12b75afa196bcc4af467  tests/kit-check.sh
