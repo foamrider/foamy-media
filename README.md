@@ -177,7 +177,30 @@ difference is reported with both hashes. `git -C ../foamy-kit describe --tags`
 prints `v0.6.0`, the release `native.pin` names. To check a release the
 marketplace lists, run `git checkout <commit>` right after `cd`.
 
-<!-- Maintainers: when native.pin's kit changes, set the commit above to
+### Building the helper yourself
+
+To run binaries you built instead of the committed ones, build them in the
+installed plugin (`omarchy plugin add` cloned it to
+`~/.config/omarchy/plugins/foamy.media`), with the same toolchain and
+foamy-kit commit as above. Keep foamy-kit outside
+`~/.config/omarchy/plugins`, which the shell scans for plugins:
+
+```sh
+cd ~/.config/omarchy/plugins/foamy.media
+pin=native/native.pin
+rustup toolchain install "$(awk '$1 == "toolchain" { print $2 }' $pin)" \
+  --profile minimal --target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl
+git clone https://github.com/foamrider/foamy-kit.git ~/.cache/foamy-kit &&
+  git -C ~/.cache/foamy-kit checkout -q --detach 89659cbc1a9b4303c5f169e513baea5ad4d6c78a &&
+  ~/.cache/foamy-kit/tools/build-native.sh .
+```
+
+This replaces `bin/x86_64/foamy-media-helper`, `bin/aarch64/foamy-media-helper`
+and `native/native.pin` with your build; run `omarchy restart shell` so running
+helpers use it. The build is reproducible, so `git status` shows no change
+when your binaries match the release, and `omarchy plugin update` still applies.
+
+<!-- Maintainers: when native.pin's kit changes, set both commits above to
      `git -C foamy-kit rev-parse v<kit>^{commit}`. -->
 
 ## Development
@@ -187,13 +210,14 @@ marketplace lists, run `git checkout <commit>` right after `cd`.
 The helper's source is `native/` (Rust; its contract is the doc comment at the
 top of `native/src/main.rs`). Rebuild both binaries and `native/native.pin`
 with foamy-kit's build tool after any change there, in `kit/rust/` or in
-`Cargo.lock`, and commit them together:
+`Cargo.lock`, and commit them together (foamy-kit cloned next to this plugin, at
+the release `native.pin` names):
 
 ```sh
 export CARGO_TARGET_DIR=~/.cache/foamy-native/foamy-media     # never inside the plugin
-~/GitHub/Personal/foamy-kit/tools/build-native.sh . --test    # fmt, clippy, unit tests
-~/GitHub/Personal/foamy-kit/tools/build-native.sh .           # bin/x86_64, bin/aarch64, native.pin
-~/GitHub/Personal/foamy-kit/tools/build-native.sh . --verify  # clean rebuild, byte-identical
+../foamy-kit/tools/build-native.sh . --test    # fmt, clippy, unit tests
+../foamy-kit/tools/build-native.sh .           # bin/x86_64, bin/aarch64, native.pin
+../foamy-kit/tools/build-native.sh . --verify  # clean rebuild, byte-identical
 ```
 
 ```sh
