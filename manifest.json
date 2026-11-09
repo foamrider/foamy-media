@@ -114,7 +114,7 @@
         "type": "boolean",
         "label": "Album cover behind the panel",
         "defaultValue": true,
-        "description": "Blurs the current cover into the panel background, tinted and dimmed to whatever keeps the theme's text readable. Needs ImageMagick and curl for the color reading; without them the panel keeps its plain background."
+        "description": "Blurs the current cover into the panel background, tinted and dimmed to whatever keeps the theme's text readable. Needs ImageMagick for the color reading; without it the panel keeps its plain background."
       },
       {
         "key": "artIntensity",

@@ -180,7 +180,7 @@ ShellRoot {
     var svc = Media.MediaService
     var a = "file:///nonexistent/foamy-media-a.png", b = "file:///nonexistent/foamy-media-b.png"
     svc.request(a); svc.artProbeDelay.stop()
-    svc.applyArtProbe(a, "MEAN 336699\nART /tmp/a.png\n")
+    svc.applyArtProbe(a, '{"ok":true,"mean":"#336699","file":"/tmp/a.png","swatches":[]}')
     eq(svc.artFor(a), true, "cover shown for its own track")
     svc.request(b); svc.artProbeDelay.stop()
     eq(svc.artFor(b), true, "previous cover lingers while the next one settles")
@@ -189,8 +189,8 @@ ShellRoot {
     eq(svc.artFor(b), false, "failed fetch drops the previous cover")
     eq(svc.artFile, "", "no cover kept after the failure")
     svc.request(a); svc.artProbeDelay.stop()
-    svc.applyArtProbe(a, "MEAN 336699\nART /tmp/a.png\n")
-    svc.applyArtProbe(b, "MEAN 000000\nART /tmp/b.png\n")
+    svc.applyArtProbe(a, '{"ok":true,"mean":"#336699","file":"/tmp/a.png","swatches":[]}')
+    svc.applyArtProbe(b, '{"ok":true,"mean":"#000000","file":"/tmp/b.png","swatches":[]}')
     eq(svc.artFile, "/tmp/a.png", "a late answer for another track is ignored")
     svc.request(b); svc.artProbeDelay.stop()
     svc.applyArtProbe(b, "garbage")

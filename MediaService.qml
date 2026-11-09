@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell.Io
 import Quickshell.Networking
 import "Model.js" as Model
+import "kit/FoamyNative.js" as FoamyNative
 
 // State shared by every media bar instance (4.5 draws one bar per monitor).
 // The selected source and the album-art probe live here, so two monitors show
@@ -14,10 +15,11 @@ import "Model.js" as Model
 // a dark one, so the cover is measured and the scrim answers. Two numbers come
 // back: the mean luminance, which sets how hard the scrim has to work, and the
 // dominant colour, which tints it so the panel reads as part of the artwork.
-// Qt can show the image but cannot tell us its colour, so an ImageMagick probe
+// Qt can show the image but cannot tell us its colour, so the plugin's native
+// helper (bin/<arch>/foamy-media-helper art-probe, which runs ImageMagick)
 // does the reading. Everything downstream falls back to the plain theme panel
 // while that is unanswered or has failed, which is also what happens on a
-// machine without ImageMagick.
+// machine without ImageMagick or on a CPU the helper isn't built for.
 QtObject {
   id: root
 
@@ -44,6 +46,10 @@ QtObject {
   // a cover that fails to load is never shown next to another track.
   property bool artSettling: false
   property int artRetries: 0
+  // No helper binary for this CPU (FoamyNative.unavailable): covers stay off
+  // and the settings say why. Never retried; a plugin update reloads this.
+  property bool artHelperUnavailable: false
+  readonly property string pluginDir: FoamyNative.localPath(Qt.resolvedUrl("."))
 
   // Whether the stored cover belongs to `url` (or is the previous one,
   // allowed to linger while `url` settles).
@@ -76,7 +82,7 @@ QtObject {
 
   function probeArt(force) {
     var target = Model.artProbeTarget(root.artUrl)
-    if (!target) {
+    if (!target || root.artHelperUnavailable) {
       root.forgetArt()
       return
     }
@@ -95,7 +101,11 @@ QtObject {
       return
     }
     artProbe.pending = root.artUrl
-    artProbe.command = ["/bin/sh", "-c", Model.artProbeScript(), "sh", target]
+    artProbe.failure = ""
+    // The helper bounds every step itself (8 s fetch, 15 s per decode); the
+    // outer timeout only catches a helper that somehow hangs.
+    artProbe.command = ["timeout", "--kill-after=2s", "60s"].concat(
+      FoamyNative.command(root.pluginDir, "foamy-media-helper", Model.artProbeArgs(target)))
     artProbe.running = true
   }
 
@@ -112,6 +122,7 @@ QtObject {
     // wrong cover, so drop it and let the newer one land.
     if (url !== root.artUrl) return
 
+    root.artProbe.failure = Model.artProbeFailure(text)
     var probe = Model.parseArtProbe(text)
     // Unreadable output means this track has no usable cover: never keep the
     // previous track's one in its place.
@@ -160,6 +171,8 @@ QtObject {
 
   property Process artProbe: Process {
     property string pending: ""
+    // The failed reply's code, e.g. TLS_UNSUPPORTED (no HTTPS on this CPU).
+    property string failure: ""
 
     stdout: StdioCollector {
       waitForEnd: true
@@ -168,10 +181,18 @@ QtObject {
 
     onExited: function(exitCode) {
       var url = pending
+      if (FoamyNative.unavailable(exitCode)) {
+        if (!root.artHelperUnavailable) console.warn("foamy-media: " + FoamyNative.UNAVAILABLE_TEXT + " (exit " + exitCode + ")")
+        root.artHelperUnavailable = true
+        root.forgetArt()
+        return
+      }
       // Let the stdout collector apply a successful result before deciding.
       Qt.callLater(function() {
         root.finishAttempt(url, exitCode)
+        // A CPU without the instructions HTTPS needs won't gain them on a retry.
         if (url !== root.artUrl || root.artProbed === root.artUrl
+            || root.artProbe.failure === "TLS_UNSUPPORTED"
             || !root.remoteArt || !root.networkReady || root.artRetries >= 3) return
         root.artRetry.interval = 2500 * Math.pow(2, root.artRetries++)
         root.artRetry.restart()
