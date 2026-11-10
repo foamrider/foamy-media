@@ -100,6 +100,82 @@ function barLabel(player, showArtist) {
   return title + "  ·  " + artist
 }
 
+// ------------------------------------------------------------------ tooltip
+//
+// The hover tooltip is the one place the widget hands track metadata to a
+// sink it does not own: the host bar's tooltip Text. Omarchy 4.5 draws it as
+// plain text, but the plugin API only promises "text", and a Text left on
+// AutoText would read a title like `<img src=…>` as markup. So the tooltip is
+// built here, bounded and made literal for both readings.
+
+// Code points per field, ellipsis included. YouTube titles stop at 100, so a
+// title is only cut when a player publishes something no store would; a long
+// list of featured artists gives way first. The whole tooltip stays narrower
+// than a 1366-pixel screen.
+var tooltipTitleLimit = 100
+var tooltipArtistLimit = 60
+
+// Characters that continue the one before them: combining marks, joiners,
+// variation selectors, emoji skin tones and tag sequences. A cut never lands
+// in front of one, so a letter keeps its accent and an emoji its modifier.
+function continuesCluster(code) {
+  return (code >= 0x0300 && code <= 0x036f) || (code >= 0x1ab0 && code <= 0x1aff)
+    || (code >= 0x1dc0 && code <= 0x1dff) || (code >= 0x20d0 && code <= 0x20ff)
+    || (code >= 0xfe00 && code <= 0xfe0f) || (code >= 0xfe20 && code <= 0xfe2f)
+    || code === 0x200c || code === 0x200d
+    || (code >= 0x1f3fb && code <= 0x1f3ff) || (code >= 0xe0020 && code <= 0xe007f)
+    || (code >= 0xe0100 && code <= 0xe01ef)
+}
+
+// One untrusted metadata field for the tooltip: line breaks and other control
+// characters become a space (a title cannot grow the tooltip into a column),
+// and anything longer than `limit` code points ends in an ellipsis within it.
+function tooltipField(value, limit) {
+  var text = String(value === undefined || value === null ? "" : value)
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ")
+  var max = limit > 1 ? Math.floor(limit) : tooltipTitleLimit
+  var points = []
+  for (var i = 0; i < text.length; i++) {
+    var code = text.charCodeAt(i)
+    if (code >= 0xd800 && code <= 0xdbff && i + 1 < text.length) {
+      var low = text.charCodeAt(i + 1)
+      if (low >= 0xdc00 && low <= 0xdfff) {
+        points.push((code - 0xd800) * 0x400 + (low - 0xdc00) + 0x10000)
+        i++
+        continue
+      }
+    }
+    points.push(code)
+  }
+  if (points.length <= max) return text
+
+  var cut = max - 1
+  while (cut > 0 && (continuesCluster(points[cut]) || points[cut - 1] === 0x200d)) cut--
+  var kept = ""
+  for (var j = 0; j < cut; j++) kept += String.fromCodePoint(points[j])
+  return kept + "\u2026"
+}
+
+// Qt's AutoText test (Qt::mightBeRichText) looks only at the first `<` (and an
+// earlier `&lt;`). A WORD JOINER after every `<` and `&` fails that test, so
+// AutoText falls back to plain text, while a PlainText sink (4.5) draws the
+// joiner as nothing: the string reads the same either way. Escaping would not:
+// plain text would show `&amp;` and AutoText would still guess per string.
+function literalTooltip(text) {
+  return String(text === undefined || text === null ? "" : text).replace(/[<&]/g, "$&\u2060")
+}
+
+// The hover text for a live player: `prefix` (the translated "Paused — ")
+// then title and artist, both bounded, made literal as a whole.
+function tooltipLabel(player, prefix) {
+  if (!player) return ""
+
+  var title = tooltipField(player.trackTitle, tooltipTitleLimit)
+  var artist = tooltipField(player.trackArtist, tooltipArtistLimit)
+  var label = !title ? artist : !artist ? title : title + "  ·  " + artist
+  return literalTooltip(String(prefix || "") + label)
+}
+
 // An open web-app window is not itself a track. YouTube clears these fields
 // after playback ends, which lets the panel keep its tab without leaving an
 // empty source in charge of the bar.
@@ -487,6 +563,11 @@ if (typeof module !== "undefined") {
     findSpotify: findSpotify,
     findYoutube: findYoutube,
     barLabel: barLabel,
+    tooltipTitleLimit: tooltipTitleLimit,
+    tooltipArtistLimit: tooltipArtistLimit,
+    tooltipField: tooltipField,
+    literalTooltip: literalTooltip,
+    tooltipLabel: tooltipLabel,
     hasTrackInformation: hasTrackInformation,
     hasDisplayableTrack: hasDisplayableTrack,
     shouldShowWidget: shouldShowWidget,

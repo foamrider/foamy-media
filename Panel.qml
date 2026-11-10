@@ -157,6 +157,11 @@ Panel {
   readonly property string trackAlbum: live ? String(player.trackAlbum || "") : ""
   readonly property string artUrl: live ? String(player.trackArtUrl || "") : ""
   readonly property string label: Model.barLabel(player, showArtist)
+  // What hovering hands the host's tooltip: bounded, and literal whatever the
+  // host's Text makes of markup (Model.tooltipLabel).
+  readonly property string tooltipText: live
+    ? Model.tooltipLabel(player, playing ? "" : FoamyI18n.t("Paused") + " — ")
+    : Model.literalTooltip(FoamyI18n.t("%1 is not running", sourceName))
 
   readonly property real trackLength: live && player.lengthSupported ? Math.max(0, player.length) : 0
   // Quickshell extrapolates position between polls, so it can overshoot the
@@ -533,9 +538,7 @@ Panel {
       else root.skipNext()
     }
 
-    onEntered: if (root.bar) root.bar.showTooltip(root, root.live
-      ? (root.playing ? "" : FoamyI18n.t("Paused") + " — ") + Model.barLabel(root.player, true)
-      : FoamyI18n.t("%1 is not running", root.sourceName))
+    onEntered: if (root.bar) root.bar.showTooltip(root, root.tooltipText)
     onExited: if (root.bar) root.bar.hideTooltip(root)
   }
 
