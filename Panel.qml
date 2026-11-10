@@ -334,25 +334,87 @@ Panel {
   // directly. Spotify keeps Omarchy's installer-aware launch path.
   function launch() {
     if (root.sourceKind === "youtube") {
-      if (root.youtubeWindow) {
-        root.youtubeWindow.activate()
-      } else {
-        youtubeLaunch.command = Schema.youtubeLaunch(root.preference("youtubeBrowser"), root.preference("youtubeProfile"))
-        youtubeLaunch.running = true
-      }
+      if (root.youtubeWindow) root.youtubeWindow.activate()
+      else root.startBrowser(Schema.youtubeLaunch(root.preference("youtubeBrowser"), root.preference("youtubeProfile")))
       return
     }
     if (bar) bar.run("omarchy launch spotify")
   }
-  Process {
-    id: youtubeLaunch
-    stderr: StdioCollector { id: launchError; waitForEnd: true }
-    onExited: function(exitCode) {
-      if (exitCode === 0) return
-      console.warn("foamy-media: starting the browser failed:", launchError.text.trim())
-      root.localError = "Couldn't start the browser."
-      root.openSettings()
-      root.browserSettingsOpen = true
+
+  // The browser may stay its launch's child for hours (BrowserSetup.js), so
+  // every launch is its own Process: one whose YouTube window was closed
+  // while the browser kept running doesn't block the next. Within
+  // launchWindow a command that can't start, a non-zero exit or a crash is a
+  // failed launch, reported in the browser settings; past it the launch has
+  // succeeded, its stderr is dropped and the browser is left alone (never
+  // timed out). Meanwhile only the tail of stderr is kept.
+  property int launchWindow: BrowserSetup.LAUNCH_WINDOW_MS
+  // The launch still inside its window: a second click then starts nothing.
+  property QtObject pendingLaunch: null
+  // The kept stderr of the last failed launch, for the log.
+  property string launchDiagnostic: ""
+  function startBrowser(command) {
+    if (pendingLaunch) return null
+    var launch = browserLaunch.createObject(root, { command: command })
+    if (!launch) return null
+    pendingLaunch = launch
+    launch.begin()
+    return launch
+  }
+  function settleLaunch(launch) {
+    if (pendingLaunch === launch) pendingLaunch = null
+    launch.settled = true
+    launch.diagnostic = ""
+    // Quickshell keeps draining and discarding the pipe (no SIGPIPE, no block).
+    launch.stderr = null
+  }
+  function endLaunch(launch, failed, detail) {
+    if (launch.ended) return
+    launch.ended = true
+    launch.settleTimer.stop()
+    if (pendingLaunch === launch) pendingLaunch = null
+    if (failed) {
+      launchDiagnostic = BrowserSetup.diagnostic(detail)
+      console.warn("foamy-media: starting the browser failed: " + launchDiagnostic)
+      localError = "Couldn't start the browser."
+      openSettings()
+      browserSettingsOpen = true
+    }
+    launch.destroy()
+  }
+  Component {
+    id: browserLaunch
+    Process {
+      id: launchProcess
+      property bool settled: false
+      property bool ended: false
+      property bool exitSeen: false
+      property string diagnostic: ""
+      property Timer settleTimer: Timer {
+        interval: root.launchWindow
+        onTriggered: root.settleLaunch(launchProcess)
+      }
+      function begin() {
+        settleTimer.start()
+        running = true
+      }
+      // An empty marker hands data on as it arrives: a line that never ends
+      // is not buffered whole.
+      stderr: SplitParser {
+        splitMarker: ""
+        onRead: function(data) {
+          if (!launchProcess.settled) launchProcess.diagnostic = BrowserSetup.keepTail(launchProcess.diagnostic, data)
+        }
+      }
+      onExited: function(exitCode, exitStatus) {
+        exitSeen = true
+        var crashed = Number(exitStatus) !== 0
+        root.endLaunch(launchProcess, BrowserSetup.launchFailed(exitCode, crashed, settled),
+          diagnostic !== "" ? diagnostic : (crashed ? "killed by signal " : "exit code ") + exitCode)
+      }
+      // A command that can't start ends with running false and no exited().
+      onRunningChanged: if (!running && !exitSeen)
+        root.endLaunch(launchProcess, !settled, "could not run " + (command.length ? command[0] : "the browser"))
     }
   }
 

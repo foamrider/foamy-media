@@ -91,7 +91,8 @@ Item {
   }
   Process {
     id: fixture
-    stderr: StdioCollector { onStreamFinished: if (text.trim() !== "") console.log("fake MPRIS: " + text.trim()) }
+    // Line by line as it comes: nothing is held until the fixture exits.
+    stderr: SplitParser { onRead: function(line) { if (line.trim() !== "") console.log("fake MPRIS: " + line.trim()) } }
   }
   // A static MPRIS fixture (python3-dbus), embedded so the dev copy the kit
   // renders (git archive of dev + this file) has it.

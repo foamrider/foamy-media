@@ -76,4 +76,29 @@ function candidates(windows, players, entries) {
   }
   return result.sort(function(a,b) { return a.title.localeCompare(b.title) || a.id.localeCompare(b.id) })
 }
-if (typeof module !== "undefined") module.exports = {description:description, webApp:webApp, suggestion:suggestion, candidates:candidates}
+// Launching the browser. uwsm-app execs it in place, so the browser can stay
+// the launch's own child for hours, writing to its stderr all the while. A
+// launch that fails does so quickly (uwsm-app gives up on its daemon after
+// 10 s); only within that window is stderr kept, and only its tail.
+var LAUNCH_WINDOW_MS = 15000
+var LAUNCH_DIAGNOSTIC_CHARS = 4096
+function keepTail(buffer, chunk, limit) {
+  var max = limit > 0 ? limit : LAUNCH_DIAGNOSTIC_CHARS
+  var next = String(chunk || "")
+  if (next.length >= max) return next.slice(next.length - max)
+  var text = String(buffer || "") + next
+  return text.length > max ? text.slice(text.length - max) : text
+}
+// Exiting 0 is a browser handing the window to its running instance. Any
+// other exit or a crash counts only while the launch can still fail: a
+// browser that ran past the window and closes later is not a failed launch.
+function launchFailed(exitCode, crashed, settled) {
+  return !settled && (crashed === true || exitCode !== 0)
+}
+// The kept tail as one log line: control characters (escape sequences
+// included) become spaces.
+function diagnostic(text) {
+  return String(text || "").replace(/[\x00-\x1f\x7f]+/g, " ").trim()
+}
+if (typeof module !== "undefined") module.exports = {description:description, webApp:webApp, suggestion:suggestion, candidates:candidates,
+  LAUNCH_WINDOW_MS:LAUNCH_WINDOW_MS, LAUNCH_DIAGNOSTIC_CHARS:LAUNCH_DIAGNOSTIC_CHARS, keepTail:keepTail, launchFailed:launchFailed, diagnostic:diagnostic}

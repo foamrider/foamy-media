@@ -44,4 +44,24 @@ const selectedLabel = settings => B.description(Prefs.value(P.schema, settings, 
 assert.equal(selectedLabel({}), 'Vivaldi · Default')
 assert.equal(selectedLabel({youtubeAppId:'  ', youtubeProfile:'Default'}), 'Vivaldi · Default')
 assert.equal(selectedLabel({youtubeAppId:'chromium-youtube.com__-Profile_2', youtubeProfile:'Profile 2'}), 'Chromium · Profile 2')
-console.log('ok — browser setup detection, missing metadata, ambiguity, and lookalike tests passed')
+// Browser launch: only the tail of stderr is kept, whatever arrives.
+const cap = B.LAUNCH_DIAGNOSTIC_CHARS
+assert.equal(B.keepTail('', 'Error: Command not found: "nope"\n'), 'Error: Command not found: "nope"\n')
+let tail = ''
+for (let i = 0; i < 2000; i++) tail = B.keepTail(tail, 'x'.repeat(997) + i + '\n')
+assert.equal(tail.length, cap)
+assert.ok(tail.endsWith('1999\n'))
+assert.equal(B.keepTail('kept', 'y'.repeat(cap * 3)), 'y'.repeat(cap))
+assert.equal(B.keepTail('abc', 'def', 4), 'cdef')
+assert.equal(B.keepTail(undefined, undefined), '')
+assert.ok(B.LAUNCH_WINDOW_MS > 10000, 'the window outlasts uwsm-app giving up on its daemon')
+// A failed launch: any non-zero exit or crash inside the window; never exit
+// 0 (a hand-off to a running browser), never after the window.
+assert.equal(B.launchFailed(0, false, false), false)
+assert.equal(B.launchFailed(127, false, false), true)
+assert.equal(B.launchFailed(9, true, false), true)
+assert.equal(B.launchFailed(1, false, true), false)
+assert.equal(B.launchFailed(15, true, true), false)
+assert.equal(B.diagnostic('\x1b[31mError:\tbad\x07\nnext\r\n'), '[31mError: bad next')
+assert.equal(B.diagnostic(''), '')
+console.log('ok — browser setup detection, missing metadata, ambiguity, lookalike, and launch diagnostics tests passed')

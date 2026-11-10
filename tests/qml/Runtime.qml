@@ -1,10 +1,12 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "harness"
 import "plugin" as Media
 import "plugin/kit"
+import "plugin/BrowserSetup.js" as BrowserSetup
 
 // Foamy Media under a real host shell, offscreen: three bar instances (as on
 // three monitors) sharing one MediaService and one leader, the lazy popup
@@ -449,8 +451,111 @@ ShellRoot {
       eq(panels.itemAt(0).popup.centerOnBar, false, "a shown widget still hangs from itself")
       hidden.close()
       hidden.destroy()
-      shell.finish()
+      launchSteps.begin()
     }
+  }
+
+  // Browser launches with fake browsers (regression: the launch kept all of a
+  // long-lived browser's stderr until it exited, and a command that couldn't
+  // start was never reported). The window is shortened for the test.
+  Timer {
+    id: launchSteps
+    property int step: 0
+    property var live: null
+    property var beats: []
+    readonly property string beatPath: Quickshell.env("XDG_RUNTIME_DIR") + "/foamy-media-beat"
+    interval: 700
+    repeat: true
+    function begin() {
+      var first = panels.itemAt(0)
+      first.launchWindow = 1200
+      var missing = first.startBrowser(["foamy-media-no-such-browser"])
+      check(missing !== null, "a launch starts")
+      check(first.startBrowser(["true"]) === null, "a second click while a launch settles starts nothing")
+      check(first.pendingLaunch === missing, "the launch is pending")
+      // The art probe's command not starting ends the attempt too.
+      var svc = Media.MediaService
+      var a = "file:///nonexistent/foamy-media-a.png", b = "file:///nonexistent/foamy-media-b.png"
+      svc.request(a); svc.artProbeDelay.stop()
+      svc.applyArtProbe(a, '{"ok":true,"mean":"#336699","file":"/tmp/a.png","swatches":[]}')
+      svc.request(b); svc.artProbeDelay.stop()
+      eq(svc.artSettling, true, "the next cover settles")
+      svc.artProbe.pending = b
+      svc.artProbe.exitSeen = false
+      svc.artProbe.command = ["foamy-media-no-such-helper"]
+      svc.artProbe.running = true
+      start()
+    }
+    onTriggered: {
+      var first = panels.itemAt(0)
+      var svc = Media.MediaService
+      var cap = BrowserSetup.LAUNCH_DIAGNOSTIC_CHARS
+      step++
+      if (step === 1) {
+        eq(svc.artProbe.running, false, "art probe that can't start is not running")
+        eq(svc.artSettling, false, "a probe that can't start ends the settling")
+        eq(svc.artFile, "", "and keeps no previous cover")
+        svc.request("")
+        svc.artProbeDelay.stop()
+        // (a) The browser command doesn't exist.
+        check(first.pendingLaunch === null, "a failed start is not left pending")
+        eq(first.settingsError, "Couldn't start the browser.", "a failed start is reported")
+        eq(first.editingSettings, true, "on the settings page")
+        eq(first.browserSettingsOpen, true, "with the browser settings open")
+        check(first.launchDiagnostic.indexOf("foamy-media-no-such-browser") !== -1, "the log names the command: " + first.launchDiagnostic)
+        first.close()
+        // (b) It exits non-zero at once, after a flood of stderr.
+        var quick = first.startBrowser(["sh", "-c", "head -c 300000 /dev/zero | tr '\\0' x >&2; echo boom-diagnostic >&2; exit 3"])
+        check(quick !== null, "a launch after a failed one starts")
+      } else if (step === 2) {
+        check(first.pendingLaunch === null, "a quick failure is not left pending")
+        eq(first.settingsError, "Couldn't start the browser.", "a quick non-zero exit is reported")
+        eq(first.editingSettings, true, "on the settings page again")
+        check(first.launchDiagnostic.length <= cap, "the kept stderr is bounded: " + first.launchDiagnostic.length)
+        check(/boom-diagnostic$/.test(first.launchDiagnostic), "the kept stderr is its tail")
+        first.close()
+        // (c) A healthy browser that stays and keeps writing to stderr.
+        live = first.startBrowser(["sh", "-c", "n=0; end=$(($(date +%s) + 60)); while [ $(date +%s) -lt $end ]; do "
+          + "head -c 65536 /dev/zero | tr '\\0' z >&2; n=$((n + 1)); echo $n > \"$0\"; sleep 0.05; done", beatPath])
+        check(live !== null, "a third launch starts")
+      } else if (step === 3) {
+        check(live.running, "the browser runs")
+        check(first.pendingLaunch === live, "inside its window")
+        check(live.diagnostic.length > 0 && live.diagnostic.length <= cap, "stderr kept bounded while it can fail: " + live.diagnostic.length)
+      } else if (step === 4) {
+        check(live.running, "the browser still runs at the end of its window")
+      } else if (step === 5) {
+        // Past the window (1.2 s).
+        check(live.running, "a browser past its window is not killed")
+        eq(live.settled, true, "the launch succeeded")
+        check(live.diagnostic === "", "its stderr is dropped: " + live.diagnostic.length)
+        check(live.stderr === null, "and no longer read")
+        check(first.pendingLaunch === null, "nothing pending")
+        eq(first.settingsError, "", "no error for a healthy browser")
+        eq(first.editingSettings, false, "no settings page for a healthy browser")
+        check(first.startBrowser(["true"]) !== null, "a running browser doesn't block the next launch")
+        beatReader.running = true
+      } else if (step === 6) {
+        check(live.running, "the browser still runs")
+        check(beats.length === 1 && beats[0] > 0, "heartbeat read: " + JSON.stringify(beats))
+        beatReader.running = true
+      } else if (step === 7) {
+        check(beats.length === 2 && beats[1] > beats[0], "the browser keeps writing after its stderr is dropped: " + JSON.stringify(beats))
+        eq(first.settingsError, "", "a launch exiting 0 is not a failure")
+        live.running = false          // closed (SIGTERM) long after it started
+      } else {
+        stop()
+        check(live === null, "the closed browser's launch is released")
+        eq(first.settingsError, "", "a browser closing after its window is not a failed launch")
+        eq(first.editingSettings, false, "and opens no settings")
+        shell.finish()
+      }
+    }
+  }
+  Process {
+    id: beatReader
+    command: ["cat", launchSteps.beatPath]
+    stdout: StdioCollector { onStreamFinished: launchSteps.beats = launchSteps.beats.concat([parseInt(text, 10) || 0]) }
   }
 
   property int holdMs: Number(Quickshell.env("FOAMY_HOLD_MS") || 0)
