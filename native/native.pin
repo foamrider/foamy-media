@@ -1,11 +1,11 @@
-# native.pin: written by foamy-kit tools/build-native.sh; do not edit.
+# native.pin: written by kit/native/build-native.sh; do not edit.
 # check.sh and tests/kit-check.sh verify bin/<arch>/<binary> against it and
 # report the binaries stale when `source` no longer matches the crate, kit/rust,
-# Cargo.toml, Cargo.lock and rust-toolchain.toml. Rebuild: foamy-kit tools/build-native.sh <plugin>.
+# Cargo.toml, Cargo.lock and rust-toolchain.toml. Rebuild: kit/native/build-native.sh .
 crate native
 binary foamy-media-helper
 toolchain 1.99.1
-kit 0.6.0
+kit 0.7.0
 source 5cbd9aa0d8317dcbd02b5e767ee4231162c30b79db74115a46dae824355152c9
 6d4b9617dfb092f5c8750c15397ccce8f8fd393ab261212861853aced2f42380  bin/aarch64/foamy-media-helper
 718100ccd0c7336abc36f9cd8104ecde9fcaee176e1915f718721639d62e53ff  bin/x86_64/foamy-media-helper

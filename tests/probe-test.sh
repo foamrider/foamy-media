@@ -26,7 +26,7 @@ fi
 
 helper="$PWD/bin/$(uname -m)/foamy-media-helper"
 if [ ! -x "$helper" ]; then
-  echo "skip — no helper for $(uname -m) (build it with foamy-kit tools/build-native.sh)"
+  echo "skip — no helper for $(uname -m) (build it with kit/native/build-native.sh .)"
   exit 0
 fi
 work=$(mktemp -d)
