@@ -125,6 +125,81 @@ const M = require("../Model.js")
 
 }
 
+// ------------------------------------------------------------ the hover tooltip
+{
+  const WJ = "\u2060"
+  const shown = (text) => text.split(WJ).join("") // what a reader sees
+  const tip = (title, artist, prefix) => M.tooltipLabel({ trackTitle: title, trackArtist: artist }, prefix)
+
+  // Normal text passes through untouched, prefix first.
+  assert.strictEqual(tip("Instant Crush", "Daft Punk", ""), "Instant Crush  ·  Daft Punk")
+  assert.strictEqual(tip("Instant Crush", "Daft Punk", "Paused — "), "Paused — Instant Crush  ·  Daft Punk")
+  assert.strictEqual(tip("", "Daft Punk", ""), "Daft Punk")
+  assert.strictEqual(tip("Solo", "", ""), "Solo")
+  assert.strictEqual(tip("أغنية", "فنان", ""), "أغنية  ·  فنان")
+  assert.strictEqual(M.tooltipLabel(null, "Paused — "), "")
+  // The tooltip is the one place the artist always shows, whatever showArtist says.
+  assert.strictEqual(tip("Title", "Artist", ""), M.barLabel({ trackTitle: "Title", trackArtist: "Artist" }, true))
+
+  // Markup and entities stay literal: every `<` and `&` is followed by a word
+  // joiner (so Qt's AutoText test cannot take it for markup), and nothing
+  // else changes, so a plain-text sink draws exactly the original.
+  const hostile = [
+    ["<b>bold</b>", "<i>artist</i>"],
+    ['<img src="file:///tmp/probe.png">', '<img src="https://example.com/x.png" width=4000>'],
+    ["Tom & Jerry", "Simon & Garfunkel"],
+    ["a < b > c", "&amp;"],
+    ["&lt;b&gt;hi&lt;/b&gt;", "<!DOCTYPE html><p>x"],
+    ["  <font color=red>x</font>", "<?xml version='1.0'?><b>y</b>"],
+  ]
+  for (const [title, artist] of hostile) {
+    const out = tip(title, artist, "")
+    assert.strictEqual(shown(out), title + "  ·  " + artist)
+    for (let i = 0; i < out.length; i++) {
+      if (out[i] === "<" || out[i] === "&") assert.strictEqual(out[i + 1], WJ, JSON.stringify(out))
+    }
+  }
+  assert.strictEqual(M.literalTooltip("Spotify is not running"), "Spotify is not running")
+  assert.strictEqual(M.literalTooltip("<b>"), "<" + WJ + "b>")
+  assert.strictEqual(M.literalTooltip(undefined), "")
+
+  // Control characters cannot stack the tooltip into lines.
+  assert.strictEqual(tip("one\ntwo\r\nthree\u2028four\tfive", "", ""), "one two three four five")
+  assert.strictEqual(tip("a\u0000\u001b[31mb\u0085c", "", ""), "a [31mb c")
+
+  // Each field is bounded, ellipsis included: the title to 100 code points
+  // (YouTube's own maximum, so a real one is never cut), the artist to 60.
+  const limit = M.tooltipTitleLimit
+  const artistLimit = M.tooltipArtistLimit
+  assert.strictEqual(limit, 100)
+  assert.strictEqual(artistLimit, 60)
+  assert.strictEqual(tip("t".repeat(100), "a".repeat(60), ""), "t".repeat(100) + "  ·  " + "a".repeat(60))
+  const exact = "x".repeat(limit)
+  assert.strictEqual(M.tooltipField(exact, limit), exact)
+  const long = "y".repeat(5000)
+  assert.strictEqual(M.tooltipField(long, limit), "y".repeat(limit - 1) + "\u2026")
+  const both = tip(long, "z".repeat(5000), "Paused — ")
+  assert.strictEqual(both, "Paused — " + "y".repeat(limit - 1) + "\u2026  ·  " + "z".repeat(artistLimit - 1) + "\u2026")
+  // The bound counts what is shown, before the joiners go in.
+  const angles = tip("<".repeat(500), "", "")
+  assert.strictEqual(shown(angles), "<".repeat(limit - 1) + "\u2026")
+  // Astral characters are counted and cut whole, never split into a lone surrogate.
+  const emoji = M.tooltipField("\u{1F600}".repeat(200), limit)
+  assert.strictEqual(emoji, "\u{1F600}".repeat(limit - 1) + "\u2026")
+  assert.strictEqual(Array.from(emoji).length, limit)
+  // A cut never strands a base letter from its combining mark or a ZWJ sequence half-built.
+  const accents = "e\u0301".repeat(100) // 200 code points
+  const cutAccents = M.tooltipField(accents, limit)
+  assert.ok(/^(e\u0301)+\u2026$/.test(cutAccents), JSON.stringify(cutAccents))
+  const family = "\u{1F468}\u200d\u{1F469}\u200d\u{1F467}"
+  const cutFamily = M.tooltipField("a".repeat(limit - 3) + family, limit)
+  assert.ok(!/\u200d\u2026$/.test(cutFamily) && !/\u200d$/.test(cutFamily.slice(0, -1)), JSON.stringify(cutFamily))
+  assert.ok(Array.from(cutFamily).length <= limit)
+  // A long RTL title keeps its characters in logical order.
+  const rtl = "مرحبا ".repeat(60)
+  assert.strictEqual(M.tooltipField(rtl, limit), rtl.slice(0, limit - 1) + "\u2026")
+}
+
 // ------------------------------------------------------------------- run time
 {
   assert.strictEqual(M.formatTime(0), "0:00")

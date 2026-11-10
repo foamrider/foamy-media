@@ -217,6 +217,7 @@ python3 -I tests/test_clipboard.py
 python3 tests/i18n-runtime.py          # the installed 4.5 shell; OMARCHY_PATH picks another tree
 bash tests/kit-check.sh
 python3 -I tests/runtime.py            # offscreen on the installed 4.5 shell (4.0 only with FOAMY_HOST_40); needs foamy-kit (FOAMY_KIT)
+python3 -I tests/tooltip-runtime.py    # hover tooltip with hostile track metadata on the installed 4.5 shell; needs FOAMY_KIT, PyGObject, dbus-daemon
 ```
 
 Shared components live in `kit/`, copied from
