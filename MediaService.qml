@@ -102,6 +102,7 @@ QtObject {
     }
     artProbe.pending = root.artUrl
     artProbe.failure = ""
+    artProbe.exitSeen = false
     // The helper bounds every step itself (8 s fetch, 15 s per decode); the
     // outer timeout only catches a helper that somehow hangs.
     artProbe.command = ["timeout", "--kill-after=2s", "60s"].concat(
@@ -173,13 +174,22 @@ QtObject {
     property string pending: ""
     // The failed reply's code, e.g. TLS_UNSUPPORTED (no HTTPS on this CPU).
     property string failure: ""
+    property bool exitSeen: false
 
+    // The helper writes one bounded JSON line (native/src/main.rs).
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.applyArtProbe(root.artProbe.pending, text)
     }
 
+    // A command that can't start ends with running false and no exited():
+    // the attempt failed, and retrying it won't help.
+    onRunningChanged: if (!running && !exitSeen) {
+      console.warn("foamy-media: the art probe could not start")
+      root.finishAttempt(pending, -1)
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       var url = pending
       if (FoamyNative.unavailable(exitCode)) {
         if (!root.artHelperUnavailable) console.warn("foamy-media: " + FoamyNative.UNAVAILABLE_TEXT + " (exit " + exitCode + ")")
