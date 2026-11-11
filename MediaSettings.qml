@@ -1,8 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import qs.Commons
-import qs.Commons as Commons
-import qs.Ui
 import "kit"
 import "kit/FoamyPrefs.js" as Prefs
 import "Preferences.js" as Schema
