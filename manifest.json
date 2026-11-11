@@ -39,8 +39,6 @@
       "showEqualizer": true,
       "volumeStep": 5,
       "youtubeEnabled": true,
-      "youtubeBrowser": "vivaldi",
-      "youtubeProfile": "Default",
       "youtubeAppId": "vivaldi-youtube.com__-Default",
       "youtubeMprisName": "vivaldi"
     },
@@ -152,18 +150,6 @@
         "type": "boolean",
         "label": "Enable YouTube integration",
         "defaultValue": true
-      },
-      {
-        "key": "youtubeBrowser",
-        "type": "string",
-        "label": "Browser executable",
-        "defaultValue": "vivaldi"
-      },
-      {
-        "key": "youtubeProfile",
-        "type": "string",
-        "label": "Browser profile",
-        "defaultValue": "Default"
       },
       {
         "key": "youtubeAppId",

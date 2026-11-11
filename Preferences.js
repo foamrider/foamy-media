@@ -110,18 +110,6 @@ var fields = [
     "defaultValue": true
   },
   {
-    "key": "youtubeBrowser",
-    "type": "string",
-    "label": "Browser executable",
-    "defaultValue": "vivaldi"
-  },
-  {
-    "key": "youtubeProfile",
-    "type": "string",
-    "label": "Browser profile",
-    "defaultValue": "Default"
-  },
-  {
     "key": "youtubeAppId",
     "type": "string",
     "label": "YouTube window app ID",
@@ -149,8 +137,6 @@ var labels = {
   "artBackground": "Artwork background",
   "artIntensity": "Artwork intensity",
   "youtubeEnabled": "Enable YouTube",
-  "youtubeBrowser": "Browser",
-  "youtubeProfile": "Profile",
   "youtubeAppId": "Window app ID",
   "youtubeMprisName": "MPRIS name"
 }
@@ -161,16 +147,17 @@ var units = {
   "artIntensity": "%"
 }
 
-// Extra constraints for foamy-kit's FoamyPrefs engine. The browser value is
-// launched (uwsm-app -- <browser>), so it and the MPRIS name are bare program
-// names that cannot start with "-"; profiles and app IDs are any non-blank
-// single line. Kept out of `fields`, which mirrors manifest.json exactly.
+// Extra constraints for foamy-kit's FoamyPrefs engine. The MPRIS name is a
+// bare bus-name component that cannot start with "-"; the app ID is any
+// non-blank single line. Kept out of `fields`, which mirrors manifest.json
+// exactly. YouTube is focus-only: the plugin never starts a browser, so it
+// has no browser or profile setting. Entries saved by earlier versions may
+// still hold youtubeBrowser and youtubeProfile; FoamyPrefs reads only schema
+// keys and carries unknown ones through a save untouched, so they are inert.
 var namePattern = "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
 var linePattern = "^(?=.*\\S)[^\\x00-\\x1f\\x7f]+$"
 var constraints = {
-  "youtubeBrowser": { pattern: namePattern, maxLength: 200 },
   "youtubeMprisName": { pattern: namePattern, maxLength: 200 },
-  "youtubeProfile": { pattern: linePattern, maxLength: 200 },
   "youtubeAppId": { pattern: linePattern, maxLength: 200 }
 }
 // The schema handed to FoamyPrefs (validation, defaults, saving).
@@ -188,9 +175,5 @@ function clickAction(button, leftClick) {
   if (button !== "left" && button !== "right") return "none"
   return (button === "left") === (leftClick !== "Play/pause") ? "panel" : "playPause"
 }
-// The validated browser and profile (Prefs.value) launch the dedicated web app.
-function youtubeLaunch(browser, profile) {
-  return ["uwsm-app", "--", String(browser), "--app=https://youtube.com/", "--profile-directory=" + String(profile)]
-}
 if (typeof module !== "undefined") module.exports = {labels: labels, units: units, fields: fields, schema: schema,
-  constraints: constraints, clickAction: clickAction, youtubeLaunch: youtubeLaunch}
+  constraints: constraints, clickAction: clickAction}

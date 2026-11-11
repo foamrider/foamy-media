@@ -61,16 +61,16 @@ Item {
     readonly property color spotifyGreen: "#1DB954"
     readonly property color youtubeRed: "#FF0033"
     readonly property color sourceBrandColor: youtube ? youtubeRed : spotifyGreen
-    readonly property var settings: ({ id: "foamy.media", youtubeAppId: "vivaldi-youtube.com__-Default", youtubeProfile: "Default" })
+    readonly property var settings: ({ id: "foamy.media", youtubeAppId: "vivaldi-youtube.com__-Default" })
     readonly property bool saving: false
     readonly property string settingsError: ""
     readonly property bool retryable: false
     readonly property var browserCandidates: browserSettingsOpen ? [{
       id: "vivaldi-youtube.com__-Default", title: "YouTube",
-      values: { youtubeAppId: "vivaldi-youtube.com__-Default", youtubeProfile: "Default", youtubeBrowser: "vivaldi", youtubeMprisName: "vivaldi" }
+      values: { youtubeAppId: "vivaldi-youtube.com__-Default", youtubeMprisName: "vivaldi" }
     }, {
       id: "chromium-youtube.com__-Profile_2", title: "YouTube – Work",
-      values: { youtubeAppId: "chromium-youtube.com__-Profile_2", youtubeProfile: "Profile 2", youtubeBrowser: "chromium" }
+      values: { youtubeAppId: "chromium-youtube.com__-Profile_2" }
     }] : []
     function playPause() {}
     function skipNext() {}

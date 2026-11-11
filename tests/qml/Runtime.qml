@@ -1,19 +1,21 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 import "harness"
 import "plugin" as Media
 import "plugin/kit"
-import "plugin/BrowserSetup.js" as BrowserSetup
 
 // Foamy Media under a real host shell, offscreen: three bar instances (as on
 // three monitors) sharing one MediaService and one leader, the lazy popup
 // body, the single keyboard cursor, settings saving through the bar, the
 // cover rules (no stale cover after a failed fetch), the equalizer and
-// marquee gates, translations and RTL mirroring. No MPRIS player is
-// reachable here, so the widget is in its "not running" state.
+// marquee gates, translations and RTL mirroring, and YouTube being
+// focus-only. No MPRIS player is reachable here, so the widget is in its
+// "not running" state. The entry still holds the browser and profile keys
+// 1.3.3 and earlier saved, which must stay inert.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -46,7 +48,7 @@ ShellRoot {
         Media.Panel {
           bar: mockBar
           moduleName: "foamy.media"
-          settings: ({ id: "foamy.media", hideWhenClosed: false, extra: "kept" })
+          settings: ({ id: "foamy.media", hideWhenClosed: false, extra: "kept", youtubeBrowser: "chromium", youtubeProfile: "Profile 2" })
         }
       }
     }
@@ -297,6 +299,14 @@ ShellRoot {
     player.live = false
     player.volumeSupported = false
     eq(JSON.stringify(playerView.stops), JSON.stringify(["settings", "tab:spotify", "tab:youtube", "launch"]), "stops follow the player")
+    // The footer button never offers to start YouTube (focus-only).
+    eq(playerView.launchShows, true, "an open source is shown")
+    player.sourceOpen = false
+    eq(playerView.launchShows, false, "Spotify not running is started")
+    player.sourceKind = "youtube"
+    eq(playerView.launchShows, true, "YouTube without its window is never started")
+    player.sourceKind = "spotify"
+    player.sourceOpen = true
 
     first.open()
     stepTwo.start()
@@ -332,17 +342,24 @@ ShellRoot {
         eq(mockBar.saved[0].id, "foamy.media", "saved to the widget's own entry")
         eq(mockBar.saved[0].settings.showArtist, false, "saved value")
         eq(mockBar.saved[0].settings.extra, "kept", "unknown keys kept")
+        // Legacy 1.3.3 keys: carried through a save untouched, never read.
+        eq(mockBar.saved[0].settings.youtubeBrowser, "chromium", "legacy browser key kept")
+        eq(mockBar.saved[0].settings.youtubeProfile, "Profile 2", "legacy profile key kept")
       }
-      first.saveMany({ youtubeAppId: "chromium-youtube.com__-Default", youtubeBrowser: "chromium" })
+      eq(first.preference("youtubeBrowser"), undefined, "the legacy browser key is no setting")
+      eq(first.preference("youtubeAppId"), "vivaldi-youtube.com__-Default", "a legacy entry reads the app ID default")
+      first.saveMany({ youtubeAppId: "chromium-youtube.com__-Default", youtubeMprisName: "chromium" })
       eq(mockBar.saved.length, 3, "browser suggestion saved key by key")
       if (mockBar.saved.length === 3) {
         eq(mockBar.saved[2].settings.youtubeAppId, "chromium-youtube.com__-Default", "earlier key kept by the later save")
-        eq(mockBar.saved[2].settings.youtubeBrowser, "chromium", "later key")
+        eq(mockBar.saved[2].settings.youtubeMprisName, "chromium", "later key")
       }
-      first.saveMany({ youtubeBrowser: "--evil", youtubeProfile: "Default" })
+      first.saveMany({ youtubeMprisName: "--evil", youtubeAppId: "chromium-youtube.com__-Default" })
       eq(mockBar.saved.length, 3, "an invalid suggestion writes nothing")
       check(first.settingsError !== "", "invalid value reported")
       eq(first.retryable, false, "an invalid value is not offered for retry")
+      first.saveMany({ youtubeBrowser: "vivaldi" })
+      eq(mockBar.saved.length, 3, "a removed setting can't be written")
       eq(first.preference("showArtist"), false, "saved value read back before the host reflects it")
       // Regression: a settings field follows a change made elsewhere (another
       // monitor, the bar editor) after being focused and left unchanged, and
@@ -365,14 +382,18 @@ ShellRoot {
         eq(mockBar.saved.length, before + 1, "a changed value commits once")
         eq(mockBar.saved[mockBar.saved.length - 1].settings.maxLabelWidth, 250, "saved value")
       }
-      var browser = shell.findKey(view.settingsPage, "youtubeBrowser")
-      check(browser !== null, "browser field")
-      if (browser) {
-        browser.field.text = "--evil"; browser.dirty = true
-        browser.commitEdit(false)
-        check(browser.error !== "", "an invalid browser name is refused in the field")
-        browser.commitEdit(true)
-        eq(browser.field.text, browser.value, "focus-out restores the saved name")
+      // No Browser or Profile rows: YouTube is focus-only.
+      eq(shell.findKey(view.settingsPage, "youtubeBrowser"), null, "no browser field")
+      eq(shell.findKey(view.settingsPage, "youtubeProfile"), null, "no profile field")
+      check(shell.findKey(view.settingsPage, "youtubeAppId") !== null, "the app ID field stays")
+      var mpris = shell.findKey(view.settingsPage, "youtubeMprisName")
+      check(mpris !== null, "MPRIS name field")
+      if (mpris) {
+        mpris.field.text = "--evil"; mpris.dirty = true
+        mpris.commitEdit(false)
+        check(mpris.error !== "", "an invalid MPRIS name is refused in the field")
+        mpris.commitEdit(true)
+        eq(mpris.field.text, mpris.value, "focus-out restores the saved name")
       }
       // Regression: on a host that reflects an inline save at once (4.5), the
       // saved value must not stay pending and mask a later outside change,
@@ -451,28 +472,51 @@ ShellRoot {
       eq(panels.itemAt(0).popup.centerOnBar, false, "a shown widget still hangs from itself")
       hidden.close()
       hidden.destroy()
-      launchSteps.begin()
+      focusSteps.begin()
     }
   }
 
-  // Browser launches with fake browsers (regression: the launch kept all of a
-  // long-lived browser's stderr until it exited, and a command that couldn't
-  // start was never reported). The window is shortened for the test.
+  // YouTube is focus-only (regression: with no YouTube window, launch()
+  // started the browser as a child of this bar). A stand-in window list
+  // gives the panel a YouTube web-app window to focus.
+  QtObject {
+    id: fakeYoutubeWindow
+    property string appId: "vivaldi-youtube.com__-Default"
+    property string title: "Example - YouTube"
+    property bool activated: false
+    property int activations: 0
+    function activate() { activations++ }
+  }
   Timer {
-    id: launchSteps
-    property int step: 0
-    property var live: null
-    property var beats: []
-    readonly property string beatPath: Quickshell.env("XDG_RUNTIME_DIR") + "/foamy-media-beat"
+    id: focusSteps
     interval: 700
-    repeat: true
     function begin() {
       var first = panels.itemAt(0)
-      first.launchWindow = 1200
-      var missing = first.startBrowser(["foamy-media-no-such-browser"])
-      check(missing !== null, "a launch starts")
-      check(first.startBrowser(["true"]) === null, "a second click while a launch settles starts nothing")
-      check(first.pendingLaunch === missing, "the launch is pending")
+      eq(first.startBrowser, undefined, "no browser start path")
+      eq(first.pendingLaunch, undefined, "no pending browser launch")
+      // The app ID the panel matches (a suggestion saved earlier set it).
+      fakeYoutubeWindow.appId = first.preference("youtubeAppId")
+      first.toplevelModel = { values: [fakeYoutubeWindow] }
+      eq(first.youtubeOpen, true, "the YouTube window is matched by its app ID")
+      first.selectSource("youtube")
+      eq(first.sourceKind, "youtube", "YouTube selected")
+      eq(first.launch(), true, "launch() acts on an open YouTube window")
+      eq(fakeYoutubeWindow.activations, 1, "launch() focuses the YouTube window")
+      eq(first.playPause(), false, "play/pause without a YouTube player is not a transport call")
+      eq(fakeYoutubeWindow.activations, 2, "and focuses the window instead")
+      // The window closes; until the leader moves the selection on, YouTube
+      // stays selected with nothing to focus.
+      first.toplevelModel = { values: [] }
+      eq(first.youtubeOpen, false, "the YouTube window is gone")
+      eq(first.sourceKind, "youtube", "still selected this frame")
+      eq(first.launch(), false, "launch() without the YouTube window does nothing")
+      eq(first.playPause(), false, "nor does play/pause")
+      eq(fakeYoutubeWindow.activations, 2, "nothing is focused")
+      eq(first.settingsError, "", "no error")
+      eq(first.editingSettings, false, "no settings page")
+      first.toplevelModel = ToplevelManager.toplevels
+      Media.MediaService.selectedSource = "spotify"
+      eq(first.launch(), true, "Spotify keeps Omarchy's launcher")
       // The art probe's command not starting ends the attempt too.
       var svc = Media.MediaService
       var a = "file:///nonexistent/foamy-media-a.png", b = "file:///nonexistent/foamy-media-b.png"
@@ -489,73 +533,18 @@ ShellRoot {
     onTriggered: {
       var first = panels.itemAt(0)
       var svc = Media.MediaService
-      var cap = BrowserSetup.LAUNCH_DIAGNOSTIC_CHARS
-      step++
-      if (step === 1) {
-        eq(svc.artProbe.running, false, "art probe that can't start is not running")
-        eq(svc.artSettling, false, "a probe that can't start ends the settling")
-        eq(svc.artFile, "", "and keeps no previous cover")
-        svc.request("")
-        svc.artProbeDelay.stop()
-        // (a) The browser command doesn't exist.
-        check(first.pendingLaunch === null, "a failed start is not left pending")
-        eq(first.settingsError, "Couldn't start the browser.", "a failed start is reported")
-        eq(first.editingSettings, true, "on the settings page")
-        eq(first.browserSettingsOpen, true, "with the browser settings open")
-        check(first.launchDiagnostic.indexOf("foamy-media-no-such-browser") !== -1, "the log names the command: " + first.launchDiagnostic)
-        first.close()
-        // (b) It exits non-zero at once, after a flood of stderr.
-        var quick = first.startBrowser(["sh", "-c", "head -c 300000 /dev/zero | tr '\\0' x >&2; echo boom-diagnostic >&2; exit 3"])
-        check(quick !== null, "a launch after a failed one starts")
-      } else if (step === 2) {
-        check(first.pendingLaunch === null, "a quick failure is not left pending")
-        eq(first.settingsError, "Couldn't start the browser.", "a quick non-zero exit is reported")
-        eq(first.editingSettings, true, "on the settings page again")
-        check(first.launchDiagnostic.length <= cap, "the kept stderr is bounded: " + first.launchDiagnostic.length)
-        check(/boom-diagnostic$/.test(first.launchDiagnostic), "the kept stderr is its tail")
-        first.close()
-        // (c) A healthy browser that stays and keeps writing to stderr.
-        live = first.startBrowser(["sh", "-c", "n=0; end=$(($(date +%s) + 60)); while [ $(date +%s) -lt $end ]; do "
-          + "head -c 65536 /dev/zero | tr '\\0' z >&2; n=$((n + 1)); echo $n > \"$0\"; sleep 0.05; done", beatPath])
-        check(live !== null, "a third launch starts")
-      } else if (step === 3) {
-        check(live.running, "the browser runs")
-        check(first.pendingLaunch === live, "inside its window")
-        check(live.diagnostic.length > 0 && live.diagnostic.length <= cap, "stderr kept bounded while it can fail: " + live.diagnostic.length)
-      } else if (step === 4) {
-        check(live.running, "the browser still runs at the end of its window")
-      } else if (step === 5) {
-        // Past the window (1.2 s).
-        check(live.running, "a browser past its window is not killed")
-        eq(live.settled, true, "the launch succeeded")
-        check(live.diagnostic === "", "its stderr is dropped: " + live.diagnostic.length)
-        check(live.stderr === null, "and no longer read")
-        check(first.pendingLaunch === null, "nothing pending")
-        eq(first.settingsError, "", "no error for a healthy browser")
-        eq(first.editingSettings, false, "no settings page for a healthy browser")
-        check(first.startBrowser(["true"]) !== null, "a running browser doesn't block the next launch")
-        beatReader.running = true
-      } else if (step === 6) {
-        check(live.running, "the browser still runs")
-        check(beats.length === 1 && beats[0] > 0, "heartbeat read: " + JSON.stringify(beats))
-        beatReader.running = true
-      } else if (step === 7) {
-        check(beats.length === 2 && beats[1] > beats[0], "the browser keeps writing after its stderr is dropped: " + JSON.stringify(beats))
-        eq(first.settingsError, "", "a launch exiting 0 is not a failure")
-        live.running = false          // closed (SIGTERM) long after it started
-      } else {
-        stop()
-        check(live === null, "the closed browser's launch is released")
-        eq(first.settingsError, "", "a browser closing after its window is not a failed launch")
-        eq(first.editingSettings, false, "and opens no settings")
-        shell.finish()
-      }
+      eq(svc.artProbe.running, false, "art probe that can't start is not running")
+      eq(svc.artSettling, false, "a probe that can't start ends the settling")
+      eq(svc.artFile, "", "and keeps no previous cover")
+      svc.request("")
+      svc.artProbeDelay.stop()
+      // A browser start would have failed or opened Settings by now.
+      eq(first.settingsError, "", "still no error after the YouTube launch calls")
+      eq(first.editingSettings, false, "and no settings page")
+      eq(first.sourceKind, "spotify", "Spotify selected")
+      eq(fakeYoutubeWindow.activations, 2, "the stand-in window was only focused while open")
+      shell.finish()
     }
-  }
-  Process {
-    id: beatReader
-    command: ["cat", launchSteps.beatPath]
-    stdout: StdioCollector { onStreamFinished: launchSteps.beats = launchSteps.beats.concat([parseInt(text, 10) || 0]) }
   }
 
   property int holdMs: Number(Quickshell.env("FOAMY_HOLD_MS") || 0)
