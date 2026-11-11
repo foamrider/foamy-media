@@ -119,8 +119,6 @@ FoamySettingsPage {
         saving: page.saving
         onApply: function(values) { page.media.saveMany(values) }
       }
-      TextRow { key: "youtubeBrowser" }
-      TextRow { key: "youtubeProfile" }
       FoamyAction {
         focusable: true
         iconName: page.browserAdvancedOpen ? "chevron-down" : "chevron-right"
@@ -174,7 +172,7 @@ FoamySettingsPage {
   }
 
   // A string setting, same rules; the draft is checked against the schema
-  // (the browser and MPRIS name must be bare program names).
+  // (the MPRIS name must be a bare name, the app ID a single line).
   component TextRow: FoamyTextSettingField {
     id: textRow
     required property string key

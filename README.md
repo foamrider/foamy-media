@@ -26,7 +26,9 @@ Chromium-family browser for YouTube). Optional:
   ARMv8; local cover files don't. Without ImageMagick, or on another CPU, the
   popup shows the source icon on the foamy band (and Settings says when the
   helper isn't available for this CPU).
-- YouTube: Hyprland and the configured browser, started through `uwsm-app`.
+- YouTube: Hyprland and a YouTube web app you start yourself (for example
+  with Omarchy's web-app launcher). The plugin controls and focuses that
+  window; it never starts the browser.
 - Pasting into the settings fields: `wl-paste` (wl-clipboard), `jq` and
   `timeout` (coreutils), all part of Omarchy. Pastes are capped at 16 KiB and
   two seconds; a failed paste leaves the field unchanged and shows an error.
@@ -40,7 +42,9 @@ Chromium-family browser for YouTube). Optional:
   touchpad swipe), or changes the player volume.
 - In the popup: seek, previous/next, play/pause, shuffle and repeat
   (Spotify), volume, and a tab per open source when Spotify and YouTube both
-  run. The button at the bottom right shows or starts the selected source.
+  run. The button at the bottom right focuses the selected source's window,
+  or starts Spotify when it isn't running. YouTube is never started by the
+  plugin: start the web app yourself and it shows up here.
 - The widget hides when no supported player has a track; paused tracks stay
   visible. Turn off **Hide when stopped** to keep a dimmed source icon.
 
@@ -51,10 +55,13 @@ timeline and change the volume on the volume row. Enter or Space activates
 Shift-Tab switch to the next bar panel, Esc closes (or leaves Settings).
 Hovering moves the same cursor.
 
-For YouTube, open **Settings → YouTube → Browser settings → Use an open
-window** and pick your YouTube web app (start a video first if it is not
-listed). Check the browser and profile; ordinary browser tabs are never
-treated as the web app.
+For YouTube, start the web app yourself (for example with Omarchy's web-app
+launcher), then open **Settings → YouTube → Browser settings → Use an open
+window** and pick it (start a video first if it is not listed). That sets
+the window app ID the plugin focuses and the MPRIS name it controls;
+ordinary browser tabs are never treated as the web app. The plugin only
+controls and focuses that window: it never starts the browser, and without
+the window the YouTube tab is gone.
 
 ### Covers
 
@@ -110,8 +117,11 @@ Omarchy's `shell.json`.
 | Artwork background | on | The cover as the popup's header band (blurred) |
 | Artwork intensity (%) | 55 | How much cover shows through, 0–100 |
 | Enable YouTube | on | |
-| Browser, Profile | vivaldi, Default | Start the YouTube web app |
-| Window app ID, MPRIS name | Vivaldi web app | Under **Advanced** |
+| Window app ID, MPRIS name | Vivaldi web app | The window to focus and the player to control, under **Advanced** |
+
+Version 1.3.3 and earlier also had Browser and Profile settings for starting the
+web app. They are gone; values saved by those versions stay in `shell.json`
+but are ignored.
 
 With Omarchy's CPU rendering the header band shows the cover sharp under a
 readability scrim, and the thumbnail is square (the blur, the adaptive scrim and
@@ -131,6 +141,9 @@ omarchy-shell foamy.media status      # JSON: source, track, position, state
 ```
 
 Transport calls answer `ok`, or `unhandled` when the player can't do it.
+`launch` (and `playPause` with no player to control) focuses the selected
+source's window, or starts Spotify; for YouTube without its web-app window
+it does nothing.
 
 ## Remove
 

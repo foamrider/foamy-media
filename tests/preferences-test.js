@@ -21,18 +21,49 @@ for (const value of [1, 5, 20]) assert.equal(Prefs.valid(S, 'volumeStep', value)
 assert.equal(Prefs.valid(S, 'showArtist', 'false'), false)
 assert.equal(Prefs.valid(S, 'unknown', true), false)
 assert.equal(Prefs.value(S, { volumeStep: -5 }, 'volumeStep'), 5)
-// The browser is launched (uwsm-app -- <browser>): bare program names only.
+// The MPRIS name is a bare name; the app ID any non-blank single line.
 for (const value of ['--help', '-x', 'vivaldi;echo', '$(echo bad)', 'browser\nname', '', ' ', '/usr/bin/vivaldi', 'a'.repeat(201)])
-  assert.equal(Prefs.valid(S, 'youtubeBrowser', value), false, JSON.stringify(value))
-for (const value of ['', '   ', 'Profile\n2', 'x\u007f', 'a'.repeat(201)])
-  assert.equal(Prefs.valid(S, 'youtubeProfile', value), false, JSON.stringify(value))
-assert.equal(Prefs.valid(S, 'youtubeProfile', 'Profile 2'), true)
+  assert.equal(Prefs.valid(S, 'youtubeMprisName', value), false, JSON.stringify(value))
+for (const value of ['', '   ', 'app\nid', 'x\u007f', 'a'.repeat(201)])
+  assert.equal(Prefs.valid(S, 'youtubeAppId', value), false, JSON.stringify(value))
 assert.equal(Prefs.valid(S, 'youtubeAppId', 'vivaldi-youtube.com__-Default'), true)
 assert.equal(Prefs.valid(S, 'youtubeMprisName', 'chromium'), true)
 // The schema keeps the manifest fields untouched.
-assert.equal(P.fields.find(f => f.key === 'youtubeBrowser').pattern, undefined)
-assert.deepEqual(P.youtubeLaunch('chromium', 'Profile 2'),
-  ['uwsm-app', '--', 'chromium', '--app=https://youtube.com/', '--profile-directory=Profile 2'])
+assert.equal(P.fields.find(f => f.key === 'youtubeMprisName').pattern, undefined)
+// YouTube is focus-only: no browser or profile setting, and nothing builds a
+// browser command.
+for (const key of ['youtubeBrowser', 'youtubeProfile']) {
+  assert.equal(Prefs.field(S, key), null, key)
+  assert.equal(key in manifest.barWidget.defaults, false, key)
+  assert.equal(P.labels[key], undefined, key)
+  assert.equal(P.constraints[key], undefined, key)
+  assert.equal(Prefs.valid(S, key, 'vivaldi'), false, key)
+}
+assert.equal(P.youtubeLaunch, undefined)
+// A saved entry from 1.3.3 or earlier still holds youtubeBrowser and
+// youtubeProfile: it reads cleanly (every setting its saved or default value,
+// the legacy keys not among them, nothing logged) and a later save keeps
+// them untouched rather than failing or dropping the entry's other keys.
+const logged = []
+const quiet = require('../kit/node-loader.cjs').load('FoamyPrefs', { console: { log: (...a) => logged.push(a), warn: (...a) => logged.push(a), error: (...a) => logged.push(a) } })
+const legacy = { id: 'foamy.media', youtubeEnabled: true, youtubeBrowser: 'chromium', youtubeProfile: 'Profile 2',
+  youtubeAppId: 'chromium-youtube.com__-Profile_2', youtubeMprisName: 'chromium', showArtist: false }
+const read = quiet.values(S, legacy)
+assert.deepEqual(Object.keys(read).sort(), P.fields.map(f => f.key).sort())
+assert.equal(read.youtubeAppId, 'chromium-youtube.com__-Profile_2')
+assert.equal(read.youtubeMprisName, 'chromium')
+assert.equal(read.showArtist, false)
+assert.equal(read.volumeStep, 5)
+assert.equal(quiet.value(S, legacy, 'youtubeBrowser'), undefined)
+const legacySaved = []
+const legacyBar = { shell: { updateEntryInline(id, settings) { legacySaved.push(settings); return true } } }
+const legacyResult = quiet.save(legacyBar, 'foamy.media', S, legacy, 'youtubeMprisName', 'vivaldi')
+assert.equal(legacyResult.ok && legacyResult.inline, true)
+assert.equal(legacySaved[0].youtubeMprisName, 'vivaldi')
+assert.equal(legacySaved[0].youtubeBrowser, 'chromium')
+assert.equal(legacySaved[0].youtubeProfile, 'Profile 2')
+assert.equal(legacySaved[0].showArtist, false)
+assert.deepEqual(logged, [])
 // Saving: inline through the bar with the merged entry, else the omarchy CLI.
 const saved = []
 const bar = { shell: { updateEntryInline(id, settings) { saved.push({ id, settings }); return true } } }
@@ -41,7 +72,8 @@ assert.equal(result.ok && result.inline, true)
 assert.equal(JSON.stringify(saved[0]), JSON.stringify({ id: 'foamy.media', settings: { showArtist: false, extra: 1 } }))
 result = Prefs.save({ shell: { updateEntryInline() { return false } } }, 'foamy.media', S, {}, 'volumeStep', 7)
 assert.equal(JSON.stringify(result.command), JSON.stringify(['omarchy', 'bar', 'set', 'foamy.media', 'volumeStep', '7', '--json']))
-assert.equal(Prefs.save(bar, 'foamy.media', S, {}, 'youtubeBrowser', '--evil').ok, false)
+assert.equal(Prefs.save(bar, 'foamy.media', S, {}, 'youtubeMprisName', '--evil').ok, false)
+assert.equal(Prefs.save(bar, 'foamy.media', S, {}, 'youtubeBrowser', 'vivaldi').ok, false)
 for (const left of ['Open panel', 'Play/pause']) {
   assert.equal(P.clickAction('left', left), left === 'Open panel' ? 'panel' : 'playPause')
   assert.equal(P.clickAction('right', left), left === 'Open panel' ? 'playPause' : 'panel')

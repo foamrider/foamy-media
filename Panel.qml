@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
 import qs.Commons
@@ -65,7 +64,7 @@ Panel {
   }
   readonly property bool editingSettings: settingsState.editing
   property bool browserSettingsOpen: false
-  // Errors that are not a save (a failed paste, the browser not starting).
+  // Errors that are not a save (an invalid browser suggestion).
   property string localError: ""
   readonly property bool saving: prefs.busy
   readonly property string settingsError: localError !== "" ? localError : prefs.error
@@ -79,7 +78,7 @@ Panel {
     values[key] = value
     saveMany(values)
   }
-  // Several keys at once (the browser picker writes up to four): every value
+  // Several keys at once (the browser picker writes up to two): every value
   // is checked before any is written, then the queue saves them in order,
   // each merged over the ones before.
   function saveMany(values) {
@@ -94,7 +93,7 @@ Panel {
   function retrySave() { localError = ""; prefs.retry() }
 
   readonly property var browserCandidates: editingSettings && browserSettingsOpen
-    ? BrowserSetup.candidates(ToplevelManager.toplevels.values || [], players, DesktopEntries.applications.values || []) : []
+    ? BrowserSetup.candidates(root.toplevelModel ? root.toplevelModel.values || [] : [], players) : []
 
   // ------------------------------------------------------------------- theme
   // Source brand colours: the default accent is the source's own colour.
@@ -117,11 +116,13 @@ Panel {
   property int toplevelGeneration: 0
   readonly property string selectedSource: MediaService.selectedSource
 
+  // The compositor's windows (a test stands in its own).
+  property var toplevelModel: ToplevelManager.toplevels
   readonly property var youtubeWindow: {
     if (!root.youtubeEnabled) return null
     var generation = root.toplevelGeneration
     var appId = root.preference("youtubeAppId")
-    var values = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
+    var values = root.toplevelModel ? root.toplevelModel.values || [] : []
     for (var i = 0; i < values.length; i++) {
       if (String(values[i].appId || "") === appId) return values[i]
     }
@@ -330,92 +331,19 @@ Panel {
     return true
   }
 
-  // YouTube already has an exact reactive toplevel identity, so activate that
-  // directly. Spotify keeps Omarchy's installer-aware launch path.
+  // YouTube is focus-only: the plugin raises the web-app window it matched
+  // (youtubeAppId) and never starts a browser, so a YouTube selection without
+  // its window does nothing (the leader falls back to Spotify right after).
+  // Spotify keeps Omarchy's installer-aware launch path. True when it acted.
   function launch() {
     if (root.sourceKind === "youtube") {
-      if (root.youtubeWindow) root.youtubeWindow.activate()
-      else root.startBrowser(Schema.youtubeLaunch(root.preference("youtubeBrowser"), root.preference("youtubeProfile")))
-      return
+      if (!root.youtubeWindow) return false
+      root.youtubeWindow.activate()
+      return true
     }
-    if (bar) bar.run("omarchy launch spotify")
-  }
-
-  // The browser may stay its launch's child for hours (BrowserSetup.js), so
-  // every launch is its own Process: one whose YouTube window was closed
-  // while the browser kept running doesn't block the next. Within
-  // launchWindow a command that can't start, a non-zero exit or a crash is a
-  // failed launch, reported in the browser settings; past it the launch has
-  // succeeded, its stderr is dropped and the browser is left alone (never
-  // timed out). Meanwhile only the tail of stderr is kept.
-  property int launchWindow: BrowserSetup.LAUNCH_WINDOW_MS
-  // The launch still inside its window: a second click then starts nothing.
-  property QtObject pendingLaunch: null
-  // The kept stderr of the last failed launch, for the log.
-  property string launchDiagnostic: ""
-  function startBrowser(command) {
-    if (pendingLaunch) return null
-    var launch = browserLaunch.createObject(root, { command: command })
-    if (!launch) return null
-    pendingLaunch = launch
-    launch.begin()
-    return launch
-  }
-  function settleLaunch(launch) {
-    if (pendingLaunch === launch) pendingLaunch = null
-    launch.settled = true
-    launch.diagnostic = ""
-    // Quickshell keeps draining and discarding the pipe (no SIGPIPE, no block).
-    launch.stderr = null
-  }
-  function endLaunch(launch, failed, detail) {
-    if (launch.ended) return
-    launch.ended = true
-    launch.settleTimer.stop()
-    if (pendingLaunch === launch) pendingLaunch = null
-    if (failed) {
-      launchDiagnostic = BrowserSetup.diagnostic(detail)
-      console.warn("foamy-media: starting the browser failed: " + launchDiagnostic)
-      localError = "Couldn't start the browser."
-      openSettings()
-      browserSettingsOpen = true
-    }
-    launch.destroy()
-  }
-  Component {
-    id: browserLaunch
-    Process {
-      id: launchProcess
-      property bool settled: false
-      property bool ended: false
-      property bool exitSeen: false
-      property string diagnostic: ""
-      property Timer settleTimer: Timer {
-        interval: root.launchWindow
-        onTriggered: root.settleLaunch(launchProcess)
-      }
-      function begin() {
-        settleTimer.start()
-        running = true
-      }
-      // An empty marker hands data on as it arrives: a line that never ends
-      // is not buffered whole.
-      stderr: SplitParser {
-        splitMarker: ""
-        onRead: function(data) {
-          if (!launchProcess.settled) launchProcess.diagnostic = BrowserSetup.keepTail(launchProcess.diagnostic, data)
-        }
-      }
-      onExited: function(exitCode, exitStatus) {
-        exitSeen = true
-        var crashed = Number(exitStatus) !== 0
-        root.endLaunch(launchProcess, BrowserSetup.launchFailed(exitCode, crashed, settled),
-          diagnostic !== "" ? diagnostic : (crashed ? "killed by signal " : "exit code ") + exitCode)
-      }
-      // A command that can't start ends with running false and no exited().
-      onRunningChanged: if (!running && !exitSeen)
-        root.endLaunch(launchProcess, !settled, "could not run " + (command.length ? command[0] : "the browser"))
-    }
+    if (!bar) return false
+    bar.run("omarchy launch spotify")
+    return true
   }
 
   function statusObject() {

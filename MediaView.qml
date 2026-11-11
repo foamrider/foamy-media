@@ -74,6 +74,9 @@ PanelKeyCatcher {
   // Rows of stops, top to bottom; the cursor is an index into the flat list.
   readonly property bool seekShown: media.live === true && media.trackLength > 0
   readonly property bool spotifyTabShown: media.spotifyOpen === true || media.anySourceOpen !== true
+  // The footer button shows the selected source, or starts Spotify. YouTube
+  // is never started (Panel.launch), so its button only ever shows it.
+  readonly property bool launchShows: media.sourceOpen === true || media.sourceKind === "youtube"
   readonly property var rows: {
     var list = [["settings"]]
     if (seekShown) list.push(["seek"])
@@ -487,7 +490,7 @@ PanelKeyCatcher {
           iconName: "external-link"
           foreground: FoamyPalette.secondaryText
           hasCursor: view.hasCursor("launch")
-          tooltipText: FoamyI18n.t(view.media.sourceOpen ? "Show %1" : "Start %1", view.media.sourceName)
+          tooltipText: FoamyI18n.t(view.launchShows ? "Show %1" : "Start %1", view.media.sourceName)
           onHoveredChanged: if (hovered) view.hover("launch")
           onClicked: { view.media.launch(); view.media.close() }
         }

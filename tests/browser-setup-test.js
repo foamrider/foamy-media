@@ -4,64 +4,62 @@ const P = require('../Preferences.js')
 const Prefs = require('../kit/node-loader.cjs').load('FoamyPrefs', { console: { log() {}, warn() {} } })
 const window = {appId:'vivaldi-youtube.com__-Default', title:'Example - YouTube'}
 const players = [{dbusName:'org.mpris.MediaPlayer2.vivaldi.instance42', desktopEntry:'vivaldi-stable'}]
-const entries = [{id:'vivaldi-stable', startupClass:'Vivaldi-stable', command:['/usr/bin/vivaldi-stable','%U']}]
-const row = B.suggestion(window, players, entries)
-assert.deepEqual(row.values, {youtubeAppId:window.appId, youtubeProfile:'Default', youtubeMprisName:'vivaldi', youtubeBrowser:'vivaldi-stable'})
+// YouTube is focus-only: a suggestion is the window to focus and the player
+// to control, never a browser or profile to start.
+const row = B.suggestion(window, players)
+assert.deepEqual(row.values, {youtubeAppId:window.appId, youtubeMprisName:'vivaldi'})
 assert.deepEqual(row.missing, [])
 for (const [key,value] of Object.entries(row.values)) assert.equal(Prefs.valid(P.schema,key,value),true)
-assert.equal(B.suggestion({appId:'vivaldi-stable',title:'Example - YouTube'},players,entries),null)
+for (const appId of ['vivaldi-youtube.com__-Default', 'chromium-youtube.com__-Profile_2', 'vivaldi-youtube.com__-Custom_Profile']) {
+  const suggested = B.suggestion({...window, appId}, players.concat([{dbusName:'org.mpris.MediaPlayer2.chromium.instance7'}]))
+  assert.deepEqual(Object.keys(suggested.values).sort(), ['youtubeAppId', 'youtubeMprisName'], appId)
+  for (const key of Object.keys(suggested.values)) assert.ok(Prefs.field(P.schema, key), 'suggested key is a setting: ' + key)
+}
+assert.equal(B.suggestion({appId:'vivaldi-stable',title:'Example - YouTube'},players),null)
 assert.equal(B.webApp('vivaldi-youtube.com.evil.test__-Default'),null)
 assert.equal(B.webApp('vivaldi-music.youtube.com__-Default'),null)
 assert.equal(B.webApp('vivaldi-youtube.com__-Bad\nProfile'),null)
-assert.equal(B.suggestion({...window, appId:'vivaldi-youtube.com__-'+'a'.repeat(220)},players,entries),null)
-const inactive = B.suggestion(window,[],entries)
-assert.equal(inactive.values.youtubeMprisName,undefined)
+assert.equal(B.suggestion({...window, appId:'vivaldi-youtube.com__-'+'a'.repeat(220)},players),null)
+const inactive = B.suggestion(window,[])
+assert.deepEqual(inactive.values,{youtubeAppId:window.appId})
 assert.deepEqual(inactive.missing,['youtubeMprisName'])
-assert.equal(inactive.values.youtubeBrowser,'vivaldi-stable')
-const custom = B.suggestion({...window,appId:'vivaldi-youtube.com__-Profile_2'},players,entries)
-assert.equal(custom.values.youtubeProfile,'Profile 2')
-assert.equal(custom.inferredProfile,true)
-const unknown=B.suggestion({...window,appId:'vivaldi-youtube.com__-Custom_Profile'},players,entries)
-assert.equal(unknown.values.youtubeProfile,undefined)
-assert.ok(unknown.missing.includes('youtubeProfile'))
-assert.equal(B.suggestion(window,players,[{id:'vivaldi-stable',command:['flatpak','run','com.vivaldi.Vivaldi']}]).values.youtubeBrowser,undefined)
-assert.equal(B.suggestion(window,players,[{id:'vivaldi-stable',command:['sh','-c','vivaldi']}]).values.youtubeBrowser,undefined)
-assert.equal(B.suggestion(window,players,[{id:'vivaldi-stable',command:['other-program']}]).values.youtubeBrowser,undefined)
-const ambiguousEntries = [{id:'vivaldi',command:['vivaldi']},{id:'vivaldi-stable',command:['vivaldi-stable']}]
-assert.equal(B.suggestion(window,[],ambiguousEntries).values.youtubeBrowser,undefined)
-assert.equal(B.suggestion(window,players,ambiguousEntries).values.youtubeBrowser,'vivaldi-stable')
-assert.equal(B.candidates([window,window,{appId:'spotify',title:'Spotify'}],players,entries).length,1)
-assert.deepEqual(B.candidates([],players,entries),[])
+assert.deepEqual(B.suggestion(window,undefined).values,{youtubeAppId:window.appId})
+// Two players of the browser's family: ambiguous, so the MPRIS name is left unset.
+assert.equal(B.suggestion(window,[{dbusName:'org.mpris.MediaPlayer2.vivaldi.instance1'},{dbusName:'org.mpris.MediaPlayer2.vivaldi-stable.instance2'}]).values.youtubeMprisName,undefined)
+assert.equal(B.suggestion(window,[{dbusName:'org.mpris.MediaPlayer2.vivaldi.instance1'},{dbusName:'org.mpris.MediaPlayer2.vivaldi.instance2'}]).values.youtubeMprisName,'vivaldi')
+assert.equal(B.candidates([window,window,{appId:'spotify',title:'Spotify'}],players).length,1)
+assert.deepEqual(B.candidates([],players),[])
 const chrome=B.suggestion({appId:'chrome-youtube.com__-Default',title:'YouTube'},
-  [{dbusName:'org.mpris.MediaPlayer2.chrome.instance1',desktopEntry:'google-chrome'}],
-  [{id:'google-chrome',startupClass:'Google-chrome',command:['google-chrome-stable']}])
-assert.equal(chrome.values.youtubeBrowser,'google-chrome-stable')
-assert.equal(chrome.values.youtubeMprisName,'chrome')
-assert.equal(B.suggestion(window,[{dbusName:'org.mpris.MediaPlayer2.vivaldievil'}],entries).values.youtubeMprisName,undefined)
+  [{dbusName:'org.mpris.MediaPlayer2.chrome.instance1',desktopEntry:'google-chrome'}])
+assert.deepEqual(chrome.values,{youtubeAppId:'chrome-youtube.com__-Default',youtubeMprisName:'chrome'})
+assert.equal(B.suggestion(window,[{dbusName:'org.mpris.MediaPlayer2.vivaldievil'}]).values.youtubeMprisName,undefined)
 // BrowserPicker's summary reads the app ID through the schema: unset or
-// invalid is the default app, the one the widget actually uses.
-const selectedLabel = settings => B.description(Prefs.value(P.schema, settings, 'youtubeAppId'), Prefs.value(P.schema, settings, 'youtubeProfile'))
+// invalid is the default app, the one the widget actually uses. The profile
+// comes from the app ID (Chromium's Profile_N shown as its directory name).
+const selectedLabel = settings => B.description(Prefs.value(P.schema, settings, 'youtubeAppId'))
 assert.equal(selectedLabel({}), 'Vivaldi · Default')
-assert.equal(selectedLabel({youtubeAppId:'  ', youtubeProfile:'Default'}), 'Vivaldi · Default')
-assert.equal(selectedLabel({youtubeAppId:'chromium-youtube.com__-Profile_2', youtubeProfile:'Profile 2'}), 'Chromium · Profile 2')
-// Browser launch: only the tail of stderr is kept, whatever arrives.
-const cap = B.LAUNCH_DIAGNOSTIC_CHARS
-assert.equal(B.keepTail('', 'Error: Command not found: "nope"\n'), 'Error: Command not found: "nope"\n')
-let tail = ''
-for (let i = 0; i < 2000; i++) tail = B.keepTail(tail, 'x'.repeat(997) + i + '\n')
-assert.equal(tail.length, cap)
-assert.ok(tail.endsWith('1999\n'))
-assert.equal(B.keepTail('kept', 'y'.repeat(cap * 3)), 'y'.repeat(cap))
-assert.equal(B.keepTail('abc', 'def', 4), 'cdef')
-assert.equal(B.keepTail(undefined, undefined), '')
-assert.ok(B.LAUNCH_WINDOW_MS > 10000, 'the window outlasts uwsm-app giving up on its daemon')
-// A failed launch: any non-zero exit or crash inside the window; never exit
-// 0 (a hand-off to a running browser), never after the window.
-assert.equal(B.launchFailed(0, false, false), false)
-assert.equal(B.launchFailed(127, false, false), true)
-assert.equal(B.launchFailed(9, true, false), true)
-assert.equal(B.launchFailed(1, false, true), false)
-assert.equal(B.launchFailed(15, true, true), false)
-assert.equal(B.diagnostic('\x1b[31mError:\tbad\x07\nnext\r\n'), '[31mError: bad next')
-assert.equal(B.diagnostic(''), '')
-console.log('ok — browser setup detection, missing metadata, ambiguity, lookalike, and launch diagnostics tests passed')
+assert.equal(selectedLabel({youtubeAppId:'  '}), 'Vivaldi · Default')
+assert.equal(selectedLabel({youtubeAppId:'chromium-youtube.com__-Profile_2'}), 'Chromium · Profile 2')
+assert.equal(selectedLabel({youtubeAppId:'vivaldi-youtube.com__-Custom_Profile'}), 'Vivaldi · Custom_Profile')
+// A legacy entry's browser and profile don't change the summary.
+assert.equal(selectedLabel({youtubeAppId:'chromium-youtube.com__-Default', youtubeBrowser:'chromium', youtubeProfile:'Profile 9'}), 'Chromium · Default')
+assert.equal(B.description('not-a-web-app'), '')
+// The launch helpers are gone with the browser start.
+for (const name of ['LAUNCH_WINDOW_MS', 'LAUNCH_DIAGNOSTIC_CHARS', 'keepTail', 'launchFailed', 'diagnostic'])
+  assert.equal(B[name], undefined, name)
+// Panel: launch() only ever focuses the YouTube window or runs Omarchy's
+// Spotify launcher; no plugin QML builds a process to start a browser.
+const fs = require('node:fs'), path = require('node:path')
+const root = path.join(__dirname, '..')
+const panel = fs.readFileSync(path.join(root, 'Panel.qml'), 'utf8')
+const launch = /\n  function launch\(\) \{\n([\s\S]*?)\n  \}\n/.exec(panel)
+assert.ok(launch, 'Panel.launch()')
+assert.deepEqual([...launch[1].matchAll(/bar\.run\(([^)]*)\)/g)].map(m => m[1]), ['"omarchy launch spotify"'])
+assert.ok(/youtubeWindow\.activate\(\)/.test(launch[1]), 'YouTube is focused')
+for (const file of fs.readdirSync(root).filter(f => /\.(qml|js)$/.test(f))) {
+  const text = fs.readFileSync(path.join(root, file), 'utf8')
+  for (const banned of ['uwsm-app', '--app=', '--profile-directory', 'startBrowser', 'youtubeLaunch'])
+    assert.ok(!text.includes(banned), file + ' mentions ' + banned)
+}
+assert.ok(!/\bProcess\s*\{|createObject|Quickshell\.Io/.test(panel), 'Panel.qml creates no process')
+console.log('ok — browser setup detection (app ID and MPRIS name only), missing metadata, ambiguity and lookalike tests passed')

@@ -7,7 +7,8 @@ import "Preferences.js" as Schema
 import "BrowserSetup.js" as BrowserSetup
 
 // "Use an open window": lists the open YouTube web-app windows and offers
-// the browser, profile, app ID and MPRIS name each implies. A settings-form
+// the app ID and MPRIS name each implies (the window to focus and the player
+// to control; the plugin never starts the browser). A settings-form
 // control (Tab, arrows and Enter inside the picker), not a cursor row.
 
 Column {
@@ -18,8 +19,7 @@ Column {
   property bool expanded: false
   readonly property color secondaryForeground: FoamyPalette.secondaryText
   // Derive the summary and checks from persisted settings, not the last clicked row.
-  readonly property string selectedLabel: BrowserSetup.description(Prefs.value(Schema.schema, settings, "youtubeAppId"),
-    Prefs.value(Schema.schema, settings, "youtubeProfile"))
+  readonly property string selectedLabel: BrowserSetup.description(Prefs.value(Schema.schema, settings, "youtubeAppId"))
   signal apply(var values)
   function tr(text) { return FoamyI18n.t(text) }
   function matches(values) {
@@ -162,7 +162,7 @@ Column {
           required property var modelData
           required property int index
           readonly property bool selected: root.matches(modelData.values)
-          readonly property string description: BrowserSetup.description(modelData.id, modelData.values.youtubeProfile)
+          readonly property string description: BrowserSetup.description(modelData.id)
           width: windowColumn.width
           height: Style.space(54)
           radius: FoamyStyle.radius

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "foamy.media",
   "name": "Foamy Media",
-  "version": "1.3.3",
+  "version": "1.4.0",
   "author": "foamrider",
   "license": "MIT",
   "description": "Spotify and the dedicated YouTube web app in the Omarchy bar, with source-aware transport and artwork.",
@@ -39,8 +39,6 @@
       "showEqualizer": true,
       "volumeStep": 5,
       "youtubeEnabled": true,
-      "youtubeBrowser": "vivaldi",
-      "youtubeProfile": "Default",
       "youtubeAppId": "vivaldi-youtube.com__-Default",
       "youtubeMprisName": "vivaldi"
     },
@@ -152,18 +150,6 @@
         "type": "boolean",
         "label": "Enable YouTube integration",
         "defaultValue": true
-      },
-      {
-        "key": "youtubeBrowser",
-        "type": "string",
-        "label": "Browser executable",
-        "defaultValue": "vivaldi"
-      },
-      {
-        "key": "youtubeProfile",
-        "type": "string",
-        "label": "Browser profile",
-        "defaultValue": "Default"
       },
       {
         "key": "youtubeAppId",
