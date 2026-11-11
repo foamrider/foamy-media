@@ -185,12 +185,12 @@ else
     *) echo "FAIL     the written cover is not a PNG"; failures=$((failures + 1)) ;;
   esac
 
-  edge=$(magick identify -format '%w %h' "$art")
-  set -- $edge
-  if [ "$1" -le 640 ] && [ "$2" -le 640 ]; then
-    echo "ok       3000x2000 was capped to ${1}x${2}"
+  width=$(magick identify -format '%w' "$art")
+  height=$(magick identify -format '%h' "$art")
+  if [ "$width" -le 640 ] && [ "$height" -le 640 ]; then
+    echo "ok       3000x2000 was capped to ${width}x${height}"
   else
-    echo "FAIL     the written cover is ${1}x${2}, past the 640 cap"
+    echo "FAIL     the written cover is ${width}x${height}, past the 640 cap"
     failures=$((failures + 1))
   fi
 fi
