@@ -57,9 +57,10 @@ Hovering moves the same cursor.
 
 For YouTube, start the web app yourself (for example with Omarchy's web-app
 launcher), then open **Settings → YouTube → Browser settings → Use an open
-window** and pick it (start a video first if it is not listed). That sets
-the window app ID the plugin focuses and the MPRIS name it controls;
-ordinary browser tabs are never treated as the web app. The plugin only
+window** and pick it. That sets the window app ID the plugin focuses and,
+when exactly one MPRIS player of that browser is running (start a video
+first), the MPRIS name it controls; otherwise set the MPRIS name under
+**Advanced**. Ordinary browser tabs are never treated as the web app. The plugin only
 controls and focuses that window: it never starts the browser, and without
 the window the YouTube tab is gone.
 
