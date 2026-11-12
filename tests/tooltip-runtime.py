@@ -33,6 +33,7 @@ sys.path.insert(0, str(KIT / "preview"))
 import harness  # noqa: E402
 
 TITLE_LIMIT, ARTIST_LIMIT = 100, 60  # Model.tooltipTitleLimit, tooltipArtistLimit
+LINE_LIMIT = 100  # kit FoamyText.TOOLTIP_CHARS: the whole line, prefix included
 IN_OPEN = 0x20
 
 
@@ -104,6 +105,7 @@ def cases(probe):
         ("&lt;b&gt;escaped&lt;/b&gt;", "x<br>y", "Playing", True),
         ("مرحبا بالعالم", "فيروز", "Playing", False),
         ("first line\nsecond line", "", "Playing", False),
+        ("t" * 80, "a" * 50, "Paused", False),
         (long_title, "z" * 3000, "Playing", True),
     ]
 
@@ -114,7 +116,8 @@ def cases(probe):
     out = []
     for title, artist, status, rich in rows:
         title_shown, artist_shown = bounded(title, TITLE_LIMIT), bounded(artist, ARTIST_LIMIT)
-        label = title_shown + ("  ·  " + artist_shown if artist_shown else "")
+        prefix = "" if status == "Playing" else "Paused — "
+        label = bounded(prefix + title_shown + ("  ·  " + artist_shown if artist_shown else ""), LINE_LIMIT)
         out.append({"title": title, "artist": artist, "status": status, "label": label, "rich": rich})
     return out
 

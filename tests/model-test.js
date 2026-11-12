@@ -163,6 +163,21 @@ const M = require("../Model.js")
   assert.strictEqual(M.literalTooltip("<b>"), "<" + WJ + "b>")
   assert.strictEqual(M.literalTooltip(undefined), "")
 
+  // The kit's host-tooltip cap (FoamyText.tooltip, as Panel passes it) bounds
+  // the whole line, prefix included, before the markup guard: a long title
+  // and artist end in "…" within 100 code points, and the joiners after `<`
+  // and `&` are added afterwards, so they neither count nor get cut off.
+  const FoamyText = require("../kit/node-loader.cjs").load("FoamyText")
+  const capped = (title, artist, prefix) =>
+    M.tooltipLabel({ trackTitle: title, trackArtist: artist }, prefix, FoamyText.tooltip)
+  assert.strictEqual(capped("Instant Crush", "Daft Punk", "Paused — "), "Paused — Instant Crush  ·  Daft Punk")
+  const longLine = capped("t".repeat(80), "a".repeat(50), "Paused — ")
+  assert.strictEqual(longLine, ("Paused — " + "t".repeat(80) + "  ·  " + "a".repeat(50)).slice(0, 99) + "\u2026")
+  assert.strictEqual([...longLine].length, FoamyText.TOOLTIP_CHARS)
+  const guarded = capped("<".repeat(99) + "x", "", "")
+  assert.strictEqual(shown(guarded), "<".repeat(99) + "x")
+  assert.strictEqual(guarded, ("<" + WJ).repeat(99) + "x")
+
   // Control characters cannot stack the tooltip into lines.
   assert.strictEqual(tip("one\ntwo\r\nthree\u2028four\tfive", "", ""), "one two three four five")
   assert.strictEqual(tip("a\u0000\u001b[31mb\u0085c", "", ""), "a [31mb c")

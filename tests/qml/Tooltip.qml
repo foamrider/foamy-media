@@ -136,7 +136,7 @@ ShellRoot {
       var prefix = t.status === "Playing" ? "" : "Paused — "
       var raw = prefix + t.title + (t.artist ? "  ·  " + t.artist : "")
       raw = raw.split("tooltip-probe.png").join("control-probe.png")
-      shell.hover(prefix + t.label, "track " + shell.index, raw, t.rich === true)
+      shell.hover(t.label, "track " + shell.index, raw, t.rich === true)
       if (shell.index === shell.tracks.length - 1) {
         shell.finish()
         return

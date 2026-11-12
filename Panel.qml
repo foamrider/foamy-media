@@ -8,6 +8,7 @@ import qs.Commons as Commons
 import qs.Ui
 import "kit"
 import "kit/FoamyPrefs.js" as Prefs
+import "kit/FoamyText.js" as FoamyText
 import "Model.js" as Model
 import "Preferences.js" as Schema
 import "BrowserSetup.js" as BrowserSetup
@@ -163,7 +164,7 @@ Panel {
   // says what the popup says: an open source (the YouTube window with no
   // matching player) has nothing playing, a closed one is not running.
   readonly property string tooltipText: live
-    ? Model.tooltipLabel(player, playing ? "" : FoamyI18n.t("Paused") + " — ")
+    ? Model.tooltipLabel(player, playing ? "" : FoamyI18n.t("Paused") + " — ", FoamyText.tooltip)
     : Model.literalTooltip(sourceOpen ? FoamyI18n.t("Nothing playing") : FoamyI18n.t("%1 is not running", sourceName))
 
   readonly property real trackLength: live && player.lengthSupported ? Math.max(0, player.length) : 0
