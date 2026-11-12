@@ -1,4 +1,9 @@
-"""Bound clipboard producers in real subprocesses and exercise the QML editor."""
+"""Bound clipboard producers in real subprocesses and exercise the QML editor.
+
+The wl-paste, clipboard-fixture and timeout stand-ins are foamy-kit's
+hostenv.clipboard_fakes(), from the kit checkout (FOAMY_KIT). The shell cases
+need no Quickshell or Omarchy host, so tests/suite.sh --ci runs them too
+(FOAMY_SUITE_CI=1 skips the QML case)."""
 
 import json
 import os
@@ -14,76 +19,40 @@ KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "kit/clipboard.sh"
-# The stand-in wl-paste (and clipboard-fixture, which sets its mode). Bash
-# builtins only, so it starts in milliseconds: kit/clipboard.sh gives a paste
-# 2 s in all, and a Python stand-in's start-up alone took longer than that on
-# a loaded machine.
-MOCK = r"""#!/bin/bash
-state=$TEST_CLIPBOARD_STATE
-if [[ ${0##*/} == clipboard-fixture ]]; then
-  printf '%s' "$1" >"$state"
-  exit 0
-fi
-mode=$(<"$state")
-printf '%s' "$$" >"$state.pid"
-args=$(printf ',"%s"' "$@")
-printf '[%s]' "${args#,}" >"$state.args"
-xs() { local s; printf -v s '%*s' "$1" ''; printf '%s' "${s// /x}"; }
-case $mode in
-  failure) exit 1 ;;
-  ignore) trap '' TERM; exec sleep 30 ;;
-  stall) exec sleep 30 ;;
-  stream) while :; do xs 4096; done ;;
-  slow) while :; do printf x; sleep 0.1; done ;;
-  delayed) sleep 0.4; printf later ;;
-  unicode) printf '%s' "/home/test/Blåbær 📁" ;;
-  empty) ;;
-  limit) xs 16384 ;;
-  large) xs 16385 ;;
-  nul) printf 'a\0b' ;;
-  lines) printf 'one\r\ntwo\xe2\x80\xa8three' ;;
-  long) xs 400 ;;
-  *) printf folder ;;
-esac
-"""
-# Modes whose outcome is kit/clipboard.sh's 2 s deadline itself.
-DEADLINE_MODES = ("stall", "slow", "ignore")
-# Stand-in for timeout(1) in front of clipboard.sh. A deadline mode keeps
-# the real 2 s; every other mode, which finishes on its own, gets 60 s, so a
-# loaded machine (the pipeline is six processes) can't turn a paste that
-# works into a timeout. REAL_TIMEOUT is filled in by setUp().
-TIMEOUT_STUB = r"""#!/bin/bash
-case $(<"$TEST_CLIPBOARD_STATE") in
-  stall | slow | ignore) ;;
-  *) [[ $1 == --signal=KILL && $2 == 2s ]] && set -- "$1" 60s "${@:3}" ;;
-esac
-exec REAL_TIMEOUT "$@"
-"""
+
+
+def load_hostenv():
+    """foamy-kit's preview/hostenv.py, imported from the kit checkout, or None."""
+    if not (KIT / "preview/hostenv.py").exists():
+        return None
+    sys.path.insert(0, str(KIT / "preview"))
+    import hostenv
+
+    return hostenv
+
+
+hostenv = load_hostenv()
 
 
 class ClipboardTests(unittest.TestCase):
     def setUp(self):
+        if hostenv is None:
+            self.skipTest(f"foamy-kit's preview/hostenv.py not found at {KIT} (set FOAMY_KIT)")
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.base = Path(self.temporary.name)
-        self.state = self.base / "state"
-        self.state.write_text("normal")
-        for name in ("wl-paste", "clipboard-fixture"):
-            path = self.base / name
-            path.write_text(MOCK, encoding="utf-8")
-            path.chmod(0o755)
-        stub = self.base / "timeout"
-        stub.write_text(TIMEOUT_STUB.replace("REAL_TIMEOUT", shutil.which("timeout")))
-        stub.chmod(0o755)
-        self.env = dict(os.environ, TEST_CLIPBOARD_STATE=str(self.state), PATH=f"{self.base}:{os.environ['PATH']}")
+        self.env = dict(os.environ, **hostenv.clipboard_fakes(self.base / "bin"))
+        self.state = Path(self.env["TEST_CLIPBOARD_STATE"])
 
     def read(self, mode, selection="clipboard"):
         self.state.write_text(mode)
         started = time.monotonic()
-        deadline = mode in DEADLINE_MODES
+        deadline = mode in hostenv.CLIPBOARD_DEADLINE_MODES
         result = subprocess.run(
             ["bash", str(HELPER), selection], env=self.env, capture_output=True, timeout=5 if deadline else 90
         )
+        # The stand-in timeout gives a paste that ends by itself 60 s, so only
+        # the deadline modes are bounded tightly here.
         if deadline:
             self.assertLess(time.monotonic() - started, 4)
         self.assertLessEqual(len(result.stdout), 100000)
@@ -100,7 +69,7 @@ class ClipboardTests(unittest.TestCase):
         result = self.read("lines", "primary")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), "one  two three")
-        args = json.loads(Path(str(self.state) + ".args").read_text())
+        args = json.loads(Path(f"{self.state}.args").read_text())
         self.assertEqual(args, ["--no-newline", "--type", "text", "--primary"])
 
     def test_oversized_nul_and_continuous_stream_are_rejected(self):
@@ -117,6 +86,12 @@ class ClipboardTests(unittest.TestCase):
                 result = self.read(mode)
                 self.assertEqual(result.returncode, 137)
 
+    def test_slow_paste_that_works_still_pastes(self):
+        # A paste that takes 2.5 s, as on a loaded machine.
+        result = self.read("loaded")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), "late")
+
     def test_failure_and_invalid_selection(self):
         self.assertNotEqual(self.read("failure").returncode, 0)
         self.assertEqual(self.read("normal", "invalid").returncode, 2)
@@ -127,7 +102,7 @@ class ClipboardTests(unittest.TestCase):
         self.assert_producer_stopped()
 
     def assert_producer_stopped(self):
-        pid = Path(str(self.state) + ".pid").read_text()
+        pid = Path(f"{self.state}.pid").read_text()
         status = Path(f"/proc/{pid}/stat")
         # The group leader can close stdout before a killed child is scheduled
         # to exit. Observe the child's state with a bounded wait, without the
@@ -148,7 +123,7 @@ class ClipboardTests(unittest.TestCase):
         with subprocess.Popen(
             ["bash", str(HELPER), "clipboard"], env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         ) as process:
-            pid_file = Path(str(self.state) + ".pid")
+            pid_file = Path(f"{self.state}.pid")
             deadline = time.monotonic() + 2
             while not pid_file.exists() and time.monotonic() < deadline:
                 time.sleep(0.01)
@@ -158,16 +133,11 @@ class ClipboardTests(unittest.TestCase):
         self.assert_producer_stopped()
 
     def test_qml_editing_and_paste(self):
+        if os.environ.get("FOAMY_SUITE_CI"):
+            self.skipTest("tests/suite.sh --ci runs no Quickshell")
         runner = shutil.which("qs")
         if not runner:
             self.skipTest("Quickshell is unavailable")
-        if os.environ.get("FOAMY_SUITE_CI"):
-            self.skipTest("tests/suite.sh --ci runs no Quickshell")
-        if not (KIT / "preview/hostenv.py").exists():
-            self.skipTest(f"foamy-kit not found at {KIT} (set FOAMY_KIT)")
-        sys.path.insert(0, str(KIT / "preview"))
-        import hostenv
-
         # Quickshell's statically registered Io plugin requires the qs executable.
         # A stock qmltestrunner cannot load it as a dynamic QML plugin.
         fixture = self.base / "shell.qml"
@@ -192,30 +162,37 @@ ShellRoot {
             (self.base / name).symlink_to(host / name, target_is_directory=True)
         runtime = self.base / "runtime"
         runtime.mkdir(mode=0o700)
+        platform = os.environ.get("FOAMY_TEST_PLATFORM", "offscreen")
         env = dict(
             self.env,
-            QT_QPA_PLATFORM=os.environ.get("FOAMY_TEST_PLATFORM", "offscreen"),
+            QT_QPA_PLATFORM=platform,
             QT_QUICK_BACKEND="software",
             QT_QPA_PLATFORMTHEME="",
             XDG_RUNTIME_DIR=str(runtime),
-            DBUS_SESSION_BUS_ADDRESS=f"unix:path={self.base}/no-session-bus",
         )
-        # No Omarchy bin dir, AppImage library path, audio server or system bus.
-        hostenv.isolate(env, self.base)
-        if env["QT_QPA_PLATFORM"] == "offscreen":
-            # Nothing of the live session: no compositor or Hyprland socket.
-            for name in ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE"):
-                env.pop(name, None)
-        if env["QT_QPA_PLATFORM"] == "wayland":
+        # The kit's isolation for a qs the test starts itself: no Omarchy bin
+        # directory or AppImage library on the paths, no audio server, system
+        # or session bus (so no media player), no compositor. The editor needs
+        # no bus. Only the wayland mode keeps the compositor, on purpose.
+        hostenv.isolate(env, self.base, display=platform == "wayland")
+        if platform == "wayland":
             # Keep test logs/IPC private without hiding the host compositor socket.
             display = Path(os.environ["WAYLAND_DISPLAY"])
             if not display.is_absolute():
                 env["WAYLAND_DISPLAY"] = str(Path(os.environ["XDG_RUNTIME_DIR"]) / display)
-        result = subprocess.run(
-            [runner, "-p", str(fixture), "--no-color"], env=env, text=True, capture_output=True, timeout=180
-        )
-        output = result.stdout + result.stderr
-        self.assertEqual(result.returncode, 0, output)
+        # Only a hang guard: the QtTest cases bound each step themselves
+        # (pasteWait). The qs is its own process group, so the stand-ins its
+        # Processes started stop with it.
+        log_path = self.base / "qs.log"
+        with log_path.open("w") as log:
+            with hostenv.ProcessGroup(
+                [runner, "-p", str(fixture), "--no-color"], env=env, stdout=log, stderr=subprocess.STDOUT
+            ) as shell:
+                status = shell.wait(180)
+        output = log_path.read_text(errors="replace")
+        self.assertIsNotNone(status, "qs did not finish within 180 s\n" + output)
+        self.assertEqual(status, 0, output)
+        hostenv.check(env, output)
         self.assertRegex(output, r"CLIPBOARD_RESULT passed=[1-9][0-9]* failed=0")
         self.assertIn("failed=0", output, output)
         print(output[output.index("CLIPBOARD_RESULT") :].splitlines()[0])

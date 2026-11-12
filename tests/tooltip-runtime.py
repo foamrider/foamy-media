@@ -32,6 +32,7 @@ if not os.environ.get("FOAMY_HOST_45"):
     os.environ["FOAMY_HOST_45"] = str(Path(_root) / "shell") if _root else "/usr/share/omarchy/shell"
 sys.path.insert(0, str(KIT / "preview"))
 import harness  # noqa: E402
+import hostenv  # noqa: E402
 
 TITLE_LIMIT, ARTIST_LIMIT = 100, 60  # Model.tooltipTitleLimit, tooltipArtistLimit
 LINE_LIMIT = 100  # kit FoamyText.TOOLTIP_CHARS: the whole line, prefix included
@@ -150,17 +151,19 @@ def main():
     try:
         r.start()
         r.wait_for_log("FOAMY WAITING FOR PLAYER", 60)
-        fake = subprocess.Popen(
-            [sys.executable, "-I", str(PLUGIN / "tests/fake-mpris.py"), str(r.base / "tracks.json")],
-            env=r.env,
-            stdout=(r.base / "fake.log").open("w"),
-            stderr=subprocess.STDOUT,
-        )
+        # r.env names the run's private session bus, so the fake player is
+        # never on the desktop's. Its own process group, killed with this test.
+        with (r.base / "fake.log").open("w") as fake_log:
+            fake = hostenv.ProcessGroup(
+                [sys.executable, "-I", str(PLUGIN / "tests/fake-mpris.py"), str(r.base / "tracks.json")],
+                env=r.env,
+                stdout=fake_log,
+                stderr=subprocess.STDOUT,
+            )
         r.wait(180)
     finally:
-        if fake and fake.poll() is None:
-            fake.terminate()
-            fake.wait(5)
+        if fake:
+            fake.stop()
         r.stop()
     opened = watch.opened()
     log = r.log

@@ -233,8 +233,9 @@ mise install                           # once: the pinned linters and node (mise
 tests/validate.sh                      # kit check, linters, formatters, helper tests, then tests/suite.sh
 tests/validate.sh --ci                 # what CI runs: no Quickshell or Omarchy host
 bash tests/suite.sh [--ci] [--fast]    # the tests alone: node, the helper on fixtures (both arches with
-                                       # qemu binfmt; needs ImageMagick), the clipboard tests, and the
-                                       # offscreen runtime tests on the installed 4.5 shell (FOAMY_KIT)
+                                       # qemu binfmt; needs ImageMagick), the clipboard tests (the kit's
+                                       # stand-ins), and the offscreen runtime tests on the installed 4.5
+                                       # shell; both need foamy-kit (FOAMY_KIT)
 ```
 
 Shared components live in `kit/`, copied from
