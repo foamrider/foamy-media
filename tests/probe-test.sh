@@ -24,9 +24,11 @@ if ! command -v node >/dev/null 2>&1; then
   exit 0
 fi
 
-helper="$PWD/bin/$(uname -m)/foamy-media-helper"
+# FOAMY_MEDIA_ARCH=aarch64 runs the other build (through binfmt and qemu).
+arch=${FOAMY_MEDIA_ARCH:-$(uname -m)}
+helper="$PWD/bin/$arch/foamy-media-helper"
 if [ ! -x "$helper" ]; then
-  echo "skip — no helper for $(uname -m) (build it with kit/native/build-native.sh .)"
+  echo "skip — no helper for $arch (build it with kit/native/build-native.sh .)"
   exit 0
 fi
 work=$(mktemp -d)

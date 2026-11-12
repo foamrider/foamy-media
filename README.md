@@ -225,14 +225,12 @@ kit/native/build-native.sh . --verify  # clean rebuild, byte-identical
 ```
 
 ```sh
-node tests/model-test.js && node tests/network-test.js && node tests/preferences-test.js
-node tests/browser-setup-test.js && node tests/i18n.test.cjs
-sh tests/probe-test.sh                 # the built helper on real fixtures; needs ImageMagick
-python3 -I tests/test_clipboard.py
-python3 "$FOAMY_KIT/preview/i18n_runtime.py" .   # the catalogs live in the installed 4.5 shell
-bash tests/kit-check.sh
-python3 -I tests/runtime.py            # offscreen on the installed 4.5 shell; needs foamy-kit (FOAMY_KIT)
-python3 -I tests/tooltip-runtime.py    # hover tooltip with hostile track metadata on the installed 4.5 shell; needs FOAMY_KIT, PyGObject, dbus-daemon
+mise install                           # once: the pinned linters and node (mise.toml)
+tests/validate.sh                      # kit check, linters, formatters, helper tests, then tests/suite.sh
+tests/validate.sh --ci                 # what CI runs: no Quickshell or Omarchy host
+bash tests/suite.sh [--ci] [--fast]    # the tests alone: node, the helper on fixtures (both arches with
+                                       # qemu binfmt; needs ImageMagick), the clipboard tests, and the
+                                       # offscreen runtime tests on the installed 4.5 shell (FOAMY_KIT)
 ```
 
 Shared components live in `kit/`, copied from
