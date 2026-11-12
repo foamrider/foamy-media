@@ -228,7 +228,7 @@ node tests/model-test.js && node tests/network-test.js && node tests/preferences
 node tests/browser-setup-test.js && node tests/i18n.test.cjs
 sh tests/probe-test.sh                 # the built helper on real fixtures; needs ImageMagick
 python3 -I tests/test_clipboard.py
-python3 tests/i18n-runtime.py          # the installed 4.5 shell; OMARCHY_PATH picks another tree
+python3 "$FOAMY_KIT/preview/i18n_runtime.py" .   # the catalogs live in the installed 4.5 shell
 bash tests/kit-check.sh
 python3 -I tests/runtime.py            # offscreen on the installed 4.5 shell (4.0 only with FOAMY_HOST_40); needs foamy-kit (FOAMY_KIT)
 python3 -I tests/tooltip-runtime.py    # hover tooltip with hostile track metadata on the installed 4.5 shell; needs FOAMY_KIT, PyGObject, dbus-daemon
