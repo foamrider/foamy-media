@@ -103,8 +103,9 @@ QtObject {
     artProbe.pending = root.artUrl
     artProbe.failure = ""
     artProbe.exitSeen = false
-    // The helper bounds every step itself (8 s fetch, 15 s per decode); the
-    // outer timeout only catches a helper that somehow hangs.
+    // The helper bounds every step itself (8 s fetch, 15 s per decode) and
+    // the whole run to 55 s, so it replies before this timeout, which only
+    // catches a helper that somehow hangs (native/src/main.rs, "Deadline").
     artProbe.command = ["timeout", "--kill-after=2s", "60s"].concat(
       FoamyNative.command(root.pluginDir, "foamy-media-helper", Model.artProbeArgs(target)))
     artProbe.running = true

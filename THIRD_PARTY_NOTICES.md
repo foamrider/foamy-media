@@ -12,9 +12,9 @@ How the lists are made:
 
 ## `foamy-media-helper`
 
-- `bin/aarch64/foamy-media-helper`: sha256 `f573756a5f909a6dc79213a684c27829bb6c91427b0f85ac54100b21a41848ab`
-- `bin/x86_64/foamy-media-helper`: sha256 `9c3bb93138dc153b7ae2233d6e3e5cad978e53b3ad7d611e852911e41b47ad1b`
-- `native/native.pin`: source `270a433df7160ed2beecae3155a92dfc6db6e02d59dfb92bab1c9e4dc04199bd`, toolchain 1.99.1
+- `bin/aarch64/foamy-media-helper`: sha256 `af7e60cdd18c63c2659ecdfa5da105095e301a00b4ee7b67f5f1f4d2db465e0b`
+- `bin/x86_64/foamy-media-helper`: sha256 `1bebfce257b4597d4e0ddcb82d1c9adb7cf96c02558afd5eef4fe086a5ee93ed`
+- `native/native.pin`: source `304142ae38feb2ac10dc2197ada7f2d11dc429f1ca7b8887b145cbed8a8393d0`, toolchain 1.99.1
 
 ### Crates linked into `foamy-media-helper`
 

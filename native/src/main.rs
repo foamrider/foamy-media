@@ -67,6 +67,16 @@
 //!    written atomically, mode 0600, unless that file is already there (then
 //!    only its modification time is refreshed). The newest eight covers are
 //!    kept, the current one always; other names are never touched.
+//!
+//! # Deadline
+//!
+//! The panel runs the helper under `timeout --kill-after=2s 60s`
+//! (`MediaService.qml`), which signals the helper alone, not the
+//! ImageMagick runs in their own process groups. The whole run therefore
+//! has a 55 s budget (`foamy_helper::process::set_run_budget`): every
+//! decode ends by then, and one that would start later doesn't start and
+//! fails as a timeout, so the panel always gets the reply. The steps'
+//! own deadlines add up to 53 s (8 s fetch, three 15 s decodes).
 
 mod cache;
 mod fetch;
@@ -75,13 +85,18 @@ mod magick;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::Duration;
 
-use foamy_helper::{Failure, json};
+use foamy_helper::{Failure, json, process};
 use serde_json::{Value, json};
 
 /// The most bytes a cover may have. A cover is a few hundred kilobytes;
 /// anything far past that is not one.
 pub const MAX_BYTES: u64 = 8_000_000;
+
+/// The whole run's deadline, under the panel's 60 s `timeout` (module doc,
+/// "Deadline").
+const RUN_BUDGET: Duration = Duration::from_secs(55);
 
 /// The only hosts whose images are fetched, matched on a label boundary
 /// (Model.js `artHosts`, kept in step).
@@ -183,8 +198,14 @@ fn main_json(args: &[String]) -> Result<Value, Failure> {
     }
 }
 
+/// `main_json` with every child bounded by `budget` from now.
+fn run_within(budget: Duration, args: &[String]) -> Result<Value, Failure> {
+    process::set_run_budget(budget);
+    main_json(args)
+}
+
 fn main() -> ExitCode {
-    json::run(|| main_json(&args()?), json::error_reply)
+    json::run(|| run_within(RUN_BUDGET, &args()?), json::error_reply)
 }
 
 #[cfg(test)]
@@ -260,6 +281,75 @@ mod tests {
         assert_eq!(call(&["art-probe"]), "INVALID_ARGUMENT");
         assert_eq!(call(&["art-probe", "/a", "/b"]), "INVALID_ARGUMENT");
         assert_eq!(call(&["probe", "/a"]), "INVALID_ARGUMENT");
+    }
+
+    /// [`the_run_budget_ends_the_decodes`]'s child: a local cover and a
+    /// `magick` on `PATH` that takes 10 s per run (inside each run's own
+    /// 15 s deadline), under a 1 s budget. Prints the reply and how long it
+    /// took; run normally it does nothing.
+    #[test]
+    fn run_budget_child() {
+        let Some(cover) = std::env::var_os("FOAMY_MEDIA_BUDGET_TEST") else {
+            return;
+        };
+        let started = std::time::Instant::now();
+        let args = [
+            "foamy-media-helper".to_owned(),
+            "art-probe".to_owned(),
+            cover.into_string().unwrap(),
+        ];
+        let reply = run_within(Duration::from_secs(1), &args);
+        println!("elapsed_ms={}", started.elapsed().as_millis());
+        match reply {
+            Ok(value) => println!("ok {value}"),
+            Err(failure) => println!("failure {} {}", failure.code, failure.message),
+        }
+    }
+
+    #[test]
+    fn the_run_budget_ends_the_decodes() {
+        // ImageMagick runs in its own process group, out of the wrapper's
+        // reach, so the budget is what ends it in time.
+        let dir = std::env::temp_dir().join(format!("foamy-media-budget-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let magick = dir.join("magick");
+        std::fs::write(&magick, "#!/bin/sh\nexec sleep 10\n").unwrap();
+        std::fs::set_permissions(&magick, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .unwrap();
+        let cover = dir.join("cover.png");
+        std::fs::write(&cover, crate::image::testing::plain([1, 2, 3])).unwrap();
+        let output = foamy_helper::child::Bounded::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "tests::run_budget_child",
+                "--nocapture",
+                "--test-threads=1",
+                "-q",
+            ])
+            .env("FOAMY_MEDIA_BUDGET_TEST", &cover)
+            .env(
+                "PATH",
+                std::env::join_paths([dir.as_path(), "/usr/bin".as_ref(), "/bin".as_ref()])
+                    .unwrap(),
+            )
+            .env("XDG_CACHE_HOME", dir.join("cache"))
+            .timeout(Duration::from_secs(60))
+            .run()
+            .unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        let text = output.stdout_lossy();
+        assert!(output.success(), "{output:?}");
+        assert!(
+            text.contains("failure DECODE_FAILED ImageMagick's mean colour took too long"),
+            "{text}"
+        );
+        let elapsed: u64 = text
+            .lines()
+            .find_map(|line| line.strip_prefix("elapsed_ms="))
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!(elapsed < 5000, "within the 1 s budget: {elapsed} ms");
     }
 
     #[test]
