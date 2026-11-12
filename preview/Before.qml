@@ -24,13 +24,16 @@ Item {
   readonly property Item popup: found
 
   function findPopup(item, depth) {
-    if (!item || depth > 8) return null
+    if (!item || depth > 8)
+      return null
     var kids = item.children || []
     for (var i = 0; i < kids.length; i++) {
       var child = kids[i]
-      if (child && child.owner === old && child.borderSpec !== undefined) return child
+      if (child && child.owner === old && child.borderSpec !== undefined)
+        return child
       var deeper = findPopup(child, depth + 1)
-      if (deeper) return deeper
+      if (deeper)
+        return deeper
     }
     return null
   }
@@ -40,10 +43,13 @@ Item {
   // renderer. Turn those layers off so the shot shows dev's header content as
   // on a GPU (without the blur and rounded masks).
   function unlayer(item, depth) {
-    if (!item || depth > 40) return
-    if (item.layer && item.layer.enabled && item.layer.effect) item.layer.enabled = false
+    if (!item || depth > 40)
+      return
+    if (item.layer && item.layer.enabled && item.layer.effect)
+      item.layer.enabled = false
     var kids = item.children || []
-    for (var i = 0; i < kids.length; i++) unlayer(kids[i], depth + 1)
+    for (var i = 0; i < kids.length; i++)
+      unlayer(kids[i], depth + 1)
   }
   Timer {
     interval: 200
@@ -58,9 +64,11 @@ Item {
     repeat: true
     onTriggered: {
       var top = preview
-      while (top.parent) top = top.parent
+      while (top.parent)
+        top = top.parent
       var popup = preview.findPopup(top, 0)
-      if (!popup) return
+      if (!popup)
+        return
       popup.anchorItem = preview.anchorItem
       preview.found = popup
     }
@@ -71,20 +79,27 @@ Item {
     bar: preview.bar
     width: 60
     height: 30
-    settings: ({ id: "foamy.media", hideWhenClosed: false })
+    settings: ({
+        id: "foamy.media",
+        hideWhenClosed: false
+      })
     Component.onCompleted: old.open()
   }
   onPreviewStateChanged: {
-    if (previewState === "settings") old.openSettings(); else old.closeSettings()
+    if (previewState === "settings")
+      old.openSettings()
+    else
+      old.closeSettings()
     preview.startFixture()
   }
   Component.onCompleted: startFixture()
 
   function startFixture() {
     fixture.running = false
-    if (previewState !== "playing" && previewState !== "two-sources") return
+    if (previewState !== "playing" && previewState !== "two-sources")
+      return
     var state = previewState
-    Qt.callLater(function() {
+    Qt.callLater(function () {
       fixture.command = ["python3", "-I", "-c", preview.fixtureSource, state]
       fixture.running = true
     })
@@ -92,7 +107,12 @@ Item {
   Process {
     id: fixture
     // Line by line as it comes: nothing is held until the fixture exits.
-    stderr: SplitParser { onRead: function(line) { if (line.trim() !== "") console.log("fake MPRIS: " + line.trim()) } }
+    stderr: SplitParser {
+      onRead: function (line) {
+        if (line.trim() !== "")
+          console.log("fake MPRIS: " + line.trim())
+      }
+    }
   }
   // A static MPRIS fixture (python3-dbus), embedded so the dev copy the kit
   // renders (git archive of dev + this file) has it.

@@ -1,0 +1,80 @@
+# qmllint findings accepted when the check was adopted. tests/validate.sh fails on any
+# finding not listed here. Regenerate with `tests/validate.sh --update-baseline qmllint`
+# only to drop fixed entries or after reviewing every added one; never to pass a check.
+BarContent.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: Style.font.body
+BarContent.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: Style.font.body
+BarContent.qml: missing-property: Member "family" not found on type "QObject" | property string fontFamily: Style.font.family
+BarContent.qml: missing-property: Member "sizeHorizontal" not found on type "QObject" | property int barSize: Style.bar.sizeHorizontal
+BrowserPicker.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
+BrowserPicker.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
+BrowserPicker.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
+BrowserPicker.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
+BrowserPicker.qml: missing-property: Member "rowPaddingX" not found on type "QObject" | anchors.leftMargin: Style.spacing.rowPaddingX
+BrowserPicker.qml: missing-property: Member "rowPaddingX" not found on type "QObject" | anchors.rightMargin: Style.spacing.rowPaddingX
+BrowserPicker.qml: missing-property: Member "subtitle" not found on type "QObject" | font.pixelSize: FoamyStyle.font.subtitle
+BrowserPicker.qml: missing-property: Member "subtitle" not found on type "QObject" | font.pixelSize: FoamyStyle.font.subtitle
+MediaService.qml: import: Type MediaService not declared as singleton in qmldir but using pragma Singleton
+MediaService.qml: missing-property: Member "exitSeen" not found on type MediaService::artProbe with type Process | artProbe.exitSeen = false
+MediaService.qml: missing-property: Member "failure" not found on type "Process" | if (url !== root.artUrl || root.artProbed === root.artUrl || root.artProbe.failure === "TLS_UNSUPPORTED" || !root.remoteArt || !root.networkReady || root.artRet
+MediaService.qml: missing-property: Member "failure" not found on type MediaService::artProbe with type Process | artProbe.failure = ""
+MediaService.qml: missing-property: Member "failure" not found on type MediaService::artProbe with type Process | root.artProbe.failure = Model.artProbeFailure(text)
+MediaService.qml: missing-property: Member "pending" not found on type "Process" | if (artProbe.pending === root.artUrl)
+MediaService.qml: missing-property: Member "pending" not found on type "Process" | onStreamFinished: root.applyArtProbe(root.artProbe.pending, text)
+MediaService.qml: missing-property: Member "pending" not found on type MediaService::artProbe with type Process | artProbe.pending = root.artUrl
+MediaSlider.qml: missing-property: Member "text" not found on type "QObject" | color: Commons.Color.popups.text
+MediaSlider.qml: missing-property: Member "text" not found on type "QObject" | color: Qt.alpha(Commons.Color.popups.text, root.hasCursor ? 0.28 : 0.18)
+MediaView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < rows.length; i++)
+MediaView.qml: id-shadows-member: Id for object FoamyHeroBand shadows property "band". Rename one or the other. | return band
+MediaView.qml: id-shadows-member: Id for object MediaSettings shadows property "settingsPage". Rename one or the other. | implicitHeight: editing ? settingsPage.implicitHeight : main.implicitHeight
+MediaView.qml: id-shadows-member: Note: Id defined here | id: band
+MediaView.qml: id-shadows-member: Note: Id defined here | id: settingsPage
+MediaView.qml: missing-property: Member "background" not found on type "QObject" | foreground: Commons.Color.popups.background
+MediaView.qml: missing-property: Member "background" not found on type "QObject" | foreground: toggledOn && enabled ? Commons.Color.popups.background : FoamyPalette.secondaryText
+MediaView.qml: missing-property: Member "background" not found on type "QObject" | var base = Commons.Color.popups.background
+MediaView.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
+MediaView.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
+MediaView.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
+MediaView.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
+MediaView.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
+MediaView.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
+MediaView.qml: missing-property: Member "displayLarge" not found on type "QObject" | font.pixelSize: FoamyStyle.font.displayLarge
+MediaView.qml: missing-property: Member "heading" not found on type "QObject" | font.pixelSize: view.compact ? FoamyStyle.font.title : FoamyStyle.font.heading
+MediaView.qml: missing-property: Member "title" not found on type "QObject" | font.pixelSize: FoamyStyle.font.title
+MediaView.qml: missing-property: Member "title" not found on type "QObject" | font.pixelSize: view.compact ? FoamyStyle.font.title : FoamyStyle.font.heading
+MediaView.qml: property-override: Property "accent" already exists in base type "CursorSurface", use a different name. | required property color accent
+Panel.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < keys.length; i++) {
+Panel.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < values.length; i++) {
+Panel.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var j = 0; j < keys.length; j++)
+Panel.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var volumeStep = continuous ? pointer.notch * 2 : pointer.notch
+Panel.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var volumeUp = pointer.wheelAccumulator > 0
+Panel.qml: id-shadows-member: Id for object FoamyMember shadows property "member". Rename one or the other. | if (!member.isLeader)
+Panel.qml: id-shadows-member: Id for object FoamyPopup shadows property "popup". Rename one or the other. | readonly property bool compactPanel: popup.availableCardHeight > 0 && popup.availableCardHeight < Style.space(500)
+Panel.qml: id-shadows-member: Note: Id defined here | id: member
+Panel.qml: id-shadows-member: Note: Id defined here | id: popup
+Panel.qml: missing-property: Member "barSize" not found on type "QObject" | barSize: root.bar ? root.bar.barSize : Style.bar.sizeHorizontal
+Panel.qml: missing-property: Member "family" not found on type "QObject" | fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+Panel.qml: missing-property: Member "fontFamily" not found on type "QObject" | fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+Panel.qml: missing-property: Member "foregroundAnimationEnabled" not found on type "QObject" | colorAnimation: !root.bar || root.bar.foregroundAnimationEnabled
+Panel.qml: missing-property: Member "hideTooltip" not found on type "QObject" | bar.hideTooltip(root)
+Panel.qml: missing-property: Member "hideTooltip" not found on type "QObject" | root.bar.hideTooltip(root)
+Panel.qml: missing-property: Member "run" not found on type "QObject" | bar.run("omarchy launch spotify")
+Panel.qml: missing-property: Member "showTooltip" not found on type "QObject" | root.bar.showTooltip(root, root.tooltipText)
+Panel.qml: missing-property: Member "sizeHorizontal" not found on type "QObject" | barSize: root.bar ? root.bar.barSize : Style.bar.sizeHorizontal
+Panel.qml: missing-property: Member "vertical" not found on type "QObject" | readonly property bool vertical: bar ? bar.vertical : false
+preview/Before.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < kids.length; i++)
+preview/Before.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < kids.length; i++) {
+preview/Before.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var child = kids[i]
+preview/Before.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var deeper = findPopup(child, depth + 1)
+preview/Preview.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < kids.length; i++) {
+preview/Preview.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var header = preview.findNamed(view.settingsPage, "browserPickerHeader")
+preview/Preview.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var hit = findNamed(kids[i], name)
+preview/Preview.qml: missing-property: Member "background" not found on type "QObject" | color: Commons.Color.bar.background
+preview/Preview.qml: missing-property: Member "barSize" not found on type "QObject" | barSize: preview.bar.barSize
+preview/Preview.qml: missing-property: Member "barSize" not found on type "QObject" | barSize: preview.bar.barSize
+preview/Preview.qml: missing-property: Member "barSize" not found on type "QObject" | y: preview.bar.barSize - height - 2
+preview/Preview.qml: missing-property: Member "family" not found on type "QObject" | fontFamily: Style.font.family
+preview/Preview.qml: missing-property: Member "family" not found on type "QObject" | fontFamily: Style.font.family
+preview/Preview.qml: missing-property: Member "position" not found on type "QObject" | visible: preview.bar.position === "top"
+preview/Preview.qml: missing-property: Member "text" not found on type "QObject" | glyphColor: !mock.live ? Qt.darker(Commons.Color.bar.text, 1.9) : mock.playing ? mock.sourceBrandColor : Qt.darker(mock.sourceBrandColor, 1.5)
+preview/Preview.qml: missing-property: Member "text" not found on type "QObject" | labelColor: Commons.Color.bar.text
+preview/Preview.qml: unqualified: Unqualified access | media: mock

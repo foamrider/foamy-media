@@ -1,0 +1,2 @@
+# Paths a validate check must not read: <glob> [checks]  # reason
+tests/qml/*  qmllint  # harness scenes: preview/harness.py stages qs.Ui (with ScreenSim, MockBar) and links the plugin as "plugin", so their imports exist only in the harness's copy

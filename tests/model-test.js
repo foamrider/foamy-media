@@ -163,6 +163,21 @@ const M = require("../Model.js")
   assert.strictEqual(M.literalTooltip("<b>"), "<" + WJ + "b>")
   assert.strictEqual(M.literalTooltip(undefined), "")
 
+  // The kit's host-tooltip cap (FoamyText.tooltip, as Panel passes it) bounds
+  // the whole line, prefix included, before the markup guard: a long title
+  // and artist end in "…" within 100 code points, and the joiners after `<`
+  // and `&` are added afterwards, so they neither count nor get cut off.
+  const FoamyText = require("../kit/node-loader.cjs").load("FoamyText")
+  const capped = (title, artist, prefix) =>
+    M.tooltipLabel({ trackTitle: title, trackArtist: artist }, prefix, FoamyText.tooltip)
+  assert.strictEqual(capped("Instant Crush", "Daft Punk", "Paused — "), "Paused — Instant Crush  ·  Daft Punk")
+  const longLine = capped("t".repeat(80), "a".repeat(50), "Paused — ")
+  assert.strictEqual(longLine, ("Paused — " + "t".repeat(80) + "  ·  " + "a".repeat(50)).slice(0, 99) + "\u2026")
+  assert.strictEqual([...longLine].length, FoamyText.TOOLTIP_CHARS)
+  const guarded = capped("<".repeat(99) + "x", "", "")
+  assert.strictEqual(shown(guarded), "<".repeat(99) + "x")
+  assert.strictEqual(guarded, ("<" + WJ).repeat(99) + "x")
+
   // Control characters cannot stack the tooltip into lines.
   assert.strictEqual(tip("one\ntwo\r\nthree\u2028four\tfive", "", ""), "one two three four five")
   assert.strictEqual(tip("a\u0000\u001b[31mb\u0085c", "", ""), "a [31mb c")
@@ -193,7 +208,7 @@ const M = require("../Model.js")
   assert.ok(/^(e\u0301)+\u2026$/.test(cutAccents), JSON.stringify(cutAccents))
   const family = "\u{1F468}\u200d\u{1F469}\u200d\u{1F467}"
   const cutFamily = M.tooltipField("a".repeat(limit - 3) + family, limit)
-  assert.ok(!/\u200d\u2026$/.test(cutFamily) && !/\u200d$/.test(cutFamily.slice(0, -1)), JSON.stringify(cutFamily))
+  assert.ok(!cutFamily.endsWith("\u200d\u2026") && !cutFamily.slice(0, -1).endsWith("\u200d"), JSON.stringify(cutFamily))
   assert.ok(Array.from(cutFamily).length <= limit)
   // A long RTL title keeps its characters in logical order.
   const rtl = "مرحبا ".repeat(60)
@@ -280,7 +295,11 @@ const M = require("../Model.js")
   const path = require("path")
   const service = fs.readFileSync(path.join(__dirname, "..", "MediaService.qml"), "utf8")
   // The target is an argument of the bundled binary, never spliced into code.
-  assert.ok(!/\/bin\/sh|"sh", *"-c"|bash", *"-c"/.test(service), "the probe must not run through a shell script")
+  // The only shell in the file is the window-class hint's fixed script (a
+  // `head -c` bound, REVIEW section 5): a literal with no outside values.
+  const shells = service.split("\n").filter(line => /\/bin\/sh|"sh", *"-c"|bash", *"-c"/.test(line)).map(line => line.trim())
+  assert.deepStrictEqual(shells, ['command: ["bash", "-c", "set -o pipefail; timeout --kill-after=1s 3s omarchy-webapp-window-class https://youtube.com/ | head -c 512"]'],
+    "the art probe must not run through a shell script")
   assert.ok(/FoamyNative\.command\(root\.pluginDir, "foamy-media-helper", Model\.artProbeArgs\(target\)\)/.test(service))
   // And its exits are read the way DESIGN.md asks: 126/127 mean there is no
   // helper for this CPU, which is said once and never retried.

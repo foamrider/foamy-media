@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons
 import qs.Commons as Commons
@@ -21,24 +22,31 @@ Column {
   // Derive the summary and checks from persisted settings, not the last clicked row.
   readonly property string selectedLabel: BrowserSetup.description(Prefs.value(Schema.schema, settings, "youtubeAppId"))
   signal apply(var values)
-  function tr(text) { return FoamyI18n.t(text) }
+  function tr(text) {
+    return FoamyI18n.t(text)
+  }
   function matches(values) {
-    return Object.keys(values).every(function(key) { return Prefs.value(Schema.schema, root.settings, key) === values[key] })
+    return Object.keys(values).every(function (key) {
+      return Prefs.value(Schema.schema, root.settings, key) === values[key]
+    })
   }
   function collapse() {
     expanded = false
     header.forceActiveFocus()
   }
   function choose(candidate) {
-    if (saving) return
+    if (saving)
+      return
     collapse()
     apply(candidate.values)
   }
   function focusWindow(index) {
     var item = windowRows.itemAt(index)
-    if (item) item.forceActiveFocus()
+    if (item)
+      item.forceActiveFocus()
   }
-  onVisibleChanged: if (!visible) expanded = false
+  onVisibleChanged: if (!visible)
+    expanded = false
 
   Rectangle {
     id: header
@@ -54,14 +62,21 @@ Column {
     Accessible.name: root.tr("Use an open window") + (root.selectedLabel ? ": " + root.selectedLabel : "")
     Accessible.checkable: true
     Accessible.checked: root.expanded
-    Accessible.onPressAction: if (!root.saving) root.expanded = !root.expanded
-    function toggle() { if (!root.saving) root.expanded = !root.expanded }
+    Accessible.onPressAction: if (!root.saving)
+      root.expanded = !root.expanded
+    function toggle() {
+      if (!root.saving)
+        root.expanded = !root.expanded
+    }
     // Expand toward the reading direction; collapse toward the leading edge.
-    Keys.onPressed: function(event) {
+    Keys.onPressed: function (event) {
       if (event.key === (FoamyI18n.rightToLeft ? Qt.Key_Left : Qt.Key_Right) && !root.saving) {
-        root.expanded = true; root.focusWindow(0); event.accepted = true
+        root.expanded = true
+        root.focusWindow(0)
+        event.accepted = true
       } else if (event.key === (FoamyI18n.rightToLeft ? Qt.Key_Right : Qt.Key_Left) && root.expanded) {
-        root.collapse(); event.accepted = true
+        root.collapse()
+        event.accepted = true
       }
     }
     Keys.onReturnPressed: toggle()
@@ -73,9 +88,11 @@ Column {
         root.focusWindow(0)
       }
     }
-    Keys.onEscapePressed: function(event) {
-      if (root.expanded) root.collapse()
-      else event.accepted = false
+    Keys.onEscapePressed: function (event) {
+      if (root.expanded)
+        root.collapse()
+      else
+        event.accepted = false
     }
     Column {
       id: headerText
@@ -115,14 +132,22 @@ Column {
       color: root.secondaryForeground
       name: "chevron-right"
       rotation: root.expanded ? (FoamyI18n.rightToLeft ? -90 : 90) : 0
-      Behavior on rotation { NumberAnimation { duration: FoamyMotion.press; easing.type: Easing.InOutQuad } }
+      Behavior on rotation {
+        NumberAnimation {
+          duration: FoamyMotion.press
+          easing.type: Easing.InOutQuad
+        }
+      }
     }
     MouseArea {
       id: headerMouse
       anchors.fill: parent
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
-      onClicked: { header.forceActiveFocus(); header.toggle() }
+      onClicked: {
+        header.forceActiveFocus()
+        header.toggle()
+      }
     }
   }
 
@@ -133,7 +158,12 @@ Column {
     // Remove collapsed rows from keyboard navigation immediately, including during animation.
     enabled: root.expanded && !root.saving
     visible: root.expanded || height > 0
-    Behavior on height { NumberAnimation { duration: FoamyMotion.press; easing.type: Easing.InOutQuad } }
+    Behavior on height {
+      NumberAnimation {
+        duration: FoamyMotion.press
+        easing.type: Easing.InOutQuad
+      }
+    }
     Column {
       id: windowColumn
       objectName: "browserWindowList"
@@ -163,19 +193,24 @@ Column {
           required property int index
           readonly property bool selected: root.matches(modelData.values)
           readonly property string description: BrowserSetup.description(modelData.id)
+          // No single MPRIS player of this browser was found (none playing,
+          // or two that could own the window): choosing the row saves only
+          // the app ID, so say where the name is set.
+          readonly property bool nameMissing: (modelData.missing || []).indexOf("youtubeMprisName") !== -1
           width: windowColumn.width
-          height: Style.space(54)
+          height: Math.max(Style.space(54), rowText.implicitHeight + 2 * FoamyStyle.rowPadding)
           radius: FoamyStyle.radius
           color: windowMouse.containsMouse || activeFocus || selected ? FoamyPalette.hoverFill : "transparent"
           border.width: activeFocus ? 1 : 0
           border.color: Commons.Color.accent
           activeFocusOnTab: true
           Accessible.role: Accessible.Button
-          Accessible.name: modelData.title + ", " + description
+          Accessible.name: modelData.title + ", " + description + (modelData.hinted === true ? ", " + root.tr("Omarchy's YouTube app") : "") + (nameMissing ? ", " + root.tr("No MPRIS name found; set it under Advanced") : "")
           Accessible.onPressAction: root.choose(modelData)
-          Keys.onPressed: function(event) {
+          Keys.onPressed: function (event) {
             if (event.key === (FoamyI18n.rightToLeft ? Qt.Key_Right : Qt.Key_Left)) {
-              root.collapse(); event.accepted = true
+              root.collapse()
+              event.accepted = true
             }
           }
           Keys.onReturnPressed: root.choose(modelData)
@@ -195,6 +230,7 @@ Column {
             color: root.secondaryForeground
           }
           Column {
+            id: rowText
             anchors.left: windowIcon.right
             anchors.right: check.left
             anchors.verticalCenter: parent.verticalCenter
@@ -210,6 +246,7 @@ Column {
               elide: Text.ElideRight
             }
             Text {
+              id: rowDescription
               width: parent.width
               text: windowRow.description
               font.family: FoamyStyle.fontFamily
@@ -217,6 +254,29 @@ Column {
               color: root.secondaryForeground
               textFormat: Text.PlainText
               elide: Text.ElideRight
+            }
+            // The window Omarchy names its YouTube web app (Panel's hint).
+            Text {
+              objectName: "browserHintNote"
+              visible: windowRow.modelData.hinted === true
+              width: parent.width
+              text: root.tr("Omarchy's YouTube app")
+              // The browser line's font (typed, unlike FoamyStyle.font.*).
+              font: rowDescription.font
+              color: Commons.Color.accent
+              textFormat: Text.PlainText
+              elide: Text.ElideRight
+            }
+            Text {
+              objectName: "browserMissingName"
+              visible: windowRow.nameMissing
+              width: parent.width
+              text: root.tr("No MPRIS name found; set it under Advanced")
+              font.family: FoamyStyle.fontFamily
+              font.pixelSize: FoamyStyle.font.body
+              color: root.secondaryForeground
+              textFormat: Text.PlainText
+              wrapMode: Text.WordWrap
             }
           }
           FoamyIcon {

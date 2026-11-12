@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons
 import qs.Commons as Commons
@@ -31,7 +32,11 @@ Item {
   implicitHeight: Style.space(9)
   opacity: playing || showIdle ? 1 : 0
 
-  Behavior on opacity { NumberAnimation { duration: FoamyMotion.toggle } }
+  Behavior on opacity {
+    NumberAnimation {
+      duration: FoamyMotion.toggle
+    }
+  }
 
   Timer {
     interval: 125

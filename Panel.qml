@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import Quickshell
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
 import qs.Commons
@@ -8,6 +7,7 @@ import qs.Commons as Commons
 import qs.Ui
 import "kit"
 import "kit/FoamyPrefs.js" as Prefs
+import "kit/FoamyText.js" as FoamyText
 import "Model.js" as Model
 import "Preferences.js" as Schema
 import "BrowserSetup.js" as BrowserSetup
@@ -30,7 +30,11 @@ Panel {
   readonly property alias popup: popup
   readonly property alias member: member
 
-  FoamyMember { id: member; scope: "media"; demanding: root.opened }
+  FoamyMember {
+    id: member
+    scope: "media"
+    demanding: root.opened
+  }
 
   // ---------------------------------------------------------------- settings
   // Saved values (and saves not yet reflected back) through the kit queue.
@@ -41,7 +45,9 @@ Panel {
     fields: Schema.schema
     settings: root.settings
   }
-  function preference(key) { return prefs.value(key) }
+  function preference(key) {
+    return prefs.value(key)
+  }
   readonly property var effectiveSettings: prefs.effectiveSettings
   readonly property int maxLabelWidth: Style.space(preference("maxLabelWidth"))
   readonly property bool showArtist: preference("showArtist")
@@ -60,7 +66,10 @@ Panel {
   FoamySettingsState {
     id: settingsState
     panel: root
-    onHidden: { root.browserSettingsOpen = false; root.localError = "" }
+    onHidden: {
+      root.browserSettingsOpen = false
+      root.localError = ""
+    }
   }
   readonly property bool editingSettings: settingsState.editing
   property bool browserSettingsOpen: false
@@ -70,8 +79,12 @@ Panel {
   readonly property string settingsError: localError !== "" ? localError : prefs.error
   readonly property bool retryable: localError === "" && prefs.canRetry
 
-  function openSettings() { settingsState.show() }
-  function closeSettings() { settingsState.hide() }
+  function openSettings() {
+    settingsState.show()
+  }
+  function closeSettings() {
+    settingsState.hide()
+  }
 
   function save(key, value) {
     var values = {}
@@ -85,25 +98,38 @@ Panel {
     localError = ""
     var keys = Object.keys(values)
     for (var i = 0; i < keys.length; i++) {
-      if (!Prefs.valid(Schema.schema, keys[i], values[keys[i]])) { localError = "That value isn't allowed."; return false }
+      if (!Prefs.valid(Schema.schema, keys[i], values[keys[i]])) {
+        localError = "That value isn't allowed."
+        return false
+      }
     }
-    for (var j = 0; j < keys.length; j++) prefs.save(keys[j], values[keys[j]])
+    for (var j = 0; j < keys.length; j++)
+      prefs.save(keys[j], values[keys[j]])
     return true
   }
-  function retrySave() { localError = ""; prefs.retry() }
+  function retrySave() {
+    localError = ""
+    prefs.retry()
+  }
 
-  readonly property var browserCandidates: editingSettings && browserSettingsOpen
-    ? BrowserSetup.candidates(root.toplevelModel ? root.toplevelModel.values || [] : [], players) : []
+  readonly property var browserCandidates: editingSettings && browserSettingsOpen ? BrowserSetup.candidates(root.toplevelModel ? root.toplevelModel.values || [] : [], players, root.youtubeAppIdHint) : []
+
+  // The window picker's hint: Omarchy's own class for its YouTube web app
+  // (MediaService asks omarchy-webapp-window-class each time the picker
+  // opens). It applies only to an entry that has never set an app ID and
+  // whose default app ID (the Vivaldi window) matches no open window, so a
+  // configured or Vivaldi setup sees no change.
+  readonly property string youtubeAppIdHint: root.effectiveSettings.youtubeAppId === undefined && !root.youtubeOpen ? MediaService.omarchyYoutubeAppId : ""
+  function requestYoutubeAppIdHint() {
+    MediaService.requestYoutubeAppIdHint()
+  }
 
   // ------------------------------------------------------------------- theme
   // Source brand colours: the default accent is the source's own colour.
   readonly property color spotifyGreen: "#1DB954" // foamy-lint: allow hex-colour — Spotify brand colour, the widget's "Source color" accent
   readonly property color youtubeRed: "#FF0033" // foamy-lint: allow hex-colour — YouTube brand colour, the widget's "Source color" accent
   readonly property color sourceBrandColor: sourceKind === "youtube" ? youtubeRed : spotifyGreen
-  readonly property color accentColor: accentChoice === "Album art" ? artAccent
-    : accentChoice === "Theme accent" ? Commons.Color.accent
-    : accentChoice === "Bar foreground" ? barForeground
-    : sourceBrandColor
+  readonly property color accentColor: accentChoice === "Album art" ? artAccent : accentChoice === "Theme accent" ? Commons.Color.accent : accentChoice === "Bar foreground" ? barForeground : sourceBrandColor
   // The cover's own colour, lifted until it reads as an accent. The source
   // colour stands in until the probe answers for this track.
   readonly property color artAccent: artDominant === "" ? sourceBrandColor : Model.ensureContrast(artDominant, 0.48)
@@ -112,19 +138,29 @@ Panel {
   readonly property bool compactPanel: popup.availableCardHeight > 0 && popup.availableCardHeight < Style.space(500)
 
   // ------------------------------------------------------------------ player
-  readonly property var players: Mpris.players ? Mpris.players.values : []
+  // The MPRIS players (a test stands in its own, as for toplevelModel).
+  property var playerModel: Mpris.players
+  readonly property var players: playerModel ? playerModel.values || [] : []
+  // Bumped on every ToplevelManager.toplevels change and read by
+  // youtubeWindow, so the YouTube window is matched again when a window opens
+  // or closes. The binding also reads `values`, which notifies on its own
+  // (UntypedObjectModel), so this is likely redundant; it stays until a
+  // compositor test can show that the binding follows a real window without
+  // it (no offscreen test can open a toplevel).
   property int toplevelGeneration: 0
   readonly property string selectedSource: MediaService.selectedSource
 
   // The compositor's windows (a test stands in its own).
   property var toplevelModel: ToplevelManager.toplevels
   readonly property var youtubeWindow: {
-    if (!root.youtubeEnabled) return null
+    if (!root.youtubeEnabled)
+      return null
     var generation = root.toplevelGeneration
     var appId = root.preference("youtubeAppId")
     var values = root.toplevelModel ? root.toplevelModel.values || [] : []
     for (var i = 0; i < values.length; i++) {
-      if (String(values[i].appId || "") === appId) return values[i]
+      if (String(values[i].appId || "") === appId)
+        return values[i]
     }
     return null
   }
@@ -132,10 +168,7 @@ Panel {
   readonly property bool spotifyOpen: spotifyPlayer !== null && spotifyPlayer !== undefined
   readonly property bool youtubeOpen: youtubeWindow !== null && youtubeWindow !== undefined
   readonly property bool anySourceOpen: spotifyOpen || youtubeOpen
-  readonly property var youtubeCandidate: Model.findYoutube(
-    players,
-    youtubeWindow ? String(youtubeWindow.title || "") : "",
-    MprisPlaybackState.Stopped, root.preference("youtubeMprisName"))
+  readonly property var youtubeCandidate: Model.findYoutube(players, youtubeWindow ? String(youtubeWindow.title || "") : "", MprisPlaybackState.Stopped, root.preference("youtubeMprisName"))
   // The MPRIS service is shared by the whole browser profile. Requiring the
   // exact web-app toplevel and Model's URL or exact title correlation keeps
   // an ordinary browser media tab from being treated as this YouTube app.
@@ -159,16 +192,17 @@ Panel {
   readonly property string artUrl: live ? String(player.trackArtUrl || "") : ""
   readonly property string label: Model.barLabel(player, showArtist)
   // What hovering hands the host's tooltip: bounded, and literal whatever the
-  // host's Text makes of markup (Model.tooltipLabel).
-  readonly property string tooltipText: live
-    ? Model.tooltipLabel(player, playing ? "" : FoamyI18n.t("Paused") + " — ")
-    : Model.literalTooltip(FoamyI18n.t("%1 is not running", sourceName))
+  // host's Text makes of markup (Model.tooltipLabel). Without a player it
+  // says what the popup says: an open source (the YouTube window with no
+  // matching player) has nothing playing, a closed one is not running.
+  readonly property string tooltipText: live ? Model.tooltipLabel(player, playing ? "" : FoamyI18n.t("Paused") + " — ", FoamyText.tooltip) : Model.literalTooltip(sourceOpen ? FoamyI18n.t("Nothing playing") : FoamyI18n.t("%1 is not running", sourceName))
 
   readonly property real trackLength: live && player.lengthSupported ? Math.max(0, player.length) : 0
   // Quickshell extrapolates position between polls, so it can overshoot the
   // track length by a fraction of a second right before a track change.
   readonly property real trackPosition: {
-    if (!live || !player.positionSupported) return 0
+    if (!live || !player.positionSupported)
+      return 0
     var pos = Math.max(0, player.position)
     return trackLength > 0 ? Math.min(pos, trackLength) : pos
   }
@@ -184,23 +218,26 @@ Panel {
   readonly property real volume: volumeSupported ? player.volume : 0
   readonly property bool shuffleOn: live && player.shuffleSupported && player.shuffle === true
   readonly property int loopState: live && player.loopSupported ? player.loopState : MprisLoopState.None
-  readonly property string loopName: loopState === MprisLoopState.Track ? "track"
-    : loopState === MprisLoopState.Playlist ? "playlist" : "off"
+  readonly property string loopName: loopState === MprisLoopState.Track ? "track" : loopState === MprisLoopState.Playlist ? "playlist" : "off"
 
   readonly property bool shown: Model.shouldShowWidget(spotifyPlayer, youtubePlayer, hideWhenStopped, MprisPlaybackState.Stopped)
 
   // Source selection is shared; the leader keeps it in step with the players.
   function chooseInitialSource() {
-    var next = Model.initialSource(root.bothPlaying, !!(root.youtubeWindow && root.youtubeWindow.activated),
-      root.youtubePlaying, root.spotifyHasTrack, root.youtubeHasTrack, root.spotifyOpen, root.youtubeOpen)
-    if (next) MediaService.selectedSource = next
+    var next = Model.initialSource(root.bothPlaying, !!(root.youtubeWindow && root.youtubeWindow.activated), root.youtubePlaying, root.spotifyHasTrack, root.youtubeHasTrack, root.spotifyOpen, root.youtubeOpen)
+    if (next)
+      MediaService.selectedSource = next
   }
   function reconcileSource() {
-    if (!member.isLeader) return
+    if (!member.isLeader)
+      return
     MediaService.selectedSource = Model.reconcileSource(MediaService.selectedSource, {
-      spotifyPlaying: root.spotifyPlaying, youtubePlaying: root.youtubePlaying,
-      spotifyHasTrack: root.spotifyHasTrack, youtubeHasTrack: root.youtubeHasTrack,
-      spotifyOpen: root.spotifyOpen, youtubeOpen: root.youtubeOpen
+      spotifyPlaying: root.spotifyPlaying,
+      youtubePlaying: root.youtubePlaying,
+      spotifyHasTrack: root.spotifyHasTrack,
+      youtubeHasTrack: root.youtubeHasTrack,
+      spotifyOpen: root.spotifyOpen,
+      youtubeOpen: root.youtubeOpen
     })
   }
   function selectSource(kind) {
@@ -211,14 +248,20 @@ Panel {
   // Apply the selection after that update so the newest transition still
   // wins without mutating one of the binding's inputs mid-evaluation.
   function deferPlaybackTransition(kind, becamePlaying) {
-    if (!member.isLeader) return
-    Qt.callLater(function() {
+    if (!member.isLeader)
+      return
+    Qt.callLater(function () {
       var stillPlaying = kind === "youtube" ? root.youtubePlaying : root.spotifyPlaying
-      if (becamePlaying && stillPlaying) MediaService.selectedSource = kind
-      else if (!becamePlaying && MediaService.selectedSource === kind) root.reconcileSource()
+      if (becamePlaying && stillPlaying)
+        MediaService.selectedSource = kind
+      else if (!becamePlaying && MediaService.selectedSource === kind)
+        root.reconcileSource()
     })
   }
-  function deferReconcile() { if (member.isLeader) Qt.callLater(root.reconcileSource) }
+  function deferReconcile() {
+    if (member.isLeader)
+      Qt.callLater(root.reconcileSource)
+  }
   onSpotifyPlayingChanged: deferPlaybackTransition("spotify", spotifyPlaying)
   onYoutubePlayingChanged: deferPlaybackTransition("youtube", youtubePlaying)
   onSpotifyPlayerChanged: deferReconcile()
@@ -229,7 +272,9 @@ Panel {
 
   Connections {
     target: ToplevelManager.toplevels
-    function onValuesChanged() { root.toplevelGeneration++ }
+    function onValuesChanged() {
+      root.toplevelGeneration++
+    }
   }
 
   // ------------------------------------------------------------- album art
@@ -247,7 +292,10 @@ Panel {
   // No cover helper for this CPU: Settings says so under the artwork toggle.
   readonly property bool artHelperUnavailable: MediaService.artHelperUnavailable
 
-  function requestArt() { if (member.isLeader) MediaService.request(root.artUrl) }
+  function requestArt() {
+    if (member.isLeader)
+      MediaService.request(root.artUrl)
+  }
   onArtUrlChanged: requestArt()
   Connections {
     target: member
@@ -256,8 +304,9 @@ Panel {
       root.reconcileSource()
     }
   }
-  Component.onCompleted: Qt.callLater(function() {
-    if (!member.isLeader) return
+  Component.onCompleted: Qt.callLater(function () {
+    if (!member.isLeader)
+      return
     root.chooseInitialSource()
     root.requestArt()
   })
@@ -273,7 +322,8 @@ Panel {
   Timer {
     id: imageRelease
     interval: 1000
-    onTriggered: if (!root.opened) root.imagesActive = false
+    onTriggered: if (!root.opened)
+      root.imagesActive = false
   }
 
   // ----------------------------------------------------------------- actions
@@ -297,37 +347,45 @@ Panel {
     return false
   }
   function skipNext() {
-    if (!canGoNext) return false
+    if (!canGoNext)
+      return false
     player.next()
     return true
   }
   function skipPrevious() {
-    if (!canGoPrevious) return false
+    if (!canGoPrevious)
+      return false
     player.previous()
     return true
   }
   function seekTo(seconds) {
-    if (!canSeek) return false
+    if (!canSeek)
+      return false
     player.position = Math.max(0, Math.min(trackLength, seconds))
     return true
   }
-  function seekBy(seconds) { return seekTo(trackPosition + seconds) }
+  function seekBy(seconds) {
+    return seekTo(trackPosition + seconds)
+  }
   function setVolume(value) {
-    if (!volumeSupported) return false
+    if (!volumeSupported)
+      return false
     player.volume = Math.max(0, Math.min(1, value))
     return true
   }
-  function nudgeVolume(delta) { return volumeSupported && setVolume(player.volume + delta) }
+  function nudgeVolume(delta) {
+    return volumeSupported && setVolume(player.volume + delta)
+  }
   function toggleShuffle() {
-    if (!shuffleSupported) return false
+    if (!shuffleSupported)
+      return false
     player.shuffle = !player.shuffle
     return true
   }
   function cycleLoop() {
-    if (!loopSupported) return false
-    player.loopState = loopState === MprisLoopState.None ? MprisLoopState.Playlist
-      : loopState === MprisLoopState.Playlist ? MprisLoopState.Track
-      : MprisLoopState.None
+    if (!loopSupported)
+      return false
+    player.loopState = loopState === MprisLoopState.None ? MprisLoopState.Playlist : loopState === MprisLoopState.Playlist ? MprisLoopState.Track : MprisLoopState.None
     return true
   }
 
@@ -337,11 +395,13 @@ Panel {
   // Spotify keeps Omarchy's installer-aware launch path. True when it acted.
   function launch() {
     if (root.sourceKind === "youtube") {
-      if (!root.youtubeWindow) return false
+      if (!root.youtubeWindow)
+        return false
       root.youtubeWindow.activate()
       return true
     }
-    if (!bar) return false
+    if (!bar)
+      return false
     bar.run("omarchy launch spotify")
     return true
   }
@@ -377,17 +437,39 @@ Panel {
   FoamyIpc {
     target: "foamy.media"
     enabled: member.isLeader
-    function settings(): void { root.openSettings() }
-    function open(): void { root.open() }
-    function close(): void { root.close() }
-    function toggle(): void { root.toggle() }
-    function playPause(): string { return root.playPause() ? "ok" : "unhandled" }
-    function next(): string { return root.skipNext() ? "ok" : "unhandled" }
-    function previous(): string { return root.skipPrevious() ? "ok" : "unhandled" }
-    function shuffle(): string { return root.toggleShuffle() ? "ok" : "unhandled" }
-    function loop(): string { return root.cycleLoop() ? "ok" : "unhandled" }
-    function launch(): void { root.launch() }
-    function status(): string { return JSON.stringify(root.statusObject()) }
+    function settings(): void {
+      root.openSettings()
+    }
+    function open(): void {
+      root.open()
+    }
+    function close(): void {
+      root.close()
+    }
+    function toggle(): void {
+      root.toggle()
+    }
+    function playPause(): string {
+      return root.playPause() ? "ok" : "unhandled"
+    }
+    function next(): string {
+      return root.skipNext() ? "ok" : "unhandled"
+    }
+    function previous(): string {
+      return root.skipPrevious() ? "ok" : "unhandled"
+    }
+    function shuffle(): string {
+      return root.toggleShuffle() ? "ok" : "unhandled"
+    }
+    function loop(): string {
+      return root.cycleLoop() ? "ok" : "unhandled"
+    }
+    function launch(): void {
+      root.launch()
+    }
+    function status(): string {
+      return JSON.stringify(root.statusObject())
+    }
   }
 
   // MPRIS position is only re-read when something asks for it. One tick per
@@ -397,7 +479,8 @@ Panel {
     running: member.isLeader && root.playing && (member.demanded || (root.showProgress && !root.vertical))
     interval: member.demanded ? 500 : Model.progressTickInterval(root.trackLength, barContent.progressWidth)
     repeat: true
-    onTriggered: if (root.player) root.player.positionChanged()
+    onTriggered: if (root.player)
+      root.player.positionChanged()
   }
 
   // ---------------------------------------------------------------- bar entry
@@ -412,8 +495,7 @@ Panel {
     barSize: root.bar ? root.bar.barSize : Style.bar.sizeHorizontal
     fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
     glyph: root.sourceIcon
-    glyphColor: !root.live ? Qt.darker(root.barForeground, 1.9)
-      : root.playing ? root.accentColor : Qt.darker(root.accentColor, 1.5)
+    glyphColor: !root.live ? Qt.darker(root.barForeground, 1.9) : root.playing ? root.accentColor : Qt.darker(root.accentColor, 1.5)
     colorAnimation: !root.bar || root.bar.foregroundAnimationEnabled
     label: root.label
     labelColor: root.barForeground
@@ -435,13 +517,19 @@ Panel {
   // MouseArea of our own. Buttons the bar does not forward still reach the
   // MouseArea below, which routes them back to this function.
   function triggerPress(button) {
-    if (bar) bar.hideTooltip(root)
-    var name = button === Qt.LeftButton ? "left" : button === Qt.RightButton ? "right"
-      : button === Qt.MiddleButton ? "middle" : ""
+    if (bar)
+      bar.hideTooltip(root)
+    var name = button === Qt.LeftButton ? "left" : button === Qt.RightButton ? "right" : button === Qt.MiddleButton ? "middle" : ""
     var action = Schema.clickAction(name, root.leftClick)
-    if (action === "next") { if (live) skipNext(); return }
-    if (action === "panel") toggle()
-    else if (action === "playPause") playPause()
+    if (action === "next") {
+      if (live)
+        skipNext()
+      return
+    }
+    if (action === "panel")
+      toggle()
+    else if (action === "playPause")
+      playPause()
   }
 
   MouseArea {
@@ -473,13 +561,18 @@ Panel {
       pointer.gestureSkipped = false
     }
 
-    onClicked: function(mouse) { root.triggerPress(mouse.button) }
+    onClicked: function (mouse) {
+      root.triggerPress(mouse.button)
+    }
 
-    onWheel: function(wheel) {
-      if (!root.live || root.scrollAction === "Nothing") return
+    onWheel: function (wheel) {
+      if (!root.live || root.scrollAction === "Nothing")
+        return
       // Kinetic scrolling after the fingers lift is not a deliberate request.
-      if (wheel.phase === pointer.phaseMomentum) return
-      if (wheel.phase === pointer.phaseBegin) pointer.endGesture()
+      if (wheel.phase === pointer.phaseMomentum)
+        return
+      if (wheel.phase === pointer.phaseBegin)
+        pointer.endGesture()
       if (wheel.phase === pointer.phaseEnd) {
         pointer.endGesture()
         return
@@ -488,9 +581,7 @@ Panel {
       // A touchpad sets a scroll phase or reports pixel deltas; a mouse wheel
       // arrives as bare 120-unit steps. Some drivers report neither phase nor
       // pixels, so a sub-notch delta is treated as continuous scrolling too.
-      var continuous = wheel.phase !== pointer.phaseNone
-        || wheel.pixelDelta.y !== 0
-        || Math.abs(wheel.angleDelta.y) < pointer.notch
+      var continuous = wheel.phase !== pointer.phaseNone || wheel.pixelDelta.y !== 0 || Math.abs(wheel.angleDelta.y) < pointer.notch
 
       pointer.wheelAccumulator += wheel.angleDelta.y
       // The gesture is over once the events stop, which is the only end signal
@@ -510,26 +601,35 @@ Panel {
       }
 
       if (continuous) {
-        if (pointer.gestureSkipped || Math.abs(pointer.wheelAccumulator) < pointer.gestureThreshold) return
+        if (pointer.gestureSkipped || Math.abs(pointer.wheelAccumulator) < pointer.gestureThreshold)
+          return
         pointer.gestureSkipped = true
-        if (pointer.wheelAccumulator > 0) root.skipPrevious()
-        else root.skipNext()
+        if (pointer.wheelAccumulator > 0)
+          root.skipPrevious()
+        else
+          root.skipNext()
         return
       }
 
       // Discrete wheel: one skip per notch, rate limited so a fast spin does
       // not tear through the queue.
-      if (Math.abs(pointer.wheelAccumulator) < pointer.notch) return
+      if (Math.abs(pointer.wheelAccumulator) < pointer.notch)
+        return
       var up = pointer.wheelAccumulator > 0
       pointer.wheelAccumulator = 0
-      if (skipCooldown.running) return
+      if (skipCooldown.running)
+        return
       skipCooldown.restart()
-      if (up) root.skipPrevious()
-      else root.skipNext()
+      if (up)
+        root.skipPrevious()
+      else
+        root.skipNext()
     }
 
-    onEntered: if (root.bar) root.bar.showTooltip(root, root.tooltipText)
-    onExited: if (root.bar) root.bar.hideTooltip(root)
+    onEntered: if (root.bar)
+      root.bar.showTooltip(root, root.tooltipText)
+    onExited: if (root.bar)
+      root.bar.hideTooltip(root)
   }
 
   Timer {
@@ -562,7 +662,9 @@ Panel {
     owner: root
     open: root.opened
     body: Component {
-      MediaView { media: root }
+      MediaView {
+        media: root
+      }
     }
   }
 }

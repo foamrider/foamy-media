@@ -15,7 +15,7 @@ Item {
   property var previewStates: ["playing", "two-sources", "not-running", "settings", "settings-browser", "cursor-seek", "cursor-volume"]
   property string previewState: "playing"
   property int settleMs: 900
-  readonly property Item popup: popup
+  readonly property var popup: previewPopup
 
   QtObject {
     id: mock
@@ -61,34 +61,76 @@ Item {
     readonly property color spotifyGreen: "#1DB954"
     readonly property color youtubeRed: "#FF0033"
     readonly property color sourceBrandColor: youtube ? youtubeRed : spotifyGreen
-    readonly property var settings: ({ id: "foamy.media", youtubeAppId: "vivaldi-youtube.com__-Default" })
+    readonly property var settings: ({
+        id: "foamy.media",
+        youtubeAppId: "vivaldi-youtube.com__-Default"
+      })
     readonly property bool saving: false
     readonly property string settingsError: ""
     readonly property bool retryable: false
-    readonly property var browserCandidates: browserSettingsOpen ? [{
-      id: "vivaldi-youtube.com__-Default", title: "YouTube",
-      values: { youtubeAppId: "vivaldi-youtube.com__-Default", youtubeMprisName: "vivaldi" }
-    }, {
-      id: "chromium-youtube.com__-Profile_2", title: "YouTube – Work",
-      values: { youtubeAppId: "chromium-youtube.com__-Profile_2" }
-    }] : []
-    function playPause() {}
-    function skipNext() {}
-    function skipPrevious() {}
-    function seekTo(s) {}
-    function seekBy(s) {}
-    function setVolume(v) {}
-    function toggleShuffle() {}
-    function cycleLoop() {}
-    function selectSource(k) {}
-    function launch() {}
-    function openSettings() {}
-    function closeSettings() {}
-    function close() {}
-    function switchPanel(d) {}
-    function save(k, v) {}
-    function saveMany(v) {}
-    function retrySave() {}
+    // Omarchy's Chromium YouTube app first, marked as the hint (Panel puts
+    // it first when the hint applies).
+    readonly property var browserCandidates: browserSettingsOpen ? [
+      {
+        id: "chrome-youtube.com__-Default",
+        title: "YouTube – Omarchy",
+        hinted: true,
+        values: {
+          youtubeAppId: "chrome-youtube.com__-Default",
+          youtubeMprisName: "chromium"
+        }
+      },
+      {
+        id: "vivaldi-youtube.com__-Default",
+        title: "YouTube",
+        values: {
+          youtubeAppId: "vivaldi-youtube.com__-Default",
+          youtubeMprisName: "vivaldi"
+        }
+      },
+      {
+        id: "chromium-youtube.com__-Profile_2",
+        title: "YouTube – Work",
+        values: {
+          youtubeAppId: "chromium-youtube.com__-Profile_2"
+        },
+        missing: ["youtubeMprisName"]
+      }
+    ] : []
+    function playPause() {
+    }
+    function skipNext() {
+    }
+    function skipPrevious() {
+    }
+    function seekTo(s) {
+    }
+    function seekBy(s) {
+    }
+    function setVolume(v) {
+    }
+    function toggleShuffle() {
+    }
+    function cycleLoop() {
+    }
+    function selectSource(k) {
+    }
+    function launch() {
+    }
+    function openSettings() {
+    }
+    function closeSettings() {
+    }
+    function close() {
+    }
+    function switchPanel(d) {
+    }
+    function save(k, v) {
+    }
+    function saveMany(v) {
+    }
+    function retrySave() {
+    }
   }
 
   // The bar widget on the strip, covering the harness anchor icon.
@@ -162,38 +204,61 @@ Item {
     parent: preview.anchorItem.parent
     x: barWidget.x
     y: barWidget.y
-    width: popup.contentWidth
+    width: preview.popup.contentWidth
     height: barWidget.height
   }
 
   // Scroll the settings page to the browser picker for that shot; put the
   // panel cursor on a slider for the cursor-* shots.
   onPreviewStateChanged: {
-    if (previewState === "settings-browser") scrollToBrowser.start()
-    if (previewState.indexOf("cursor-") === 0) placeCursor.start()
+    if (previewState === "settings-browser")
+      scrollToBrowser.start()
+    if (previewState.indexOf("cursor-") === 0)
+      placeCursor.start()
   }
   Timer {
     id: placeCursor
     interval: 300
-    onTriggered: if (popup.bodyItem) popup.bodyItem.place(preview.previewState.slice(7))
+    onTriggered: if (preview.popup.bodyItem)
+      preview.popup.bodyItem.place(preview.previewState.slice(7))
   }
   Timer {
     id: scrollToBrowser
     interval: 300
     onTriggered: {
-      var view = popup.bodyItem
-      if (view && view.settingsPage && view.settingsPage.browserSection)
+      var view = preview.popup.bodyItem
+      if (view && view.settingsPage && view.settingsPage.browserSection) {
+        // Open the window list, so the shot shows its rows.
+        var header = preview.findNamed(view.settingsPage, "browserPickerHeader")
+        if (header)
+          header.parent.expanded = true
         view.settingsPage.keepVisible(view.settingsPage.browserSection)
+      }
     }
+  }
+  function findNamed(item, name) {
+    if (!item)
+      return null
+    if (item.objectName === name)
+      return item
+    var kids = item.children || []
+    for (var i = 0; i < kids.length; i++) {
+      var hit = findNamed(kids[i], name)
+      if (hit)
+        return hit
+    }
+    return null
   }
 
   FoamyPopup {
-    id: popup
+    id: previewPopup
     anchorItem: popupLeftAnchor
     bar: preview.bar
     open: true
     body: Component {
-      Media.MediaView { media: mock }
+      Media.MediaView {
+        media: mock
+      }
     }
   }
 }

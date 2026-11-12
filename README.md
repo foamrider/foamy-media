@@ -57,9 +57,14 @@ Hovering moves the same cursor.
 
 For YouTube, start the web app yourself (for example with Omarchy's web-app
 launcher), then open **Settings → YouTube → Browser settings → Use an open
-window** and pick it (start a video first if it is not listed). That sets
-the window app ID the plugin focuses and the MPRIS name it controls;
-ordinary browser tabs are never treated as the web app. The plugin only
+window** and pick it. That sets the window app ID the plugin focuses and,
+when exactly one MPRIS player of that browser is running (start a video
+first), the MPRIS name it controls; otherwise set the MPRIS name under
+**Advanced**. While no app ID is set and no Vivaldi YouTube window (the
+default) is open, the list puts the window Omarchy names its YouTube web app
+first, marked "Omarchy's YouTube app" (the class comes from
+`omarchy-webapp-window-class`, asked when the list opens). The defaults stay
+Vivaldi's. Ordinary browser tabs are never treated as the web app. The plugin only
 controls and focuses that window: it never starts the browser, and without
 the window the YouTube tab is gone.
 
@@ -75,8 +80,9 @@ BMP or WebP, and ImageMagick is told which), drops a PNG's text chunks
 decodes it with ImageMagick under resource limits and a deadline, with no
 shell in between, and writes a re-encoded PNG of at most 640 pixels a side to
 `$XDG_CACHE_HOME/foamy-media/covers` (mode 0700, named by the cover's
-content, so a player that reuses one file path for every track still gets the
-new cover; the newest eight are kept). The popup only ever loads that copy. Remote covers
+content; the newest eight are kept). The popup only ever loads that copy. A
+cover is read once per art URL: a player that writes every track's cover to
+the same file path keeps showing the first one until the URL changes. Remote covers
 wait for the network to settle and are retried up to three times. A cover
 that cannot be fetched or read is never replaced by the previous track's
 cover: the popup shows the source icon until the new one arrives.
@@ -223,14 +229,13 @@ kit/native/build-native.sh . --verify  # clean rebuild, byte-identical
 ```
 
 ```sh
-node tests/model-test.js && node tests/network-test.js && node tests/preferences-test.js
-node tests/browser-setup-test.js && node tests/i18n.test.cjs
-sh tests/probe-test.sh                 # the built helper on real fixtures; needs ImageMagick
-python3 -I tests/test_clipboard.py
-python3 tests/i18n-runtime.py          # the installed 4.5 shell; OMARCHY_PATH picks another tree
-bash tests/kit-check.sh
-python3 -I tests/runtime.py            # offscreen on the installed 4.5 shell (4.0 only with FOAMY_HOST_40); needs foamy-kit (FOAMY_KIT)
-python3 -I tests/tooltip-runtime.py    # hover tooltip with hostile track metadata on the installed 4.5 shell; needs FOAMY_KIT, PyGObject, dbus-daemon
+mise install                           # once: the pinned linters and node (mise.toml)
+tests/validate.sh                      # kit check, linters, formatters, helper tests, then tests/suite.sh
+tests/validate.sh --ci                 # what CI runs: no Quickshell or Omarchy host
+bash tests/suite.sh [--ci] [--fast]    # the tests alone: node, the helper on fixtures (both arches with
+                                       # qemu binfmt; needs ImageMagick), the clipboard tests (the kit's
+                                       # stand-ins), and the offscreen runtime tests on the installed 4.5
+                                       # shell; both need foamy-kit (FOAMY_KIT)
 ```
 
 Shared components live in `kit/`, copied from

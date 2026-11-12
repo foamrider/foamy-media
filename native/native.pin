@@ -5,7 +5,7 @@
 crate native
 binary foamy-media-helper
 toolchain 1.99.1
-kit 0.8.0
-source 5cbd9aa0d8317dcbd02b5e767ee4231162c30b79db74115a46dae824355152c9
-6d4b9617dfb092f5c8750c15397ccce8f8fd393ab261212861853aced2f42380  bin/aarch64/foamy-media-helper
-718100ccd0c7336abc36f9cd8104ecde9fcaee176e1915f718721639d62e53ff  bin/x86_64/foamy-media-helper
+kit 0.9.0
+source 9c506c102e6982b94e7dd09b512bab151e9a64ae70d99e87a93fefffcbdbf1b0
+4ccc22187b66baa7f7c22093a8be66b2c4179543d779060b99669f5cdf0577cd  bin/aarch64/foamy-media-helper
+c7b49f7ad2ce21a5e769e331aa20e4b7cd62015c98348ca69d56593e23e5bb27  bin/x86_64/foamy-media-helper

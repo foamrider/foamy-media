@@ -24,9 +24,11 @@ if ! command -v node >/dev/null 2>&1; then
   exit 0
 fi
 
-helper="$PWD/bin/$(uname -m)/foamy-media-helper"
+# FOAMY_MEDIA_ARCH=aarch64 runs the other build (through binfmt and qemu).
+arch=${FOAMY_MEDIA_ARCH:-$(uname -m)}
+helper="$PWD/bin/$arch/foamy-media-helper"
 if [ ! -x "$helper" ]; then
-  echo "skip — no helper for $(uname -m) (build it with kit/native/build-native.sh .)"
+  echo "skip — no helper for $arch (build it with kit/native/build-native.sh .)"
   exit 0
 fi
 work=$(mktemp -d)
@@ -73,18 +75,18 @@ expect_ok "$work/cover.jpg" "a JPEG cover"
 
 # Formats that reach an ImageMagick delegate or coder rather than a raster
 # decoder. The magic-byte check is what keeps these out.
-printf 'not an image at all\n' > "$work/text.txt"
+printf 'not an image at all\n' >"$work/text.txt"
 expect_refused "$work/text.txt" "a plain text file"
 
-printf '%s' '<svg xmlns="http://www.w3.org/2000/svg"><image href="/etc/passwd"/></svg>' > "$work/evil.svg"
+printf '%s' '<svg xmlns="http://www.w3.org/2000/svg"><image href="/etc/passwd"/></svg>' >"$work/evil.svg"
 expect_refused "$work/evil.svg" "an SVG referencing a local file"
 
-printf '%s' 'push graphic-context image over 0,0 0,0 "msl:/etc/passwd" pop graphic-context' > "$work/evil.mvg"
+printf '%s' 'push graphic-context image over 0,0 0,0 "msl:/etc/passwd" pop graphic-context' >"$work/evil.mvg"
 expect_refused "$work/evil.mvg" "an MVG vector script"
 
 # Past the byte bound, with a JPEG signature so only the size can catch it.
-printf '\377\330\377' > "$work/big.jpg"
-head -c 9000000 /dev/zero >> "$work/big.jpg"
+printf '\377\330\377' >"$work/big.jpg"
+head -c 9000000 /dev/zero >>"$work/big.jpg"
 expect_refused "$work/big.jpg" "a 9MB file past the size bound"
 
 # 410KB on disk, 144 megapixels decoded — roughly 430MB of pixels if nothing
@@ -104,7 +106,10 @@ expect_refused /dev/zero "a device in place of a cover"
 reply=$("$helper" art-probe "$work/text.txt" || :)
 case "$reply" in
   '{"code":"UNSUPPORTED_FORMAT",'*'"ok":false}') echo "ok       a refusal is a JSON reply ($reply)" ;;
-  *) echo "FAIL     a refusal printed '$reply'"; failures=$((failures + 1)) ;;
+  *)
+    echo "FAIL     a refusal printed '$reply'"
+    failures=$((failures + 1))
+    ;;
 esac
 
 # 100KB on disk, a valid 1x1 image, and 96MiB of zTXt text that libpng would
@@ -182,15 +187,18 @@ else
   kind=$(od -An -v -tx1 -N8 "$art" | tr -d " \n")
   case "$kind" in
     89504e470d0a1a0a*) echo "ok       the written cover is a PNG" ;;
-    *) echo "FAIL     the written cover is not a PNG"; failures=$((failures + 1)) ;;
+    *)
+      echo "FAIL     the written cover is not a PNG"
+      failures=$((failures + 1))
+      ;;
   esac
 
-  edge=$(magick identify -format '%w %h' "$art")
-  set -- $edge
-  if [ "$1" -le 640 ] && [ "$2" -le 640 ]; then
-    echo "ok       3000x2000 was capped to ${1}x${2}"
+  width=$(magick identify -format '%w' "$art")
+  height=$(magick identify -format '%h' "$art")
+  if [ "$width" -le 640 ] && [ "$height" -le 640 ]; then
+    echo "ok       3000x2000 was capped to ${width}x${height}"
   else
-    echo "FAIL     the written cover is ${1}x${2}, past the 640 cap"
+    echo "FAIL     the written cover is ${width}x${height}, past the 640 cap"
     failures=$((failures + 1))
   fi
 fi

@@ -36,10 +36,14 @@ Slider {
     when: !root.pressed
     restoreMode: Binding.RestoreNone
   }
-  onPressedChanged: if (!pressed) committed(value)
-  onMoved: if (!pressed) committed(value)
+  onPressedChanged: if (!pressed)
+    committed(value)
+  onMoved: if (!pressed)
+    committed(value)
 
-  HoverHandler { cursorShape: root.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor }
+  HoverHandler {
+    cursorShape: root.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+  }
 
   background: Rectangle {
     x: root.leftPadding
@@ -48,7 +52,11 @@ Slider {
     height: Commons.Style.space(4)
     radius: height / 2
     color: Qt.alpha(Commons.Color.popups.text, root.hasCursor ? 0.28 : 0.18)
-    Behavior on color { ColorAnimation { duration: FoamyMotion.hover } }
+    Behavior on color {
+      ColorAnimation {
+        duration: FoamyMotion.hover
+      }
+    }
     Rectangle {
       x: root.mirrored ? parent.width - width : 0
       width: root.position * parent.width
@@ -75,7 +83,11 @@ Slider {
       border.color: Commons.Color.accent
       opacity: root.hasCursor ? 1 : 0
       visible: opacity > 0
-      Behavior on opacity { NumberAnimation { duration: FoamyMotion.hover } }
+      Behavior on opacity {
+        NumberAnimation {
+          duration: FoamyMotion.hover
+        }
+      }
     }
   }
 }

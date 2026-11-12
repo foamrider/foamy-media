@@ -33,6 +33,47 @@ const chrome=B.suggestion({appId:'chrome-youtube.com__-Default',title:'YouTube'}
   [{dbusName:'org.mpris.MediaPlayer2.chrome.instance1',desktopEntry:'google-chrome'}])
 assert.deepEqual(chrome.values,{youtubeAppId:'chrome-youtube.com__-Default',youtubeMprisName:'chrome'})
 assert.equal(B.suggestion(window,[{dbusName:'org.mpris.MediaPlayer2.vivaldievil'}]).values.youtubeMprisName,undefined)
+// Chromium (Omarchy's default browser) names a web-app window like Chrome
+// does ("chrome-…", omarchy-webapp-window-class) but plays as "chromium".
+const chromiumWindow = {appId:'chrome-youtube.com__-Default', title:'YouTube'}
+const chromium = B.suggestion(chromiumWindow, [{dbusName:'org.mpris.MediaPlayer2.chromium.instance4242'}])
+assert.deepEqual(chromium.values, {youtubeAppId:'chrome-youtube.com__-Default', youtubeMprisName:'chromium'})
+assert.deepEqual(chromium.missing, [])
+// Chrome and Chromium playing at once: either could own the window, so no guess.
+const both = B.suggestion(chromiumWindow, [{dbusName:'org.mpris.MediaPlayer2.chromium.instance1'},
+  {dbusName:'org.mpris.MediaPlayer2.chrome.instance2'}])
+assert.equal(both.values.youtubeMprisName, undefined)
+assert.deepEqual(both.missing, ['youtubeMprisName'])
+// The widening is chrome's alone: a chromium-named window does not take a Chrome player.
+assert.equal(B.suggestion({appId:'chromium-youtube.com__-Default', title:'YouTube'},
+  [{dbusName:'org.mpris.MediaPlayer2.chrome.instance1'}]).values.youtubeMprisName, undefined)
+// Omarchy's hint: what omarchy-webapp-window-class printed counts only as one
+// line naming a Chromium YouTube web app; junk, failure output and other
+// browsers give no hint.
+assert.equal(B.omarchyAppId('chrome-youtube.com__-Default\n'), 'chrome-youtube.com__-Default')
+assert.equal(B.omarchyAppId('chrome-youtube.com__-Default'), 'chrome-youtube.com__-Default')
+for (const junk of ['', '\n', 'chrome-youtube.com__-Default\nsecond line\n', 'vivaldi-youtube.com__-Default\n',
+  'chrome-music.youtube.com__-Default\n', 'chrome-youtube.com__-' + 'x'.repeat(200), 'x'.repeat(512),
+  'Usage: omarchy-webapp-window-class <url>\n', 'chrome-youtube.com__-De\u0000fault', undefined, null])
+  assert.equal(B.omarchyAppId(junk), '', JSON.stringify(junk))
+// The hinted window comes first and is marked; nothing is marked without a hint.
+const hintWindows = [{appId:'vivaldi-youtube.com__-Default', title:'A - YouTube'},
+  {appId:'chrome-youtube.com__-Default', title:'B - YouTube'}]
+const hintPlayers = [{dbusName:'org.mpris.MediaPlayer2.chromium.instance9'}]
+const hinted = B.candidates(hintWindows, hintPlayers, 'chrome-youtube.com__-Default')
+assert.deepEqual(hinted.map(r => [r.id, r.hinted]), [['chrome-youtube.com__-Default', true], ['vivaldi-youtube.com__-Default', false]])
+assert.deepEqual(hinted[0].values, {youtubeAppId:'chrome-youtube.com__-Default', youtubeMprisName:'chromium'})
+for (const hint of [undefined, '', 'chrome-youtube.com__-Profile_1']) {
+  const rows = B.candidates(hintWindows, hintPlayers, hint)
+  assert.deepEqual(rows.map(r => [r.id, r.hinted]), [['vivaldi-youtube.com__-Default', false], ['chrome-youtube.com__-Default', false]], String(hint))
+}
+// The defaults stay Vivaldi's: the hint never changes them.
+const manifestDefaults = require('../manifest.json').barWidget.defaults
+assert.equal(manifestDefaults.youtubeAppId, 'vivaldi-youtube.com__-Default')
+assert.equal(manifestDefaults.youtubeMprisName, 'vivaldi')
+assert.equal(Prefs.value(P.schema, {}, 'youtubeAppId'), 'vivaldi-youtube.com__-Default')
+assert.equal(Prefs.value(P.schema, {}, 'youtubeMprisName'), 'vivaldi')
+
 // BrowserPicker's summary reads the app ID through the schema: unset or
 // invalid is the default app, the one the widget actually uses. The profile
 // comes from the app ID (Chromium's Profile_N shown as its directory name).

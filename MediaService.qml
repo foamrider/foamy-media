@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell.Io
 import Quickshell.Networking
 import "Model.js" as Model
+import "BrowserSetup.js" as BrowserSetup
 import "kit/FoamyNative.js" as FoamyNative
 
 // State shared by every media bar instance (4.5 draws one bar per monitor).
@@ -59,17 +60,18 @@ QtObject {
 
   function request(url) {
     var next = String(url || "")
-    if (next === artUrl) return
+    if (next === artUrl)
+      return
     artUrl = next
     artRetry.stop()
     artRetries = 0
     artSettling = artFile !== "" && next !== ""
-    if (artSettling) settleCap.restart()
+    if (artSettling)
+      settleCap.restart()
     artProbeDelay.restart()
   }
 
-  readonly property bool networkConnected: Networking.connectivity === NetworkConnectivity.Full
-    || Networking.connectivity === NetworkConnectivity.Limited
+  readonly property bool networkConnected: Networking.connectivity === NetworkConnectivity.Full || Networking.connectivity === NetworkConnectivity.Limited
   property bool networkSettled: false
   readonly property bool networkReady: networkConnected && networkSettled
   readonly property bool remoteArt: /^https?:\/\//i.test(artUrl)
@@ -77,7 +79,8 @@ QtObject {
   onNetworkReadyChanged: {
     artRetry.stop()
     artRetries = 0
-    if (networkReady && remoteArt) artProbeDelay.restart()
+    if (networkReady && remoteArt)
+      artProbeDelay.restart()
   }
 
   function probeArt(force) {
@@ -86,16 +89,19 @@ QtObject {
       root.forgetArt()
       return
     }
-    if (!force && root.artProbed === root.artUrl) return
+    if (!force && root.artProbed === root.artUrl)
+      return
     if (remoteArt && !networkReady) {
-      if (root.artProbed !== root.artUrl) root.forgetArt()
+      if (root.artProbed !== root.artUrl)
+        root.forgetArt()
       return
     }
     artRetry.stop()
 
     // Wait for the cancelled process to exit before assigning a new request URL.
     if (artProbe.running) {
-      if (artProbe.pending === root.artUrl) return
+      if (artProbe.pending === root.artUrl)
+        return
       artProbe.running = false
       artProbeDelay.restart()
       return
@@ -103,10 +109,10 @@ QtObject {
     artProbe.pending = root.artUrl
     artProbe.failure = ""
     artProbe.exitSeen = false
-    // The helper bounds every step itself (8 s fetch, 15 s per decode); the
-    // outer timeout only catches a helper that somehow hangs.
-    artProbe.command = ["timeout", "--kill-after=2s", "60s"].concat(
-      FoamyNative.command(root.pluginDir, "foamy-media-helper", Model.artProbeArgs(target)))
+    // The helper bounds every step itself (8 s fetch, 15 s per decode) and
+    // the whole run to 55 s, so it replies before this timeout, which only
+    // catches a helper that somehow hangs (native/src/main.rs, "Deadline").
+    artProbe.command = ["timeout", "--kill-after=2s", "60s"].concat(FoamyNative.command(root.pluginDir, "foamy-media-helper", Model.artProbeArgs(target)))
     artProbe.running = true
   }
 
@@ -121,8 +127,8 @@ QtObject {
   function applyArtProbe(url, text) {
     // A probe that finished after the track already moved on describes the
     // wrong cover, so drop it and let the newer one land.
-    if (url !== root.artUrl) return
-
+    if (url !== root.artUrl)
+      return
     root.artProbe.failure = Model.artProbeFailure(text)
     var probe = Model.parseArtProbe(text)
     // Unreadable output means this track has no usable cover: never keep the
@@ -144,7 +150,62 @@ QtObject {
   // A failed attempt (fetch, size, format or decode) means the current track
   // has no cover right now: drop the previous one while any retry runs.
   function finishAttempt(url, exitCode) {
-    if (url === root.artUrl && exitCode !== 0 && root.artProbed !== url) root.forgetArt()
+    if (url === root.artUrl && exitCode !== 0 && root.artProbed !== url)
+      root.forgetArt()
+  }
+
+  // ------------------------------------------- Omarchy's YouTube app
+  // The class Chromium gives Omarchy's YouTube web app, as
+  // omarchy-webapp-window-class prints it, for the window picker's hint
+  // (Panel.youtubeAppIdHint). A finite job: asked each time a picker opens,
+  // never polled, one shell-wide answer for every bar.
+  property string omarchyYoutubeAppId: ""
+  // Answers so far, one per request whatever the outcome (tests wait on it).
+  property int youtubeAppIdHintAnswers: 0
+  // The probe's request state (on the root, where qmllint can type it):
+  // whether its exit was seen, whether this request is answered, and which
+  // request a deferred answer belongs to, so a late one never lands on the
+  // next request.
+  property bool probeExitSeen: false
+  property bool probeAnswered: true
+  property int probeGeneration: 0
+  function requestYoutubeAppIdHint() {
+    if (windowClassProbe.running)
+      return
+    root.probeExitSeen = false
+    root.probeAnswered = false
+    root.probeGeneration++
+    windowClassProbe.running = true
+  }
+  // The one completion path: an exit (any code) or a failed start. Only a
+  // single line naming a Chromium YouTube web app counts (BrowserSetup).
+  function finishYoutubeAppIdHint(text, generation) {
+    if (root.probeAnswered || generation !== root.probeGeneration)
+      return
+    root.probeAnswered = true
+    root.omarchyYoutubeAppId = BrowserSetup.omarchyAppId(text)
+    root.youtubeAppIdHintAnswers++
+  }
+
+  property Process windowClassProbe: Process {
+    // A fixed script with no outside values: the command gets 3 s (then
+    // SIGKILL), and at most 512 bytes of its output are read.
+    command: ["bash", "-c", "set -o pipefail; timeout --kill-after=1s 3s omarchy-webapp-window-class https://youtube.com/ | head -c 512"]
+    stdout: StdioCollector {
+      id: windowClassOutput
+      waitForEnd: true
+    }
+    // A command that can't start ends with running false and no exited().
+    onRunningChanged: if (!running && !root.probeExitSeen)
+      root.finishYoutubeAppIdHint("", root.probeGeneration)
+    onExited: function (exitCode) {
+      root.probeExitSeen = true
+      var request = root.probeGeneration
+      // Let the collector finish before reading it.
+      Qt.callLater(function () {
+        root.finishYoutubeAppIdHint(exitCode === 0 ? windowClassOutput.text : "", request)
+      })
+    }
   }
 
   property Timer networkSettle: Timer {
@@ -188,22 +249,22 @@ QtObject {
       console.warn("foamy-media: the art probe could not start")
       root.finishAttempt(pending, -1)
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       var url = pending
       if (FoamyNative.unavailable(exitCode)) {
-        if (!root.artHelperUnavailable) console.warn("foamy-media: " + FoamyNative.UNAVAILABLE_TEXT + " (exit " + exitCode + ")")
+        if (!root.artHelperUnavailable)
+          console.warn("foamy-media: " + FoamyNative.UNAVAILABLE_TEXT + " (exit " + exitCode + ")")
         root.artHelperUnavailable = true
         root.forgetArt()
         return
       }
       // Let the stdout collector apply a successful result before deciding.
-      Qt.callLater(function() {
+      Qt.callLater(function () {
         root.finishAttempt(url, exitCode)
         // A CPU without the instructions HTTPS needs won't gain them on a retry.
-        if (url !== root.artUrl || root.artProbed === root.artUrl
-            || root.artProbe.failure === "TLS_UNSUPPORTED"
-            || !root.remoteArt || !root.networkReady || root.artRetries >= 3) return
+        if (url !== root.artUrl || root.artProbed === root.artUrl || root.artProbe.failure === "TLS_UNSUPPORTED" || !root.remoteArt || !root.networkReady || root.artRetries >= 3)
+          return
         root.artRetry.interval = 2500 * Math.pow(2, root.artRetries++)
         root.artRetry.restart()
       })
