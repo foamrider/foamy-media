@@ -114,6 +114,12 @@ Panel {
 
   // ------------------------------------------------------------------ player
   readonly property var players: Mpris.players ? Mpris.players.values : []
+  // Bumped on every ToplevelManager.toplevels change and read by
+  // youtubeWindow, so the YouTube window is matched again when a window opens
+  // or closes. The binding also reads `values`, which notifies on its own
+  // (UntypedObjectModel), so this is likely redundant; it stays until a
+  // compositor test can show that the binding follows a real window without
+  // it (no offscreen test can open a toplevel).
   property int toplevelGeneration: 0
   readonly property string selectedSource: MediaService.selectedSource
 
