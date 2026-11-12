@@ -12,6 +12,7 @@ fed the raw markup does open its own probe image.
 
 FOAMY_KIT (default ~/GitHub/Personal/foamy-kit) provides the harness;
 FOAMY_HOST_45 picks another 4.5 shell. Needs PyGObject and dbus-daemon."""
+
 import ctypes
 import json
 import os
@@ -40,8 +41,13 @@ IN_OPEN = 0x20
 def png():
     def chunk(kind, data):
         return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
-    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00\xff")) + chunk(b"IEND", b""))
+
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00\xff"))
+        + chunk(b"IEND", b"")
+    )
 
 
 def host_tooltip(host):
@@ -57,14 +63,16 @@ def host_tooltip(host):
         depth += {"{": 1, "}": -1}.get(source[end], 0)
         if depth == 0 and source[end] == "}":
             break
-    block = source[start:end + 1]
+    block = source[start : end + 1]
     if "text: root.tooltipText" not in block:
         raise SystemExit("FAIL: the host tooltip Text no longer reads root.tooltipText")
     fmt = next((line.strip() for line in block.splitlines() if "textFormat" in line), "textFormat unset (AutoText)")
-    qml = ("import QtQuick\nimport qs.Commons\nimport qs.Commons as Commons\nimport qs.Ui\n\n"
-           "Item {\n  id: root\n  property string tooltipText: \"\"\n  property string fontFamily: \"\"\n"
-           "  readonly property alias label: tooltipLabel\n  width: tooltipLabel.implicitWidth\n"
-           "  height: tooltipLabel.implicitHeight\n\n  " + block + "\n}\n")
+    qml = (
+        "import QtQuick\nimport qs.Commons\nimport qs.Commons as Commons\nimport qs.Ui\n\n"
+        'Item {\n  id: root\n  property string tooltipText: ""\n  property string fontFamily: ""\n'
+        "  readonly property alias label: tooltipLabel\n  width: tooltipLabel.implicitWidth\n"
+        "  height: tooltipLabel.implicitHeight\n\n  " + block + "\n}\n"
+    )
     return qml, fmt
 
 
@@ -85,7 +93,7 @@ class Inotify:
             offset = 0
             while offset < len(data):
                 _, mask, _, size = struct.unpack_from("iIII", data, offset)
-                name = data[offset + 16:offset + 16 + size].rstrip(b"\0").decode()
+                name = data[offset + 16 : offset + 16 + size].rstrip(b"\0").decode()
                 if mask & IN_OPEN and name:
                     names.append(name)
                 offset += 16 + size
@@ -111,7 +119,7 @@ def cases(probe):
 
     def bounded(text, limit):
         text = text.replace("\n", " ")
-        return text if len(text) <= limit else text[:limit - 1] + "\u2026"
+        return text if len(text) <= limit else text[: limit - 1] + "\u2026"
 
     out = []
     for title, artist, status, rich in rows:
@@ -126,8 +134,9 @@ def main():
     qml, fmt = host_tooltip(os.environ["FOAMY_HOST_45"])
     print(f"host tooltip Text: {fmt}")
     shell = (PLUGIN / "tests/qml/Tooltip.qml").read_text()
-    r = harness.Run("4.5", shell, plugin=PLUGIN, language="en", prefix="foamy-media-tooltip-",
-                    extra={"HostTooltip.qml": qml})
+    r = harness.Run(
+        "4.5", shell, plugin=PLUGIN, language="en", prefix="foamy-media-tooltip-", extra={"HostTooltip.qml": qml}
+    )
     probe = r.base / "probe"
     probe.mkdir()
     for name in ("tooltip-probe.png", "control-probe.png"):
@@ -141,8 +150,12 @@ def main():
     try:
         r.start()
         r.wait_for_log("FOAMY WAITING FOR PLAYER", 60)
-        fake = subprocess.Popen([sys.executable, "-I", str(PLUGIN / "tests/fake-mpris.py"), str(r.base / "tracks.json")],
-                                env=r.env, stdout=(r.base / "fake.log").open("w"), stderr=subprocess.STDOUT)
+        fake = subprocess.Popen(
+            [sys.executable, "-I", str(PLUGIN / "tests/fake-mpris.py"), str(r.base / "tracks.json")],
+            env=r.env,
+            stdout=(r.base / "fake.log").open("w"),
+            stderr=subprocess.STDOUT,
+        )
         r.wait(180)
     finally:
         if fake and fake.poll() is None:
@@ -151,12 +164,16 @@ def main():
         r.stop()
     opened = watch.opened()
     log = r.log
-    result = next((line.split("FOAMY RESULT ", 1)[1] for line in log.splitlines() if "FOAMY RESULT" in line), "no result")
+    result = next(
+        (line.split("FOAMY RESULT ", 1)[1] for line in log.splitlines() if "FOAMY RESULT" in line), "no result"
+    )
     failures = r.failures()
     if "tooltip-probe.png" in opened:
         failures.append("FOAMY FAIL an <img> in track metadata made Qt open tooltip-probe.png")
     if "control-probe.png" not in opened:
-        failures.append("FOAMY FAIL control: raw <img> markup in an AutoText Text did not open its probe; the image check proves nothing")
+        failures.append(
+            "FOAMY FAIL control: raw <img> markup in an AutoText Text did not open its probe; the image check proves nothing"
+        )
     failures += ["FOAMY FAIL Qt tried to load an image: " + line for line in log.splitlines() if "Cannot open" in line]
     ok = "FOAMY DONE" in log and not failures
     print(f"{'PASS' if ok else 'FAIL'} tooltip 4.5: {result}; files opened in the probe dir: {sorted(set(opened))}")

@@ -7,6 +7,7 @@ Hyprland, a private session bus (so no live MPRIS player). Checks tests/qml/Runt
 FOAMY_KIT (default ~/GitHub/Personal/foamy-kit) provides the harness.
 The host is Omarchy 4.5: FOAMY_HOST_45, else $OMARCHY_TEST_ROOT/shell, else
 the installed /usr/share/omarchy/shell."""
+
 import json
 import os
 from pathlib import Path
@@ -34,8 +35,13 @@ def ipc_status(run):
     ids = harness.wait_for(lambda: [p.name for p in by_id.iterdir()] if by_id.is_dir() else None, 10)
     if not ids:
         return None
-    result = subprocess.run(["qs", "ipc", "-i", ids[0], "call", "foamy.media", "status"], env=run.env,
-                            capture_output=True, text=True, timeout=30)
+    result = subprocess.run(
+        ["qs", "ipc", "-i", ids[0], "call", "foamy.media", "status"],
+        env=run.env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
     return result.stdout.strip() if result.returncode == 0 else None
 
 
@@ -51,7 +57,9 @@ def run(host, lang):
     finally:
         r.stop()
     log = r.log
-    result = next((line.split("FOAMY RESULT ", 1)[1] for line in log.splitlines() if "FOAMY RESULT" in line), "no result")
+    result = next(
+        (line.split("FOAMY RESULT ", 1)[1] for line in log.splitlines() if "FOAMY RESULT" in line), "no result"
+    )
     failures = r.failures() + [f"FOAMY FAIL host command: {line}" for line in r.host_commands()]
     try:
         leader = status is not None and json.loads(status).get("leader") is True
