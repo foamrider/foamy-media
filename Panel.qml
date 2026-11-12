@@ -159,10 +159,12 @@ Panel {
   readonly property string artUrl: live ? String(player.trackArtUrl || "") : ""
   readonly property string label: Model.barLabel(player, showArtist)
   // What hovering hands the host's tooltip: bounded, and literal whatever the
-  // host's Text makes of markup (Model.tooltipLabel).
+  // host's Text makes of markup (Model.tooltipLabel). Without a player it
+  // says what the popup says: an open source (the YouTube window with no
+  // matching player) has nothing playing, a closed one is not running.
   readonly property string tooltipText: live
     ? Model.tooltipLabel(player, playing ? "" : FoamyI18n.t("Paused") + " — ")
-    : Model.literalTooltip(FoamyI18n.t("%1 is not running", sourceName))
+    : Model.literalTooltip(sourceOpen ? FoamyI18n.t("Nothing playing") : FoamyI18n.t("%1 is not running", sourceName))
 
   readonly property real trackLength: live && player.lengthSupported ? Math.max(0, player.length) : 0
   // Quickshell extrapolates position between polls, so it can overshoot the

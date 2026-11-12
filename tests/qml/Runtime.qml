@@ -532,6 +532,10 @@ ShellRoot {
       eq(first.youtubeOpen, true, "the YouTube window is matched by its app ID")
       first.selectSource("youtube")
       eq(first.sourceKind, "youtube", "YouTube selected")
+      // The window is open but no player matches it: the hover text agrees
+      // with the popup's "Nothing playing".
+      eq(first.live, false, "no YouTube player")
+      eq(first.tooltipText, FoamyI18n.t("Nothing playing"), "tooltip for an open source with no player")
       eq(first.launch(), true, "launch() acts on an open YouTube window")
       eq(fakeYoutubeWindow.activations, 1, "launch() focuses the YouTube window")
       eq(first.playPause(), false, "play/pause without a YouTube player is not a transport call")
@@ -540,6 +544,7 @@ ShellRoot {
       // stays selected with nothing to focus.
       first.toplevelModel = { values: [] }
       eq(first.youtubeOpen, false, "the YouTube window is gone")
+      eq(first.tooltipText, FoamyI18n.t("%1 is not running", "YouTube"), "tooltip once the window is gone")
       eq(first.sourceKind, "youtube", "still selected this frame")
       eq(first.launch(), false, "launch() without the YouTube window does nothing")
       eq(first.playPause(), false, "nor does play/pause")
