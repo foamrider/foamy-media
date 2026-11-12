@@ -59,7 +59,9 @@ Item {
 
       Behavior on color {
         enabled: root.colorAnimation
-        ColorAnimation { duration: FoamyMotion.press }
+        ColorAnimation {
+          duration: FoamyMotion.press
+        }
       }
     }
 
@@ -99,7 +101,7 @@ Item {
         width: root.panning ? labelMetrics.naturalWidth : labelClip.width
         elide: root.panning ? Text.ElideNone : Text.ElideRight
         // Text direction determines which end contains the beginning of the title.
-        readonly property real panX: horizontalAlignment === Text.AlignRight ? panOffset-overflow : -panOffset
+        readonly property real panX: horizontalAlignment === Text.AlignRight ? panOffset - overflow : -panOffset
         x: root.panning ? panX : 0
 
         property real panOffset: 0
@@ -107,18 +109,21 @@ Item {
 
         onTextChanged: {
           panOffset = 0
-          if (marquee.running) marquee.restart()
+          if (marquee.running)
+            marquee.restart()
         }
       }
 
       SequentialAnimation {
         id: marquee
-        running: root.animateTitle && root.playing && !root.popupOpen && labelText.overflow > 0
-          && labelClip.visible && root.visible && !FoamyMotion.reduceMotion
+        running: root.animateTitle && root.playing && !root.popupOpen && labelText.overflow > 0 && labelClip.visible && root.visible && !FoamyMotion.reduceMotion
         loops: Animation.Infinite
-        onRunningChanged: if (!running) labelText.panOffset = 0
+        onRunningChanged: if (!running)
+          labelText.panOffset = 0
 
-        PauseAnimation { duration: FoamyMotion.duration(2600) }
+        PauseAnimation {
+          duration: FoamyMotion.duration(2600)
+        }
         NumberAnimation {
           target: labelText
           property: "panOffset"
@@ -127,7 +132,9 @@ Item {
           duration: FoamyMotion.duration(Math.max(1600, labelText.overflow * 45))
           easing.type: Easing.InOutQuad
         }
-        PauseAnimation { duration: FoamyMotion.duration(2200) }
+        PauseAnimation {
+          duration: FoamyMotion.duration(2200)
+        }
         NumberAnimation {
           target: labelText
           property: "panOffset"
@@ -163,6 +170,10 @@ Item {
     anchors.bottom: parent.bottom
     anchors.bottomMargin: Style.space(2)
 
-    Behavior on opacity { NumberAnimation { duration: FoamyMotion.press } }
+    Behavior on opacity {
+      NumberAnimation {
+        duration: FoamyMotion.press
+      }
+    }
   }
 }

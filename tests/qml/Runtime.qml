@@ -27,7 +27,10 @@ ShellRoot {
 
   function check(ok, label) {
     checks++
-    if (!ok) { failures++; console.log("FOAMY FAIL " + host + "/" + lang + " " + label) }
+    if (!ok) {
+      failures++
+      console.log("FOAMY FAIL " + host + "/" + lang + " " + label)
+    }
   }
   function eq(actual, expected, label) {
     check(actual === expected, label + ": got " + JSON.stringify(actual) + ", expected " + JSON.stringify(expected))
@@ -37,7 +40,9 @@ ShellRoot {
     implicitWidth: 1920
     implicitHeight: 1080
     color: "black"
-    ScreenSim { id: sim }
+    ScreenSim {
+      id: sim
+    }
     Row {
       id: barRow
       y: 4
@@ -49,13 +54,28 @@ ShellRoot {
         Media.Panel {
           bar: mockBar
           moduleName: "foamy.media"
-          settings: ({ id: "foamy.media", hideWhenClosed: false, extra: "kept", youtubeBrowser: "chromium", youtubeProfile: "Profile 2" })
+          settings: ({
+              id: "foamy.media",
+              hideWhenClosed: false,
+              extra: "kept",
+              youtubeBrowser: "chromium",
+              youtubeProfile: "Profile 2"
+            })
         }
       }
     }
     // Presentation pieces, fed directly.
-    Media.Equalizer { id: equalizer; playing: true; animate: true }
-    Media.MediaView { id: playerView; y: 120; width: 420; media: player }
+    Media.Equalizer {
+      id: equalizer
+      playing: true
+      animate: true
+    }
+    Media.MediaView {
+      id: playerView
+      y: 120
+      width: 420
+      media: player
+    }
     Media.BarContent {
       id: barContent
       y: 60
@@ -66,7 +86,14 @@ ShellRoot {
       showProgress: true
       progress: 0.5
     }
-    Media.BarContent { id: growBar; y: 90; label: "X"; maxLabelWidth: 600; live: true; playing: true }
+    Media.BarContent {
+      id: growBar
+      y: 90
+      label: "X"
+      maxLabelWidth: 600
+      live: true
+      playing: true
+    }
     // The window picker fed what BrowserSetup makes of two windows: Omarchy's
     // Chromium web app with its player, and a Vivaldi one with none.
     Media.BrowserPicker {
@@ -74,23 +101,46 @@ ShellRoot {
       x: 1000
       y: 120
       width: 400
-      settings: ({ id: "foamy.media" })
+      settings: ({
+          id: "foamy.media"
+        })
       candidates: BrowserSetup.candidates([
-        { appId: "chrome-youtube.com__-Default", title: "A - YouTube" },
-        { appId: "vivaldi-youtube.com__-Default", title: "B - YouTube" }
-      ], [{ dbusName: "org.mpris.MediaPlayer2.chromium.instance4242" }])
+        {
+          appId: "chrome-youtube.com__-Default",
+          title: "A - YouTube"
+        },
+        {
+          appId: "vivaldi-youtube.com__-Default",
+          title: "B - YouTube"
+        }
+      ], [
+        {
+          dbusName: "org.mpris.MediaPlayer2.chromium.instance4242"
+        }
+      ])
     }
   }
 
-  MockBar { id: mockBar; moduleName: "foamy.media" }
+  MockBar {
+    id: mockBar
+    moduleName: "foamy.media"
+  }
   // The 4.5 host: an inline save updates the widget's settings before it returns.
   QtObject {
     id: reflectingShell
     property var panel: null
     function updateEntryInline(id, settings) {
-      mockBar.saved = mockBar.saved.concat([{ id: id, settings: settings }])
-      var next = { id: id }
-      for (var k in settings) next[k] = settings[k]
+      mockBar.saved = mockBar.saved.concat([
+        {
+          id: id,
+          settings: settings
+        }
+      ])
+      var next = {
+        id: id
+      }
+      for (var k in settings)
+        next[k] = settings[k]
       panel.settings = next
       return true
     }
@@ -100,7 +150,9 @@ ShellRoot {
   QtObject {
     id: player
     property var calls: []
-    function log(name, value) { calls = calls.concat([name + (value === undefined ? "" : ":" + value)]) }
+    function log(name, value) {
+      calls = calls.concat([name + (value === undefined ? "" : ":" + value)])
+    }
     readonly property QtObject bar: mockBar
     property bool opened: true
     property bool editingSettings: false
@@ -139,44 +191,89 @@ ShellRoot {
     property color youtubeRed: "red"
     property color sourceBrandColor: "green"
     property var settings: ({})
-    function playPause() { log("playPause") }
-    function skipNext() { log("next") }
-    function skipPrevious() { log("previous") }
-    function seekTo(s) { log("seekTo", s) }
-    function seekBy(s) { log("seekBy", s) }
-    function setVolume(v) { log("volume", Math.round(v * 100)) }
-    function toggleShuffle() { log("shuffle") }
-    function cycleLoop() { log("loop") }
-    function selectSource(k) { log("select", k) }
-    function launch() { log("launch") }
-    function openSettings() { log("settings") }
-    function closeSettings() {}
-    function close() { log("close") }
-    function switchPanel(d) { log("switch", d) }
+    function playPause() {
+      log("playPause")
+    }
+    function skipNext() {
+      log("next")
+    }
+    function skipPrevious() {
+      log("previous")
+    }
+    function seekTo(s) {
+      log("seekTo", s)
+    }
+    function seekBy(s) {
+      log("seekBy", s)
+    }
+    function setVolume(v) {
+      log("volume", Math.round(v * 100))
+    }
+    function toggleShuffle() {
+      log("shuffle")
+    }
+    function cycleLoop() {
+      log("loop")
+    }
+    function selectSource(k) {
+      log("select", k)
+    }
+    function launch() {
+      log("launch")
+    }
+    function openSettings() {
+      log("settings")
+    }
+    function closeSettings() {
+    }
+    function close() {
+      log("close")
+    }
+    function switchPanel(d) {
+      log("switch", d)
+    }
   }
 
   Component.onCompleted: Qt.callLater(stepOne)
 
-  FoamyCursor { id: keys }
+  FoamyCursor {
+    id: keys
+  }
   function findKey(item, key) {
-    if (!item) return null
-    if (item.key === key && item.commitEdit !== undefined) return item
+    if (!item)
+      return null
+    if (item.key === key && item.commitEdit !== undefined)
+      return item
     var kids = item.children || []
-    for (var i = 0; i < kids.length; i++) { var hit = findKey(kids[i], key); if (hit) return hit }
+    for (var i = 0; i < kids.length; i++) {
+      var hit = findKey(kids[i], key)
+      if (hit)
+        return hit
+    }
     return null
   }
-  function key(view, text) { keys.emitTextKey(view, text) }
+  function key(view, text) {
+    keys.emitTextKey(view, text)
+  }
   function findNamed(item, name) {
-    if (!item) return null
-    if (item.objectName === name) return item
+    if (!item)
+      return null
+    if (item.objectName === name)
+      return item
     var kids = item.children || []
-    for (var i = 0; i < kids.length; i++) { var hit = findNamed(kids[i], name); if (hit) return hit }
+    for (var i = 0; i < kids.length; i++) {
+      var hit = findNamed(kids[i], name)
+      if (hit)
+        return hit
+    }
     return null
   }
 
   function leaders() {
     var count = 0
-    for (var i = 0; i < 3; i++) if (panels.itemAt(i).statusObject().leader) count++
+    for (var i = 0; i < 3; i++)
+      if (panels.itemAt(i).statusObject().leader)
+        count++
     return count
   }
 
@@ -192,8 +289,10 @@ ShellRoot {
     picker.expanded = true
     var pickerRows = []
     function collectRows(item) {
-      if (item.modelData !== undefined && item.description !== undefined) pickerRows.push(item)
-      for (var r = 0; r < (item.children || []).length; r++) collectRows(item.children[r])
+      if (item.modelData !== undefined && item.description !== undefined)
+        pickerRows.push(item)
+      for (var r = 0; r < (item.children || []).length; r++)
+        collectRows(item.children[r])
     }
     collectRows(picker)
     eq(pickerRows.length, 2, "two picker rows")
@@ -206,10 +305,10 @@ ShellRoot {
       var note = findNamed(vivaldiRow, "browserMissingName")
       check(note !== null, "a row without a player has a missing-name note")
       if (note) {
-      eq(note.visible, true, "a row without a player says the name is missing")
-      eq(note.text, FoamyI18n.t("No MPRIS name found; set it under Advanced"), "the note's text")
-      var noteBottom = note.mapToItem(vivaldiRow, 0, note.height).y
-      check(noteBottom <= vivaldiRow.height, "the row grows to fit the note: " + noteBottom + " > " + vivaldiRow.height)
+        eq(note.visible, true, "a row without a player says the name is missing")
+        eq(note.text, FoamyI18n.t("No MPRIS name found; set it under Advanced"), "the note's text")
+        var noteBottom = note.mapToItem(vivaldiRow, 0, note.height).y
+        check(noteBottom <= vivaldiRow.height, "the row grows to fit the note: " + noteBottom + " > " + vivaldiRow.height)
       }
     }
     picker.expanded = false
@@ -223,20 +322,24 @@ ShellRoot {
     // Cover rules (regression: a failed fetch kept the previous cover).
     var svc = Media.MediaService
     var a = "file:///nonexistent/foamy-media-a.png", b = "file:///nonexistent/foamy-media-b.png"
-    svc.request(a); svc.artProbeDelay.stop()
+    svc.request(a)
+    svc.artProbeDelay.stop()
     svc.applyArtProbe(a, '{"ok":true,"mean":"#336699","file":"/tmp/a.png","swatches":[]}')
     eq(svc.artFor(a), true, "cover shown for its own track")
-    svc.request(b); svc.artProbeDelay.stop()
+    svc.request(b)
+    svc.artProbeDelay.stop()
     eq(svc.artFor(b), true, "previous cover lingers while the next one settles")
     eq(svc.artFor(a), true, "the measured URL still matches its cover")
     svc.finishAttempt(b, 1)
     eq(svc.artFor(b), false, "failed fetch drops the previous cover")
     eq(svc.artFile, "", "no cover kept after the failure")
-    svc.request(a); svc.artProbeDelay.stop()
+    svc.request(a)
+    svc.artProbeDelay.stop()
     svc.applyArtProbe(a, '{"ok":true,"mean":"#336699","file":"/tmp/a.png","swatches":[]}')
     svc.applyArtProbe(b, '{"ok":true,"mean":"#000000","file":"/tmp/b.png","swatches":[]}')
     eq(svc.artFile, "/tmp/a.png", "a late answer for another track is ignored")
-    svc.request(b); svc.artProbeDelay.stop()
+    svc.request(b)
+    svc.artProbeDelay.stop()
     svc.applyArtProbe(b, "garbage")
     eq(svc.artFor(b), false, "unreadable probe output shows no cover")
     svc.request("")
@@ -286,7 +389,8 @@ ShellRoot {
     eq(playerView.cursorKey, "playPause", "down from the timeline lands on play/pause")
     playerView.moveRequested(0, 1)
     eq(playerView.cursorKey, "volume", "down reaches the volume")
-    if (volumeSlider) eq(volumeSlider.hasCursor, true, "the cursor on the volume rings its thumb")
+    if (volumeSlider)
+      eq(volumeSlider.hasCursor, true, "the cursor on the volume rings its thumb")
     playerView.moveRequested(physical, 0)
     playerView.moveRequested(0, 1)
     eq(playerView.cursorKey, "tab:spotify", "down reaches the source tabs")
@@ -294,8 +398,7 @@ ShellRoot {
     eq(playerView.cursorKey, "tab:youtube", "along the tabs in reading order")
     playerView.activateRequested()
     playerView.tabRequested(1)
-    eq(JSON.stringify(player.calls), JSON.stringify(["previous", "seekBy:5", "volume:55", "select:youtube", "switch:1"]),
-      "cursor actions")
+    eq(JSON.stringify(player.calls), JSON.stringify(["previous", "seekBy:5", "volume:55", "select:youtube", "switch:1"]), "cursor actions")
     // The hero band carries the cover as its picture (blurred on the GPU,
     // cover-fitted under the kit scrim on the software renderer).
     var gpu = playerView.effectsAvailable
@@ -306,7 +409,8 @@ ShellRoot {
     eq(playerView.band.imageSource.toString(), gpu ? "" : "file:///tmp/foamy-media-cover.png", "cover is the band picture")
     eq(playerView.band.background !== null, gpu, "blurred cover only on the GPU renderer")
     // Regression (kit 0.3.2): the band holds only the current cover.
-    for (var n = 1; n <= 5; n++) player.artSource = "file:///tmp/foamy-media-cover-" + n + ".png"
+    for (var n = 1; n <= 5; n++)
+      player.artSource = "file:///tmp/foamy-media-cover-" + n + ".png"
     eq(playerView.band.loadedImage, gpu ? "" : "file:///tmp/foamy-media-cover-5.png", "only the current cover is held after cycling")
     player.artSource = ""
     eq(playerView.band.loadedImage, "", "cleared cover (popup closed) is unloaded")
@@ -319,7 +423,8 @@ ShellRoot {
     // Short screen: the player scrolls and keeps the cursor row in view.
     var scroll = null
     for (var c = 0; c < playerView.children.length; c++)
-      if (playerView.children[c].objectName === "mediaMainScroll") scroll = playerView.children[c]
+      if (playerView.children[c].objectName === "mediaMainScroll")
+        scroll = playerView.children[c]
     check(scroll !== null, "main view has a scroll area")
     if (scroll) {
       eq(scroll.interactive, false, "no scrolling while the player fits")
@@ -350,147 +455,187 @@ ShellRoot {
 
     first.open()
     // Steps wait for the state they check, not a fixed delay (FoamyWait).
-    wait.waitFor(function() { return first.popup.bodyItem !== null && first.member.demanded }, 10000,
-      shell.stepTwo, "the popup body is built on open")
+    wait.waitFor(function () {
+      return first.popup.bodyItem !== null && first.member.demanded
+    }, 10000, shell.stepTwo, "the popup body is built on open")
   }
 
-  FoamyWait { id: wait }
+  FoamyWait {
+    id: wait
+  }
 
   function stepTwo() {
-      var first = panels.itemAt(0)
-      var view = first.popup.bodyItem
-      check(view !== null, "body built on open")
-      eq(first.member.demanded, true, "open popup raises demand")
-      eq(first.imagesActive, true, "covers decode while open")
-      if (!view) { shell.finish(); return }
-      eq(view.cursorKey, "", "no cursor highlight on open")
-      view.moveRequested(0, 1)
-      eq(view.cursorKey, "settings", "first move lands on the first stop when nothing plays")
-      view.moveRequested(0, 1)
-      eq(view.cursorKey, "tab:spotify", "down reaches the source row")
-      view.moveRequested(1, 0)
-      eq(view.cursorKey, "launch", "along the source row")
-      eq(view.LayoutMirroring.enabled, shell.lang === "ar", "popup body mirrors in RTL only")
-      var titles = { en: "Not running", no: "Ikke startet", ar: "Not running" }
-      if (shell.lang !== "ar") eq(FoamyI18n.t("Not running"), titles[shell.lang], "translated")
-      eq(FoamyI18n.t("%1 is not running", "Spotify"), shell.lang === "no" ? "Spotify er ikke startet" : "Spotify is not running", "parameter")
-      shell.key(view, "s")
-      eq(first.editingSettings, true, "s opens Settings")
-      eq(view.blocked, true, "settings page owns the keys")
-      first.save("showArtist", false)
-      eq(mockBar.saved.length, 1, "setting saved inline")
-      if (mockBar.saved.length === 1) {
-        eq(mockBar.saved[0].id, "foamy.media", "saved to the widget's own entry")
-        eq(mockBar.saved[0].settings.showArtist, false, "saved value")
-        eq(mockBar.saved[0].settings.extra, "kept", "unknown keys kept")
-        // Legacy 1.3.3 keys: carried through a save untouched, never read.
-        eq(mockBar.saved[0].settings.youtubeBrowser, "chromium", "legacy browser key kept")
-        eq(mockBar.saved[0].settings.youtubeProfile, "Profile 2", "legacy profile key kept")
-      }
-      eq(first.preference("youtubeBrowser"), undefined, "the legacy browser key is no setting")
-      eq(first.preference("youtubeAppId"), "vivaldi-youtube.com__-Default", "a legacy entry reads the app ID default")
-      first.saveMany({ youtubeAppId: "chromium-youtube.com__-Default", youtubeMprisName: "chromium" })
-      eq(mockBar.saved.length, 3, "browser suggestion saved key by key")
-      if (mockBar.saved.length === 3) {
-        eq(mockBar.saved[2].settings.youtubeAppId, "chromium-youtube.com__-Default", "earlier key kept by the later save")
-        eq(mockBar.saved[2].settings.youtubeMprisName, "chromium", "later key")
-      }
-      first.saveMany({ youtubeMprisName: "--evil", youtubeAppId: "chromium-youtube.com__-Default" })
-      eq(mockBar.saved.length, 3, "an invalid suggestion writes nothing")
-      check(first.settingsError !== "", "invalid value reported")
-      eq(first.retryable, false, "an invalid value is not offered for retry")
-      first.saveMany({ youtubeBrowser: "vivaldi" })
-      eq(mockBar.saved.length, 3, "a removed setting can't be written")
-      eq(first.preference("showArtist"), false, "saved value read back before the host reflects it")
-      // Regression: a settings field follows a change made elsewhere (another
-      // monitor, the bar editor) after being focused and left unchanged, and
-      // leaving it again doesn't save the stale value back.
-      var width = shell.findKey(view.settingsPage, "maxLabelWidth")
-      check(width !== null, "label width field")
-      if (width) {
-        var before = mockBar.saved.length
-        width.commitEdit(true)                       // tabbed through, unchanged
-        first.settings = ({ id: "foamy.media", hideWhenClosed: false, extra: "kept", maxLabelWidth: 320 })
-        eq(width.field.text, width.format(320), "field shows the external change")
-        width.commitEdit(true)
-        eq(mockBar.saved.length, before, "leaving it unchanged saves nothing")
-        width.field.text = "abc"; width.dirty = true
-        check(width.handleKey(Qt.Key_Escape), "Escape is taken by the field")
-        eq(width.field.text, width.format(320), "Escape restores the value")
-        eq(first.editingSettings, true, "and the page stays")
-        width.field.text = "250"; width.dirty = true
-        width.commitEdit(false)
-        eq(mockBar.saved.length, before + 1, "a changed value commits once")
-        eq(mockBar.saved[mockBar.saved.length - 1].settings.maxLabelWidth, 250, "saved value")
-      }
-      // No Browser or Profile rows: YouTube is focus-only.
-      eq(shell.findKey(view.settingsPage, "youtubeBrowser"), null, "no browser field")
-      eq(shell.findKey(view.settingsPage, "youtubeProfile"), null, "no profile field")
-      check(shell.findKey(view.settingsPage, "youtubeAppId") !== null, "the app ID field stays")
-      var mpris = shell.findKey(view.settingsPage, "youtubeMprisName")
-      check(mpris !== null, "MPRIS name field")
-      if (mpris) {
-        mpris.field.text = "--evil"; mpris.dirty = true
-        mpris.commitEdit(false)
-        check(mpris.error !== "", "an invalid MPRIS name is refused in the field")
-        mpris.commitEdit(true)
-        eq(mpris.field.text, mpris.value, "focus-out restores the saved name")
-      }
-      // Regression: on a host that reflects an inline save at once (4.5), the
-      // saved value must not stay pending and mask a later outside change,
-      // which the next save (merging the whole entry) would undo.
-      first.settings = JSON.parse(JSON.stringify(first.effectiveSettings))  // the host caught up
-      var base = JSON.parse(JSON.stringify(first.settings))
-      base.showArtist = true
-      first.settings = base
-      eq(first.preference("showArtist"), true, "no saves pending")
-      var plainShell = mockBar.shell
-      mockBar.shell = reflectingShell
-      reflectingShell.panel = first
-      var savedBefore = mockBar.saved.length
-      first.save("showArtist", false)
-      eq(mockBar.saved.length, savedBefore + 1, "saved inline")
-      eq(first.settings.showArtist, false, "the host reflected the save at once")
-      var elsewhere = JSON.parse(JSON.stringify(first.settings))
-      elsewhere.showArtist = true                   // another monitor turns it back on
-      first.settings = elsewhere
-      eq(first.preference("showArtist"), true, "an outside change after a reflected save shows")
-      first.save("showProgress", !first.preference("showProgress"))
-      eq(mockBar.saved[mockBar.saved.length - 1].settings.showArtist, true, "the next save keeps the outside change")
-      mockBar.shell = plainShell
-      first.closeSettings()
-      eq(view.blocked, false, "back from Settings")
-      first.close()
-      // Covers stay decoded for a moment after closing (Panel.imageRelease).
-      wait.waitFor(function() { return !first.member.demanded && !first.imagesActive }, 10000,
-        shell.stepThree, "closing releases demand and covers")
+    var first = panels.itemAt(0)
+    var view = first.popup.bodyItem
+    check(view !== null, "body built on open")
+    eq(first.member.demanded, true, "open popup raises demand")
+    eq(first.imagesActive, true, "covers decode while open")
+    if (!view) {
+      shell.finish()
+      return
+    }
+    eq(view.cursorKey, "", "no cursor highlight on open")
+    view.moveRequested(0, 1)
+    eq(view.cursorKey, "settings", "first move lands on the first stop when nothing plays")
+    view.moveRequested(0, 1)
+    eq(view.cursorKey, "tab:spotify", "down reaches the source row")
+    view.moveRequested(1, 0)
+    eq(view.cursorKey, "launch", "along the source row")
+    eq(view.LayoutMirroring.enabled, shell.lang === "ar", "popup body mirrors in RTL only")
+    var titles = {
+      en: "Not running",
+      no: "Ikke startet",
+      ar: "Not running"
+    }
+    if (shell.lang !== "ar")
+      eq(FoamyI18n.t("Not running"), titles[shell.lang], "translated")
+    eq(FoamyI18n.t("%1 is not running", "Spotify"), shell.lang === "no" ? "Spotify er ikke startet" : "Spotify is not running", "parameter")
+    shell.key(view, "s")
+    eq(first.editingSettings, true, "s opens Settings")
+    eq(view.blocked, true, "settings page owns the keys")
+    first.save("showArtist", false)
+    eq(mockBar.saved.length, 1, "setting saved inline")
+    if (mockBar.saved.length === 1) {
+      eq(mockBar.saved[0].id, "foamy.media", "saved to the widget's own entry")
+      eq(mockBar.saved[0].settings.showArtist, false, "saved value")
+      eq(mockBar.saved[0].settings.extra, "kept", "unknown keys kept")
+      // Legacy 1.3.3 keys: carried through a save untouched, never read.
+      eq(mockBar.saved[0].settings.youtubeBrowser, "chromium", "legacy browser key kept")
+      eq(mockBar.saved[0].settings.youtubeProfile, "Profile 2", "legacy profile key kept")
+    }
+    eq(first.preference("youtubeBrowser"), undefined, "the legacy browser key is no setting")
+    eq(first.preference("youtubeAppId"), "vivaldi-youtube.com__-Default", "a legacy entry reads the app ID default")
+    first.saveMany({
+      youtubeAppId: "chromium-youtube.com__-Default",
+      youtubeMprisName: "chromium"
+    })
+    eq(mockBar.saved.length, 3, "browser suggestion saved key by key")
+    if (mockBar.saved.length === 3) {
+      eq(mockBar.saved[2].settings.youtubeAppId, "chromium-youtube.com__-Default", "earlier key kept by the later save")
+      eq(mockBar.saved[2].settings.youtubeMprisName, "chromium", "later key")
+    }
+    first.saveMany({
+      youtubeMprisName: "--evil",
+      youtubeAppId: "chromium-youtube.com__-Default"
+    })
+    eq(mockBar.saved.length, 3, "an invalid suggestion writes nothing")
+    check(first.settingsError !== "", "invalid value reported")
+    eq(first.retryable, false, "an invalid value is not offered for retry")
+    first.saveMany({
+      youtubeBrowser: "vivaldi"
+    })
+    eq(mockBar.saved.length, 3, "a removed setting can't be written")
+    eq(first.preference("showArtist"), false, "saved value read back before the host reflects it")
+    // Regression: a settings field follows a change made elsewhere (another
+    // monitor, the bar editor) after being focused and left unchanged, and
+    // leaving it again doesn't save the stale value back.
+    var width = shell.findKey(view.settingsPage, "maxLabelWidth")
+    check(width !== null, "label width field")
+    if (width) {
+      var before = mockBar.saved.length
+      // tabbed through, unchanged
+      width.commitEdit(true)
+      first.settings = ({
+          id: "foamy.media",
+          hideWhenClosed: false,
+          extra: "kept",
+          maxLabelWidth: 320
+        })
+      eq(width.field.text, width.format(320), "field shows the external change")
+      width.commitEdit(true)
+      eq(mockBar.saved.length, before, "leaving it unchanged saves nothing")
+      width.field.text = "abc"
+      width.dirty = true
+      check(width.handleKey(Qt.Key_Escape), "Escape is taken by the field")
+      eq(width.field.text, width.format(320), "Escape restores the value")
+      eq(first.editingSettings, true, "and the page stays")
+      width.field.text = "250"
+      width.dirty = true
+      width.commitEdit(false)
+      eq(mockBar.saved.length, before + 1, "a changed value commits once")
+      eq(mockBar.saved[mockBar.saved.length - 1].settings.maxLabelWidth, 250, "saved value")
+    }
+    // No Browser or Profile rows: YouTube is focus-only.
+    eq(shell.findKey(view.settingsPage, "youtubeBrowser"), null, "no browser field")
+    eq(shell.findKey(view.settingsPage, "youtubeProfile"), null, "no profile field")
+    check(shell.findKey(view.settingsPage, "youtubeAppId") !== null, "the app ID field stays")
+    var mpris = shell.findKey(view.settingsPage, "youtubeMprisName")
+    check(mpris !== null, "MPRIS name field")
+    if (mpris) {
+      mpris.field.text = "--evil"
+      mpris.dirty = true
+      mpris.commitEdit(false)
+      check(mpris.error !== "", "an invalid MPRIS name is refused in the field")
+      mpris.commitEdit(true)
+      eq(mpris.field.text, mpris.value, "focus-out restores the saved name")
+    }
+    // Regression: on a host that reflects an inline save at once (4.5), the
+    // saved value must not stay pending and mask a later outside change,
+    // which the next save (merging the whole entry) would undo.
+    // the host caught up
+    first.settings = JSON.parse(JSON.stringify(first.effectiveSettings))
+    var base = JSON.parse(JSON.stringify(first.settings))
+    base.showArtist = true
+    first.settings = base
+    eq(first.preference("showArtist"), true, "no saves pending")
+    var plainShell = mockBar.shell
+    mockBar.shell = reflectingShell
+    reflectingShell.panel = first
+    var savedBefore = mockBar.saved.length
+    first.save("showArtist", false)
+    eq(mockBar.saved.length, savedBefore + 1, "saved inline")
+    eq(first.settings.showArtist, false, "the host reflected the save at once")
+    var elsewhere = JSON.parse(JSON.stringify(first.settings))
+    // another monitor turns it back on
+    elsewhere.showArtist = true
+    first.settings = elsewhere
+    eq(first.preference("showArtist"), true, "an outside change after a reflected save shows")
+    first.save("showProgress", !first.preference("showProgress"))
+    eq(mockBar.saved[mockBar.saved.length - 1].settings.showArtist, true, "the next save keeps the outside change")
+    mockBar.shell = plainShell
+    first.closeSettings()
+    eq(view.blocked, false, "back from Settings")
+    first.close()
+    // Covers stay decoded for a moment after closing (Panel.imageRelease).
+    wait.waitFor(function () {
+      return !first.member.demanded && !first.imagesActive
+    }, 10000, shell.stepThree, "closing releases demand and covers")
   }
 
   function stepThree() {
-      var first = panels.itemAt(0)
-      eq(first.member.demanded, false, "closing releases demand")
-      eq(first.imagesActive, false, "covers released after closing")
-      eq(first.editingSettings, false, "closing leaves Settings")
-      // The grown label lays out again in its wider slot instead of keeping
-      // the ellipsis of the shorter text.
-      var growText = findNamed(growBar, "mediaBarLabel").children[0]
-      check(growText.width >= growText.implicitWidth, "the slot fits a grown label: " + growText.width + " < " + growText.implicitWidth)
-      eq(growText.truncated, false, "a grown label that fits is not elided")
-      check(growText.contentWidth >= growText.implicitWidth - 1, "the grown label is drawn whole: " + growText.contentWidth)
-      // The settings IPC on a closed popup lands on Settings (reset on close only).
-      first.openSettings()
-      eq(first.opened, true, "settings opens the popup")
-      eq(first.editingSettings, true, "and lands on Settings")
-      first.close()
-      eq(first.editingSettings, false, "closing resets it")
-      // A widget hidden by "Hide when stopped" opened through IPC: centred
-      // under the bar, not in the screen corner.
-      var hidden = hiddenPanel.createObject(barRow, { bar: mockBar, moduleName: "foamy.media", settings: ({ id: "foamy.media" }) })
-      eq(hidden.shown, false, "nothing playing hides the widget")
-      eq(hidden.popup.centerOnBar, true, "hidden widget centres its popup")
-      hidden.open()
-      wait.waitFor(function() { return hidden.popup.screenW > 0 && hidden.popup.bodyItem !== null }, 10000,
-        function() { shell.stepFour(hidden) }, "the hidden widget's popup opens")
+    var first = panels.itemAt(0)
+    eq(first.member.demanded, false, "closing releases demand")
+    eq(first.imagesActive, false, "covers released after closing")
+    eq(first.editingSettings, false, "closing leaves Settings")
+    // The grown label lays out again in its wider slot instead of keeping
+    // the ellipsis of the shorter text.
+    var growText = findNamed(growBar, "mediaBarLabel").children[0]
+    check(growText.width >= growText.implicitWidth, "the slot fits a grown label: " + growText.width + " < " + growText.implicitWidth)
+    eq(growText.truncated, false, "a grown label that fits is not elided")
+    check(growText.contentWidth >= growText.implicitWidth - 1, "the grown label is drawn whole: " + growText.contentWidth)
+    // The settings IPC on a closed popup lands on Settings (reset on close only).
+    first.openSettings()
+    eq(first.opened, true, "settings opens the popup")
+    eq(first.editingSettings, true, "and lands on Settings")
+    first.close()
+    eq(first.editingSettings, false, "closing resets it")
+    // A widget hidden by "Hide when stopped" opened through IPC: centred
+    // under the bar, not in the screen corner.
+    var hidden = hiddenPanel.createObject(barRow, {
+      bar: mockBar,
+      moduleName: "foamy.media",
+      settings: ({
+          id: "foamy.media"
+        })
+    })
+    eq(hidden.shown, false, "nothing playing hides the widget")
+    eq(hidden.popup.centerOnBar, true, "hidden widget centres its popup")
+    hidden.open()
+    wait.waitFor(function () {
+      return hidden.popup.screenW > 0 && hidden.popup.bodyItem !== null
+    }, 10000, function () {
+      shell.stepFour(hidden)
+    }, "the hidden widget's popup opens")
   }
 
   Component {
@@ -498,15 +643,14 @@ ShellRoot {
     Media.Panel {}
   }
   function stepFour(hidden) {
-      var popup = hidden.popup
-      check(popup.screenW > 0, "popup knows its screen")
-      eq(popup.cardOrigin.x, Math.round(Math.max(popup.margin, Math.min(popup.screenW / 2 - popup.contentWidth / 2,
-        popup.screenW - popup.contentWidth - popup.margin))), "card centred on the screen")
-      check(popup.cardOrigin.x > popup.margin && popup.cardOrigin.y > 0, "not in the top-left corner")
-      eq(panels.itemAt(0).popup.centerOnBar, false, "a shown widget still hangs from itself")
-      hidden.close()
-      hidden.destroy()
-      focusSteps.begin()
+    var popup = hidden.popup
+    check(popup.screenW > 0, "popup knows its screen")
+    eq(popup.cardOrigin.x, Math.round(Math.max(popup.margin, Math.min(popup.screenW / 2 - popup.contentWidth / 2, popup.screenW - popup.contentWidth - popup.margin))), "card centred on the screen")
+    check(popup.cardOrigin.x > popup.margin && popup.cardOrigin.y > 0, "not in the top-left corner")
+    eq(panels.itemAt(0).popup.centerOnBar, false, "a shown widget still hangs from itself")
+    hidden.close()
+    hidden.destroy()
+    focusSteps.begin()
   }
 
   // YouTube is focus-only (regression: with no YouTube window, launch()
@@ -518,7 +662,9 @@ ShellRoot {
     property string title: "Example - YouTube"
     property bool activated: false
     property int activations: 0
-    function activate() { activations++ }
+    function activate() {
+      activations++
+    }
   }
   QtObject {
     id: focusSteps
@@ -528,7 +674,9 @@ ShellRoot {
       eq(first.pendingLaunch, undefined, "no pending browser launch")
       // The app ID the panel matches (a suggestion saved earlier set it).
       fakeYoutubeWindow.appId = first.preference("youtubeAppId")
-      first.toplevelModel = { values: [fakeYoutubeWindow] }
+      first.toplevelModel = {
+        values: [fakeYoutubeWindow]
+      }
       eq(first.youtubeOpen, true, "the YouTube window is matched by its app ID")
       first.selectSource("youtube")
       eq(first.sourceKind, "youtube", "YouTube selected")
@@ -542,7 +690,9 @@ ShellRoot {
       eq(fakeYoutubeWindow.activations, 2, "and focuses the window instead")
       // The window closes; until the leader moves the selection on, YouTube
       // stays selected with nothing to focus.
-      first.toplevelModel = { values: [] }
+      first.toplevelModel = {
+        values: []
+      }
       eq(first.youtubeOpen, false, "the YouTube window is gone")
       eq(first.tooltipText, FoamyI18n.t("%1 is not running", "YouTube"), "tooltip once the window is gone")
       eq(first.sourceKind, "youtube", "still selected this frame")
@@ -557,16 +707,19 @@ ShellRoot {
       // The art probe's command not starting ends the attempt too.
       var svc = Media.MediaService
       var a = "file:///nonexistent/foamy-media-a.png", b = "file:///nonexistent/foamy-media-b.png"
-      svc.request(a); svc.artProbeDelay.stop()
+      svc.request(a)
+      svc.artProbeDelay.stop()
       svc.applyArtProbe(a, '{"ok":true,"mean":"#336699","file":"/tmp/a.png","swatches":[]}')
-      svc.request(b); svc.artProbeDelay.stop()
+      svc.request(b)
+      svc.artProbeDelay.stop()
       eq(svc.artSettling, true, "the next cover settles")
       svc.artProbe.pending = b
       svc.artProbe.exitSeen = false
       svc.artProbe.command = ["foamy-media-no-such-helper"]
       svc.artProbe.running = true
-      wait.waitFor(function() { return !svc.artProbe.running && !svc.artSettling }, 10000,
-        focusSteps.finish, "the art probe that can't start ends")
+      wait.waitFor(function () {
+        return !svc.artProbe.running && !svc.artSettling
+      }, 10000, focusSteps.finish, "the art probe that can't start ends")
     }
     function finish() {
       var first = panels.itemAt(0)
@@ -594,6 +747,9 @@ ShellRoot {
   Timer {
     id: finishTimer
     interval: shell.holdMs
-    onTriggered: { console.log("FOAMY DONE"); Qt.quit() }
+    onTriggered: {
+      console.log("FOAMY DONE")
+      Qt.quit()
+    }
   }
 }

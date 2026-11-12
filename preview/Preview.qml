@@ -61,34 +61,65 @@ Item {
     readonly property color spotifyGreen: "#1DB954"
     readonly property color youtubeRed: "#FF0033"
     readonly property color sourceBrandColor: youtube ? youtubeRed : spotifyGreen
-    readonly property var settings: ({ id: "foamy.media", youtubeAppId: "vivaldi-youtube.com__-Default" })
+    readonly property var settings: ({
+        id: "foamy.media",
+        youtubeAppId: "vivaldi-youtube.com__-Default"
+      })
     readonly property bool saving: false
     readonly property string settingsError: ""
     readonly property bool retryable: false
-    readonly property var browserCandidates: browserSettingsOpen ? [{
-      id: "vivaldi-youtube.com__-Default", title: "YouTube",
-      values: { youtubeAppId: "vivaldi-youtube.com__-Default", youtubeMprisName: "vivaldi" }
-    }, {
-      id: "chromium-youtube.com__-Profile_2", title: "YouTube – Work",
-      values: { youtubeAppId: "chromium-youtube.com__-Profile_2" }, missing: ["youtubeMprisName"]
-    }] : []
-    function playPause() {}
-    function skipNext() {}
-    function skipPrevious() {}
-    function seekTo(s) {}
-    function seekBy(s) {}
-    function setVolume(v) {}
-    function toggleShuffle() {}
-    function cycleLoop() {}
-    function selectSource(k) {}
-    function launch() {}
-    function openSettings() {}
-    function closeSettings() {}
-    function close() {}
-    function switchPanel(d) {}
-    function save(k, v) {}
-    function saveMany(v) {}
-    function retrySave() {}
+    readonly property var browserCandidates: browserSettingsOpen ? [
+      {
+        id: "vivaldi-youtube.com__-Default",
+        title: "YouTube",
+        values: {
+          youtubeAppId: "vivaldi-youtube.com__-Default",
+          youtubeMprisName: "vivaldi"
+        }
+      },
+      {
+        id: "chromium-youtube.com__-Profile_2",
+        title: "YouTube – Work",
+        values: {
+          youtubeAppId: "chromium-youtube.com__-Profile_2"
+        },
+        missing: ["youtubeMprisName"]
+      }
+    ] : []
+    function playPause() {
+    }
+    function skipNext() {
+    }
+    function skipPrevious() {
+    }
+    function seekTo(s) {
+    }
+    function seekBy(s) {
+    }
+    function setVolume(v) {
+    }
+    function toggleShuffle() {
+    }
+    function cycleLoop() {
+    }
+    function selectSource(k) {
+    }
+    function launch() {
+    }
+    function openSettings() {
+    }
+    function closeSettings() {
+    }
+    function close() {
+    }
+    function switchPanel(d) {
+    }
+    function save(k, v) {
+    }
+    function saveMany(v) {
+    }
+    function retrySave() {
+    }
   }
 
   // The bar widget on the strip, covering the harness anchor icon.
@@ -169,13 +200,16 @@ Item {
   // Scroll the settings page to the browser picker for that shot; put the
   // panel cursor on a slider for the cursor-* shots.
   onPreviewStateChanged: {
-    if (previewState === "settings-browser") scrollToBrowser.start()
-    if (previewState.indexOf("cursor-") === 0) placeCursor.start()
+    if (previewState === "settings-browser")
+      scrollToBrowser.start()
+    if (previewState.indexOf("cursor-") === 0)
+      placeCursor.start()
   }
   Timer {
     id: placeCursor
     interval: 300
-    onTriggered: if (popup.bodyItem) popup.bodyItem.place(preview.previewState.slice(7))
+    onTriggered: if (popup.bodyItem)
+      popup.bodyItem.place(preview.previewState.slice(7))
   }
   Timer {
     id: scrollToBrowser
@@ -185,18 +219,22 @@ Item {
       if (view && view.settingsPage && view.settingsPage.browserSection) {
         // Open the window list, so the shot shows its rows.
         var header = preview.findNamed(view.settingsPage, "browserPickerHeader")
-        if (header) header.parent.expanded = true
+        if (header)
+          header.parent.expanded = true
         view.settingsPage.keepVisible(view.settingsPage.browserSection)
       }
     }
   }
   function findNamed(item, name) {
-    if (!item) return null
-    if (item.objectName === name) return item
+    if (!item)
+      return null
+    if (item.objectName === name)
+      return item
     var kids = item.children || []
     for (var i = 0; i < kids.length; i++) {
       var hit = findNamed(kids[i], name)
-      if (hit) return hit
+      if (hit)
+        return hit
     }
     return null
   }
@@ -207,7 +245,9 @@ Item {
     bar: preview.bar
     open: true
     body: Component {
-      Media.MediaView { media: mock }
+      Media.MediaView {
+        media: mock
+      }
     }
   }
 }

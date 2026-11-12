@@ -13,12 +13,17 @@ FoamySettingsPage {
 
   required property var media
   readonly property var settings: media.effectiveSettings || media.settings || ({})
-  function value(key) { return Prefs.value(Schema.schema, page.settings, key) }
-  function label(key) { return FoamyI18n.t(Schema.labels[key]) }
+  function value(key) {
+    return Prefs.value(Schema.schema, page.settings, key)
+  }
+  function label(key) {
+    return FoamyI18n.t(Schema.labels[key])
+  }
 
   property bool browserAdvancedOpen: false
   readonly property alias browserSection: browserColumn
-  onVisibleChanged: if (!visible) browserAdvancedOpen = false
+  onVisibleChanged: if (!visible)
+    browserAdvancedOpen = false
 
   saving: media.saving === true
   error: media.settingsError ? FoamyI18n.t(media.settingsError) : ""
@@ -42,10 +47,20 @@ FoamySettingsPage {
       compact: true
       label: page.label("scrollAction")
       value: page.value("scrollAction")
-      options: Prefs.field(Schema.schema, "scrollAction").options.map(function(option) { return { value: option, label: FoamyI18n.t(option) } })
-      onChanged: function(next) { page.media.save("scrollAction", next) }
+      options: Prefs.field(Schema.schema, "scrollAction").options.map(function (option) {
+        return {
+          value: option,
+          label: FoamyI18n.t(option)
+        }
+      })
+      onChanged: function (next) {
+        page.media.save("scrollAction", next)
+      }
     }
-    NumberRow { key: "volumeStep"; visible: page.value("scrollAction") === "Volume" }
+    NumberRow {
+      key: "volumeStep"
+      visible: page.value("scrollAction") === "Volume"
+    }
     FoamyToggle {
       width: parent.width
       label: page.label("hideWhenClosed")
@@ -59,11 +74,21 @@ FoamySettingsPage {
   FoamySettingsSection {
     width: parent.width
     title: FoamyI18n.t("Bar")
-    BoolRow { key: "showArtist" }
-    BoolRow { key: "showProgress" }
-    BoolRow { key: "animateTitle" }
-    BoolRow { key: "showEqualizer" }
-    NumberRow { key: "maxLabelWidth" }
+    BoolRow {
+      key: "showArtist"
+    }
+    BoolRow {
+      key: "showProgress"
+    }
+    BoolRow {
+      key: "animateTitle"
+    }
+    BoolRow {
+      key: "showEqualizer"
+    }
+    NumberRow {
+      key: "maxLabelWidth"
+    }
   }
 
   FoamySettingsSection {
@@ -75,21 +100,33 @@ FoamySettingsPage {
       label: page.label("accent")
       description: FoamyI18n.t("Colors the icon, progress line and controls.")
       value: page.value("accent")
-      options: Prefs.field(Schema.schema, "accent").options.map(function(option) { return { value: option, label: FoamyI18n.t(option) } })
-      onChanged: function(next) { page.media.save("accent", next) }
+      options: Prefs.field(Schema.schema, "accent").options.map(function (option) {
+        return {
+          value: option,
+          label: FoamyI18n.t(option)
+        }
+      })
+      onChanged: function (next) {
+        page.media.save("accent", next)
+      }
     }
     BoolRow {
       key: "artBackground"
       // Covers and their colour come from the native helper (MediaService).
       description: page.media.artHelperUnavailable === true ? FoamyI18n.t("This plugin's helper isn't available for this CPU.") : ""
     }
-    NumberRow { key: "artIntensity"; visible: page.value("artBackground") === true }
+    NumberRow {
+      key: "artIntensity"
+      visible: page.value("artBackground") === true
+    }
   }
 
   FoamySettingsSection {
     width: parent.width
     title: FoamyI18n.t("YouTube")
-    BoolRow { key: "youtubeEnabled" }
+    BoolRow {
+      key: "youtubeEnabled"
+    }
     FoamyAction {
       visible: page.value("youtubeEnabled") === true
       focusable: true
@@ -99,7 +136,8 @@ FoamySettingsPage {
       onClicked: {
         page.media.browserSettingsOpen = !page.media.browserSettingsOpen
         // Unfolded settings scroll into view (they follow while laid out).
-        if (page.media.browserSettingsOpen) page.ensureVisible(browserColumn)
+        if (page.media.browserSettingsOpen)
+          page.ensureVisible(browserColumn)
       }
     }
     Column {
@@ -110,11 +148,14 @@ FoamySettingsPage {
       BrowserPicker {
         id: browserPicker
         width: parent.width
-        onExpandedChanged: if (expanded) page.ensureVisible(browserPicker)
+        onExpandedChanged: if (expanded)
+          page.ensureVisible(browserPicker)
         candidates: page.media.browserCandidates || []
         settings: page.settings
         saving: page.saving
-        onApply: function(values) { page.media.saveMany(values) }
+        onApply: function (values) {
+          page.media.saveMany(values)
+        }
       }
       FoamyAction {
         focusable: true
@@ -123,7 +164,8 @@ FoamySettingsPage {
         foreground: FoamyPalette.secondaryText
         onClicked: {
           page.browserAdvancedOpen = !page.browserAdvancedOpen
-          if (page.browserAdvancedOpen) page.ensureVisible(advancedColumn)
+          if (page.browserAdvancedOpen)
+            page.ensureVisible(advancedColumn)
         }
       }
       Column {
@@ -131,8 +173,12 @@ FoamySettingsPage {
         visible: page.browserAdvancedOpen
         width: parent.width
         spacing: FoamyStyle.gap
-        TextRow { key: "youtubeAppId" }
-        TextRow { key: "youtubeMprisName" }
+        TextRow {
+          key: "youtubeAppId"
+        }
+        TextRow {
+          key: "youtubeMprisName"
+        }
       }
     }
   }
@@ -165,7 +211,9 @@ FoamySettingsPage {
     to: spec.max
     stepSize: spec.step || 1
     enabled: !page.saving
-    onCommitted: function(next) { page.media.save(numberRow.key, next) }
+    onCommitted: function (next) {
+      page.media.save(numberRow.key, next)
+    }
   }
 
   // A string setting, same rules; the draft is checked against the schema
@@ -176,8 +224,12 @@ FoamySettingsPage {
     width: parent ? parent.width : 0
     label: page.label(key)
     value: String(page.value(key))
-    validate: function(text) { return Prefs.valid(Schema.schema, textRow.key, text) }
+    validate: function (text) {
+      return Prefs.valid(Schema.schema, textRow.key, text)
+    }
     enabled: !page.saving
-    onCommitted: function(next) { page.media.save(textRow.key, next) }
+    onCommitted: function (next) {
+      page.media.save(textRow.key, next)
+    }
   }
 }

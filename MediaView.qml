@@ -45,16 +45,22 @@ PanelKeyCatcher {
   }
   // The row holding a cursor stop, to scroll it into view.
   function rowItem(key) {
-    if (key === "settings") return band
-    if (key === "seek") return seekRow
-    if (key === "volume") return volumeRow
-    if (key.indexOf("tab:") === 0 || key === "launch") return footer
+    if (key === "settings")
+      return band
+    if (key === "seek")
+      return seekRow
+    if (key === "volume")
+      return volumeRow
+    if (key.indexOf("tab:") === 0 || key === "launch")
+      return footer
     return key !== "" ? transport : null
   }
   function keepVisible(item) {
-    if (!item || !item.visible) return
+    if (!item || !item.visible)
+      return
     var point = item.mapToItem(main, 0, 0)
-    if (point.y < mainScroll.contentY) mainScroll.contentY = Math.max(0, point.y)
+    if (point.y < mainScroll.contentY)
+      mainScroll.contentY = Math.max(0, point.y)
     else if (point.y + item.height > mainScroll.contentY + mainScroll.height)
       mainScroll.contentY = Math.max(0, Math.min(mainScroll.contentHeight - mainScroll.height, point.y + item.height - mainScroll.height))
   }
@@ -63,10 +69,18 @@ PanelKeyCatcher {
   Connections {
     target: view.media
     ignoreUnknownSignals: true
-    function onOpenedChanged() { if (view.media.opened) view.resetView() }
+    function onOpenedChanged() {
+      if (view.media.opened)
+        view.resetView()
+    }
     function onEditingSettingsChanged() {
-      if (view.editing) Qt.callLater(function() { settingsPage.resetScroll(); settingsPage.focusBack() })
-      else view.forceActiveFocus()
+      if (view.editing)
+        Qt.callLater(function () {
+          settingsPage.resetScroll()
+          settingsPage.focusBack()
+        })
+      else
+        view.forceActiveFocus()
     }
   }
 
@@ -79,12 +93,17 @@ PanelKeyCatcher {
   readonly property bool launchShows: media.sourceOpen === true || media.sourceKind === "youtube"
   readonly property var rows: {
     var list = [["settings"]]
-    if (seekShown) list.push(["seek"])
-    if (media.live) list.push(["shuffle", "previous", "playPause", "next", "loop"])
-    if (media.volumeSupported) list.push(["volume"])
+    if (seekShown)
+      list.push(["seek"])
+    if (media.live)
+      list.push(["shuffle", "previous", "playPause", "next", "loop"])
+    if (media.volumeSupported)
+      list.push(["volume"])
     var footer = []
-    if (spotifyTabShown) footer.push("tab:spotify")
-    if (media.youtubeOpen) footer.push("tab:youtube")
+    if (spotifyTabShown)
+      footer.push("tab:spotify")
+    if (media.youtubeOpen)
+      footer.push("tab:youtube")
     footer.push("launch")
     list.push(footer)
     return list
@@ -92,23 +111,38 @@ PanelKeyCatcher {
   readonly property var stops: [].concat.apply([], rows)
   readonly property string cursorKey: cursor.index >= 0 && cursor.index < stops.length ? stops[cursor.index] : ""
 
-  FoamyCursor { id: cursor; count: view.stops.length }
+  FoamyCursor {
+    id: cursor
+    count: view.stops.length
+  }
 
-  function hasCursor(key) { return cursorKey === key }
-  function hover(key) { var index = stops.indexOf(key); if (index >= 0) cursor.hover(index) }
-  function place(key) { var index = stops.indexOf(key); if (index >= 0) cursor.index = index }
+  function hasCursor(key) {
+    return cursorKey === key
+  }
+  function hover(key) {
+    var index = stops.indexOf(key)
+    if (index >= 0)
+      cursor.hover(index)
+  }
+  function place(key) {
+    var index = stops.indexOf(key)
+    if (index >= 0)
+      cursor.index = index
+  }
   function rowOf(key) {
-    for (var i = 0; i < rows.length; i++) if (rows[i].indexOf(key) >= 0) return i
+    for (var i = 0; i < rows.length; i++)
+      if (rows[i].indexOf(key) >= 0)
+        return i
     return -1
   }
   function moveRow(dy) {
     var row = rowOf(cursorKey)
     var target = Math.max(0, Math.min(rows.length - 1, row + dy))
-    if (target === row) return
+    if (target === row)
+      return
     var from = rows[row], to = rows[target]
     // Into the transport row, land on play/pause; otherwise keep the column.
-    var column = to.indexOf("playPause") >= 0 && from.length === 1 ? to.indexOf("playPause")
-      : Math.min(to.length - 1, Math.max(0, from.indexOf(cursorKey)))
+    var column = to.indexOf("playPause") >= 0 && from.length === 1 ? to.indexOf("playPause") : Math.min(to.length - 1, Math.max(0, from.indexOf(cursorKey)))
     place(to[column])
   }
   function moveAlong(dx) {
@@ -116,8 +150,14 @@ PanelKeyCatcher {
     // The timeline, transport and volume keep their physical direction in
     // RTL (see below), while PanelKeyCatcher reports reading order there.
     var physical = view.LayoutMirroring.enabled ? -dx : dx
-    if (key === "seek") { media.seekBy(physical * 5); return }
-    if (key === "volume") { media.setVolume(media.volume + physical * 0.05); return }
+    if (key === "seek") {
+      media.seekBy(physical * 5)
+      return
+    }
+    if (key === "volume") {
+      media.setVolume(media.volume + physical * 0.05)
+      return
+    }
     var row = rows[rowOf(key)]
     var step = row.indexOf("playPause") >= 0 ? physical : dx
     var next = Math.max(0, Math.min(row.length - 1, row.indexOf(key) + step))
@@ -125,34 +165,56 @@ PanelKeyCatcher {
   }
   function activateStop() {
     var key = cursorKey
-    if (key === "settings") media.openSettings()
-    else if (key === "shuffle") media.toggleShuffle()
-    else if (key === "previous") media.skipPrevious()
-    else if (key === "next") media.skipNext()
-    else if (key === "loop") media.cycleLoop()
-    else if (key === "tab:spotify") media.selectSource("spotify")
-    else if (key === "tab:youtube") media.selectSource("youtube")
-    else if (key === "launch") { media.launch(); media.close() }
-    else media.playPause()
+    if (key === "settings")
+      media.openSettings()
+    else if (key === "shuffle")
+      media.toggleShuffle()
+    else if (key === "previous")
+      media.skipPrevious()
+    else if (key === "next")
+      media.skipNext()
+    else if (key === "loop")
+      media.cycleLoop()
+    else if (key === "tab:spotify")
+      media.selectSource("spotify")
+    else if (key === "tab:youtube")
+      media.selectSource("youtube")
+    else if (key === "launch") {
+      media.launch()
+      media.close()
+    } else
+      media.playPause()
   }
 
-  onMoveRequested: function(dx, dy) {
-    if (!cursor.active) { place(stops.indexOf("playPause") >= 0 ? "playPause" : stops[0]); return }
-    if (dy !== 0) moveRow(dy)
-    else if (dx !== 0) moveAlong(dx)
+  onMoveRequested: function (dx, dy) {
+    if (!cursor.active) {
+      place(stops.indexOf("playPause") >= 0 ? "playPause" : stops[0])
+      return
+    }
+    if (dy !== 0)
+      moveRow(dy)
+    else if (dx !== 0)
+      moveAlong(dx)
   }
   onActivateRequested: activateStop()
   onCloseRequested: media.close()
-  onTabRequested: function(direction) { media.switchPanel(direction) }
-  onTextKey: function(text, modifiers) {
-    if (!cursor.plain(modifiers)) return
-    if (String(text).toLowerCase() === "s") media.openSettings()
+  onTabRequested: function (direction) {
+    media.switchPanel(direction)
+  }
+  onTextKey: function (text, modifiers) {
+    if (!cursor.plain(modifiers))
+      return
+    if (String(text).toLowerCase() === "s")
+      media.openSettings()
   }
 
   // ---- Main view ---------------------------------------------------------
   // The popup is capped by the screen (short screens, large UI scale); the
   // player then scrolls, and the cursor row is kept in view.
-  FoamyWheelScroll { id: wheel; target: mainScroll }
+  FoamyWheelScroll {
+    id: wheel
+    target: mainScroll
+  }
   Flickable {
     id: mainScroll
     objectName: "mediaMainScroll"
@@ -166,7 +228,9 @@ PanelKeyCatcher {
     boundsBehavior: Flickable.StopAtBounds
     onContentHeightChanged: contentY = Math.max(0, Math.min(contentY, contentHeight - height))
     onHeightChanged: contentY = Math.max(0, Math.min(contentY, contentHeight - height))
-    Controls.ScrollBar.vertical: Controls.ScrollBar { policy: Controls.ScrollBar.AsNeeded }
+    Controls.ScrollBar.vertical: Controls.ScrollBar {
+      policy: Controls.ScrollBar.AsNeeded
+    }
 
     Column {
       id: main
@@ -182,12 +246,13 @@ PanelKeyCatcher {
         width: parent.width
         iconName: "music"
         title: view.media.sourceName
-        meta: !view.media.sourceOpen && !view.media.live ? FoamyI18n.t("Not running")
-          : !view.media.live ? FoamyI18n.t("Nothing playing")
-          : FoamyI18n.t(view.media.playing ? "Playing" : "Paused")
+        meta: !view.media.sourceOpen && !view.media.live ? FoamyI18n.t("Not running") : !view.media.live ? FoamyI18n.t("Nothing playing") : FoamyI18n.t(view.media.playing ? "Playing" : "Paused")
         settingsHasCursor: view.hasCursor("settings")
         onSettingsClicked: view.media.openSettings()
-        onSettingsHovered: function(hovered) { if (hovered) view.hover("settings") }
+        onSettingsHovered: function (hovered) {
+          if (hovered)
+            view.hover("settings")
+        }
         imageSource: view.pictureShown && !view.effectsAvailable ? view.media.artSource : ""
         background: view.backdropShown ? blurredCover : null
         // The blurred cover brings its own scrim, measured against the cover.
@@ -206,7 +271,10 @@ PanelKeyCatcher {
             radius: FoamyStyle.radius
             color: FoamyPalette.fieldFill
             layer.enabled: view.effectsAvailable && coverImage.status === Image.Ready
-            layer.effect: MultiEffect { maskEnabled: true; maskSource: coverMask }
+            layer.effect: MultiEffect {
+              maskEnabled: true
+              maskSource: coverMask
+            }
 
             Image {
               id: coverImage
@@ -234,7 +302,11 @@ PanelKeyCatcher {
               anchors.fill: parent
               visible: false
               layer.enabled: view.effectsAvailable
-              Rectangle { anchors.fill: parent; radius: cover.radius; color: "white" }  // mask alpha source, never drawn
+              Rectangle {
+                anchors.fill: parent
+                radius: cover.radius
+                color: "white"
+              }  // mask alpha source, never drawn
             }
           }
 
@@ -245,8 +317,7 @@ PanelKeyCatcher {
             spacing: FoamyStyle.gapTiny
             Text {
               Layout.fillWidth: true
-              text: view.media.live ? (view.media.trackTitle || FoamyI18n.t("Nothing playing"))
-                : view.media.sourceOpen ? FoamyI18n.t("Nothing playing") : FoamyI18n.t("%1 is not running", view.media.sourceName)
+              text: view.media.live ? (view.media.trackTitle || FoamyI18n.t("Nothing playing")) : view.media.sourceOpen ? FoamyI18n.t("Nothing playing") : FoamyI18n.t("%1 is not running", view.media.sourceName)
               textFormat: Text.PlainText
               horizontalAlignment: Text.AlignLeft
               wrapMode: Text.WordWrap
@@ -283,7 +354,10 @@ PanelKeyCatcher {
         }
       }
 
-      Item { width: 1; height: FoamyStyle.gap }
+      Item {
+        width: 1
+        height: FoamyStyle.gap
+      }
 
       Column {
         id: controls
@@ -301,7 +375,10 @@ PanelKeyCatcher {
           height: seekColumn.implicitHeight + FoamyStyle.gap * 2
           LayoutMirroring.enabled: false
           LayoutMirroring.childrenInherit: true
-          HoverHandler { onHoveredChanged: if (hovered) view.hover("seek") }
+          HoverHandler {
+            onHoveredChanged: if (hovered)
+              view.hover("seek")
+          }
           Column {
             id: seekColumn
             x: FoamyStyle.gap
@@ -318,7 +395,9 @@ PanelKeyCatcher {
               current: view.media.trackPosition
               hasCursor: view.hasCursor("seek")
               enabled: view.media.canSeek === true
-              onCommitted: function(value) { view.media.seekTo(value) }
+              onCommitted: function (value) {
+                view.media.seekTo(value)
+              }
             }
             Item {
               width: parent.width
@@ -390,8 +469,7 @@ PanelKeyCatcher {
             key: "loop"
             glyph: view.media.loopName === "track" ? "repeat-1" : "repeat"
             toggledOn: view.media.loopName !== "off"
-            tooltipText: FoamyI18n.t(view.media.loopName === "track" ? "Repeat: track"
-              : view.media.loopName === "playlist" ? "Repeat: playlist" : "Repeat: off")
+            tooltipText: FoamyI18n.t(view.media.loopName === "track" ? "Repeat: track" : view.media.loopName === "playlist" ? "Repeat: playlist" : "Repeat: off")
             enabled: view.media.loopSupported === true
             onClicked: view.media.cycleLoop()
           }
@@ -404,7 +482,10 @@ PanelKeyCatcher {
           height: FoamyStyle.rowHeight
           LayoutMirroring.enabled: false
           LayoutMirroring.childrenInherit: true
-          HoverHandler { onHoveredChanged: if (hovered) view.hover("volume") }
+          HoverHandler {
+            onHoveredChanged: if (hovered)
+              view.hover("volume")
+          }
           FoamyIcon {
             id: volumeIcon
             anchors.left: parent.left
@@ -491,8 +572,12 @@ PanelKeyCatcher {
           foreground: FoamyPalette.secondaryText
           hasCursor: view.hasCursor("launch")
           tooltipText: FoamyI18n.t(view.launchShows ? "Show %1" : "Start %1", view.media.sourceName)
-          onHoveredChanged: if (hovered) view.hover("launch")
-          onClicked: { view.media.launch(); view.media.close() }
+          onHoveredChanged: if (hovered)
+            view.hover("launch")
+          onClicked: {
+            view.media.launch()
+            view.media.close()
+          }
         }
       }
     }
@@ -529,7 +614,8 @@ PanelKeyCatcher {
       readonly property real scrimStrength: Model.scrimAlpha(view.media.artLuma, view.media.artIntensity)
       readonly property color scrimColor: {
         var base = Commons.Color.popups.background
-        if (view.media.artDominant === "") return Qt.rgba(base.r, base.g, base.b, scrimStrength)
+        if (view.media.artDominant === "")
+          return Qt.rgba(base.r, base.g, base.b, scrimStrength)
         var dominant = Qt.color(view.media.artDominant)
         var mixed = Qt.tint(base, Qt.rgba(dominant.r, dominant.g, dominant.b, 0.20))
         return Qt.rgba(mixed.r, mixed.g, mixed.b, scrimStrength)
@@ -566,7 +652,12 @@ PanelKeyCatcher {
         // A track change cross-fades instead of flashing the theme.
         opacity: artBlurSource.status === Image.Ready ? 1 : 0
         visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: FoamyMotion.slow; easing.type: Easing.OutCubic } }
+        Behavior on opacity {
+          NumberAnimation {
+            duration: FoamyMotion.slow
+            easing.type: Easing.OutCubic
+          }
+        }
       }
       // The band-sized rectangle inside the bleed is the only part that
       // survives; its lower corners meet the body and stay square.
@@ -590,7 +681,12 @@ PanelKeyCatcher {
         bottomLeftRadius: 0
         bottomRightRadius: 0
         color: backdrop.scrimColor
-        Behavior on color { ColorAnimation { duration: FoamyMotion.slow; easing.type: Easing.OutCubic } }
+        Behavior on color {
+          ColorAnimation {
+            duration: FoamyMotion.slow
+            easing.type: Easing.OutCubic
+          }
+        }
       }
     }
   }
@@ -611,9 +707,9 @@ PanelKeyCatcher {
     iconSize: FoamyStyle.iconSize + Style.space(3)
     hasCursor: view.hasCursor(key)
     foreground: toggledOn && enabled ? Commons.Color.popups.background : FoamyPalette.secondaryText
-    color: toggledOn && enabled ? Commons.Color.accent
-      : (hasCursor || hovered) && enabled ? FoamyPalette.hoverFill : "transparent"
-    onHoveredChanged: if (hovered) view.hover(control.key)
+    color: toggledOn && enabled ? Commons.Color.accent : (hasCursor || hovered) && enabled ? FoamyPalette.hoverFill : "transparent"
+    onHoveredChanged: if (hovered)
+      view.hover(control.key)
     TransportGlyph {
       anchors.centerIn: parent
       width: control.iconSize
@@ -633,22 +729,19 @@ PanelKeyCatcher {
     property string name: ""
     property color color: FoamyPalette.text
     readonly property var paths: ({
-      "play": '<path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/>',
-      "pause": '<rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/>',
-      "skip-back": '<path d="M17.971 4.285A2 2 0 0 1 21 6v12a2 2 0 0 1-3.029 1.715l-9.997-5.998a2 2 0 0 1-.003-3.432z"/><path d="M3 20V4"/>',
-      "skip-forward": '<path d="M21 4v16"/><path d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"/>',
-      "shuffle": '<path fill="none" d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H19"/><path fill="none" d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/><path fill="none" d="M19 18h-3.041a4 4 0 0 1-3.3-1.8l-.359-.45"/><path d="M18 14l4 4-4 4z"/><path d="M18 2l4 4-4 4z"/>',
-      "repeat": '<path fill="none" d="M3 11v-1a4 4 0 0 1 4-4h11"/><path d="M17 2l4 4-4 4z"/><path fill="none" d="M21 13v1a4 4 0 0 1-4 4H6"/><path d="M7 22l-4-4 4-4z"/>',
-      "repeat-1": '<path fill="none" d="M3 11v-1a4 4 0 0 1 4-4h11"/><path d="M17 2l4 4-4 4z"/><path fill="none" d="M21 13v1a4 4 0 0 1-4 4H6"/><path d="M7 22l-4-4 4-4z"/><path fill="none" d="M11 10h1v4"/>'
-    })
+        "play": '<path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/>',
+        "pause": '<rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/>',
+        "skip-back": '<path d="M17.971 4.285A2 2 0 0 1 21 6v12a2 2 0 0 1-3.029 1.715l-9.997-5.998a2 2 0 0 1-.003-3.432z"/><path d="M3 20V4"/>',
+        "skip-forward": '<path d="M21 4v16"/><path d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"/>',
+        "shuffle": '<path fill="none" d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H19"/><path fill="none" d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/><path fill="none" d="M19 18h-3.041a4 4 0 0 1-3.3-1.8l-.359-.45"/><path d="M18 14l4 4-4 4z"/><path d="M18 2l4 4-4 4z"/>',
+        "repeat": '<path fill="none" d="M3 11v-1a4 4 0 0 1 4-4h11"/><path d="M17 2l4 4-4 4z"/><path fill="none" d="M21 13v1a4 4 0 0 1-4 4H6"/><path d="M7 22l-4-4 4-4z"/>',
+        "repeat-1": '<path fill="none" d="M3 11v-1a4 4 0 0 1 4-4h11"/><path d="M17 2l4 4-4 4z"/><path fill="none" d="M21 13v1a4 4 0 0 1-4 4H6"/><path d="M7 22l-4-4 4-4z"/><path fill="none" d="M11 10h1v4"/>'
+      })
     visible: name !== ""
     sourceSize.width: Math.ceil(width * 2)
     sourceSize.height: Math.ceil(height * 2)
     fillMode: Image.PreserveAspectFit
-    source: name === "" ? "" : "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="' + color.toString()
-      + '" stroke="' + color.toString() + '" stroke-width="' + FoamyStyle.iconStroke
-      + '" stroke-linecap="round" stroke-linejoin="round">' + (paths[name] || "") + '</svg>')
+    source: name === "" ? "" : "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="' + color.toString() + '" stroke="' + color.toString() + '" stroke-width="' + FoamyStyle.iconStroke + '" stroke-linecap="round" stroke-linejoin="round">' + (paths[name] || "") + '</svg>')
   }
 
   component SourceTab: FoamyCursorSurface {
@@ -666,7 +759,8 @@ PanelKeyCatcher {
     foreground: FoamyPalette.text
     hasCursor: view.hasCursor(key)
     onHovered: view.hover(key)
-    onClicked: if (tab.enabled) view.media.selectSource(tab.kind)
+    onClicked: if (tab.enabled)
+      view.media.selectSource(tab.kind)
     Accessible.role: Accessible.PageTab
     Accessible.name: label
     Accessible.selected: selected

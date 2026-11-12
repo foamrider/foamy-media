@@ -59,17 +59,18 @@ QtObject {
 
   function request(url) {
     var next = String(url || "")
-    if (next === artUrl) return
+    if (next === artUrl)
+      return
     artUrl = next
     artRetry.stop()
     artRetries = 0
     artSettling = artFile !== "" && next !== ""
-    if (artSettling) settleCap.restart()
+    if (artSettling)
+      settleCap.restart()
     artProbeDelay.restart()
   }
 
-  readonly property bool networkConnected: Networking.connectivity === NetworkConnectivity.Full
-    || Networking.connectivity === NetworkConnectivity.Limited
+  readonly property bool networkConnected: Networking.connectivity === NetworkConnectivity.Full || Networking.connectivity === NetworkConnectivity.Limited
   property bool networkSettled: false
   readonly property bool networkReady: networkConnected && networkSettled
   readonly property bool remoteArt: /^https?:\/\//i.test(artUrl)
@@ -77,7 +78,8 @@ QtObject {
   onNetworkReadyChanged: {
     artRetry.stop()
     artRetries = 0
-    if (networkReady && remoteArt) artProbeDelay.restart()
+    if (networkReady && remoteArt)
+      artProbeDelay.restart()
   }
 
   function probeArt(force) {
@@ -86,16 +88,19 @@ QtObject {
       root.forgetArt()
       return
     }
-    if (!force && root.artProbed === root.artUrl) return
+    if (!force && root.artProbed === root.artUrl)
+      return
     if (remoteArt && !networkReady) {
-      if (root.artProbed !== root.artUrl) root.forgetArt()
+      if (root.artProbed !== root.artUrl)
+        root.forgetArt()
       return
     }
     artRetry.stop()
 
     // Wait for the cancelled process to exit before assigning a new request URL.
     if (artProbe.running) {
-      if (artProbe.pending === root.artUrl) return
+      if (artProbe.pending === root.artUrl)
+        return
       artProbe.running = false
       artProbeDelay.restart()
       return
@@ -106,8 +111,7 @@ QtObject {
     // The helper bounds every step itself (8 s fetch, 15 s per decode) and
     // the whole run to 55 s, so it replies before this timeout, which only
     // catches a helper that somehow hangs (native/src/main.rs, "Deadline").
-    artProbe.command = ["timeout", "--kill-after=2s", "60s"].concat(
-      FoamyNative.command(root.pluginDir, "foamy-media-helper", Model.artProbeArgs(target)))
+    artProbe.command = ["timeout", "--kill-after=2s", "60s"].concat(FoamyNative.command(root.pluginDir, "foamy-media-helper", Model.artProbeArgs(target)))
     artProbe.running = true
   }
 
@@ -122,8 +126,8 @@ QtObject {
   function applyArtProbe(url, text) {
     // A probe that finished after the track already moved on describes the
     // wrong cover, so drop it and let the newer one land.
-    if (url !== root.artUrl) return
-
+    if (url !== root.artUrl)
+      return
     root.artProbe.failure = Model.artProbeFailure(text)
     var probe = Model.parseArtProbe(text)
     // Unreadable output means this track has no usable cover: never keep the
@@ -145,7 +149,8 @@ QtObject {
   // A failed attempt (fetch, size, format or decode) means the current track
   // has no cover right now: drop the previous one while any retry runs.
   function finishAttempt(url, exitCode) {
-    if (url === root.artUrl && exitCode !== 0 && root.artProbed !== url) root.forgetArt()
+    if (url === root.artUrl && exitCode !== 0 && root.artProbed !== url)
+      root.forgetArt()
   }
 
   property Timer networkSettle: Timer {
@@ -189,22 +194,22 @@ QtObject {
       console.warn("foamy-media: the art probe could not start")
       root.finishAttempt(pending, -1)
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       var url = pending
       if (FoamyNative.unavailable(exitCode)) {
-        if (!root.artHelperUnavailable) console.warn("foamy-media: " + FoamyNative.UNAVAILABLE_TEXT + " (exit " + exitCode + ")")
+        if (!root.artHelperUnavailable)
+          console.warn("foamy-media: " + FoamyNative.UNAVAILABLE_TEXT + " (exit " + exitCode + ")")
         root.artHelperUnavailable = true
         root.forgetArt()
         return
       }
       // Let the stdout collector apply a successful result before deciding.
-      Qt.callLater(function() {
+      Qt.callLater(function () {
         root.finishAttempt(url, exitCode)
         // A CPU without the instructions HTTPS needs won't gain them on a retry.
-        if (url !== root.artUrl || root.artProbed === root.artUrl
-            || root.artProbe.failure === "TLS_UNSUPPORTED"
-            || !root.remoteArt || !root.networkReady || root.artRetries >= 3) return
+        if (url !== root.artUrl || root.artProbed === root.artUrl || root.artProbe.failure === "TLS_UNSUPPORTED" || !root.remoteArt || !root.networkReady || root.artRetries >= 3)
+          return
         root.artRetry.interval = 2500 * Math.pow(2, root.artRetries++)
         root.artRetry.restart()
       })

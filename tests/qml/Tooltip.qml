@@ -24,7 +24,10 @@ ShellRoot {
 
   function check(ok, label) {
     checks++
-    if (!ok) { failures++; console.log("FOAMY FAIL tooltip " + label) }
+    if (!ok) {
+      failures++
+      console.log("FOAMY FAIL tooltip " + label)
+    }
   }
   function eq(actual, expected, label) {
     check(actual === expected, label + ": got " + JSON.stringify(actual) + ", expected " + JSON.stringify(expected))
@@ -33,35 +36,61 @@ ShellRoot {
     check(Math.abs(actual - expected) < 0.01, label + ": width " + actual + ", expected " + expected)
   }
 
-  FileView { id: tracksFile; path: Quickshell.env("FOAMY_TRACKS"); blockLoading: true }
+  FileView {
+    id: tracksFile
+    path: Quickshell.env("FOAMY_TRACKS")
+    blockLoading: true
+  }
 
   MockBar {
     id: recordingBar
     moduleName: "foamy.media"
     property var tips: []
-    function showTooltip(target, text) { tips = tips.concat([String(text)]) }
+    function showTooltip(target, text) {
+      tips = tips.concat([String(text)])
+    }
   }
 
   FloatingWindow {
     implicitWidth: 1920
     implicitHeight: 1080
     color: "black"
-    ScreenSim { id: sim }
+    ScreenSim {
+      id: sim
+    }
     Media.Panel {
       id: panel
       y: 4
       x: 800
       bar: recordingBar
       moduleName: "foamy.media"
-      settings: ({ id: "foamy.media", hideWhenClosed: false })
+      settings: ({
+          id: "foamy.media",
+          hideWhenClosed: false
+        })
     }
     Column {
       y: 200
       // The host's sink, and three references in the same font.
-      HostTooltip { id: hostTip; fontFamily: recordingBar.fontFamily }
-      Text { id: literal; textFormat: Text.PlainText; font: hostTip.label.font }
-      Text { id: autoSink; textFormat: Text.AutoText; font: hostTip.label.font }
-      Text { id: control; textFormat: Text.AutoText; font: hostTip.label.font }
+      HostTooltip {
+        id: hostTip
+        fontFamily: recordingBar.fontFamily
+      }
+      Text {
+        id: literal
+        textFormat: Text.PlainText
+        font: hostTip.label.font
+      }
+      Text {
+        id: autoSink
+        textFormat: Text.AutoText
+        font: hostTip.label.font
+      }
+      Text {
+        id: control
+        textFormat: Text.AutoText
+        font: hostTip.label.font
+      }
     }
   }
 
@@ -69,7 +98,8 @@ ShellRoot {
     var kids = item.children || []
     for (var i = 0; i < kids.length; i++) {
       var kid = kids[i]
-      if (kid.hoverEnabled === true && kid.pressAndHoldInterval !== undefined && typeof kid.entered === "function") return kid
+      if (kid.hoverEnabled === true && kid.pressAndHoldInterval !== undefined && typeof kid.entered === "function")
+        return kid
     }
     return null
   }
@@ -102,13 +132,14 @@ ShellRoot {
       // The control: the same metadata without the guard, its images pointed
       // at the control probe, is read as markup by AutoText.
       control.text = raw
-      check(Math.abs(control.implicitWidth - literal.implicitWidth) > 1,
-        label + ": control reads raw markup (" + control.implicitWidth + " vs " + literal.implicitWidth + ")")
+      check(Math.abs(control.implicitWidth - literal.implicitWidth) > 1, label + ": control reads raw markup (" + control.implicitWidth + " vs " + literal.implicitWidth + ")")
     }
   }
 
   Component.onCompleted: Qt.callLater(noPlayer)
-  FoamyWait { id: wait }
+  FoamyWait {
+    id: wait
+  }
 
   function noPlayer() {
     eq(panel.live, false, "no player yet")
@@ -118,18 +149,18 @@ ShellRoot {
   }
 
   function settled(t) {
-    return panel.live && panel.trackTitle === t.title && panel.trackArtist === t.artist
-      && panel.playing === (t.status === "Playing")
+    return panel.live && panel.trackTitle === t.title && panel.trackArtist === t.artist && panel.playing === (t.status === "Playing")
   }
 
   // Each scripted track in turn: wait until the widget shows it, hover,
   // then skip to the next one.
   function nextTrack() {
     var t = shell.tracks[shell.index]
-    wait.waitFor(function() { return shell.settled(t) }, 60000, function(ok) {
+    wait.waitFor(function () {
+      return shell.settled(t)
+    }, 60000, function (ok) {
       if (!ok) {
-        shell.check(false, "track " + shell.index + " never arrived (live " + panel.live + ", title "
-          + JSON.stringify(panel.trackTitle) + ")")
+        shell.check(false, "track " + shell.index + " never arrived (live " + panel.live + ", title " + JSON.stringify(panel.trackTitle) + ")")
         shell.finish()
         return
       }
@@ -155,6 +186,9 @@ ShellRoot {
   Timer {
     id: finishTimer
     interval: 1500
-    onTriggered: { console.log("FOAMY DONE"); Qt.quit() }
+    onTriggered: {
+      console.log("FOAMY DONE")
+      Qt.quit()
+    }
   }
 }

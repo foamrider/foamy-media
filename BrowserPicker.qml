@@ -22,24 +22,31 @@ Column {
   // Derive the summary and checks from persisted settings, not the last clicked row.
   readonly property string selectedLabel: BrowserSetup.description(Prefs.value(Schema.schema, settings, "youtubeAppId"))
   signal apply(var values)
-  function tr(text) { return FoamyI18n.t(text) }
+  function tr(text) {
+    return FoamyI18n.t(text)
+  }
   function matches(values) {
-    return Object.keys(values).every(function(key) { return Prefs.value(Schema.schema, root.settings, key) === values[key] })
+    return Object.keys(values).every(function (key) {
+      return Prefs.value(Schema.schema, root.settings, key) === values[key]
+    })
   }
   function collapse() {
     expanded = false
     header.forceActiveFocus()
   }
   function choose(candidate) {
-    if (saving) return
+    if (saving)
+      return
     collapse()
     apply(candidate.values)
   }
   function focusWindow(index) {
     var item = windowRows.itemAt(index)
-    if (item) item.forceActiveFocus()
+    if (item)
+      item.forceActiveFocus()
   }
-  onVisibleChanged: if (!visible) expanded = false
+  onVisibleChanged: if (!visible)
+    expanded = false
 
   Rectangle {
     id: header
@@ -55,14 +62,21 @@ Column {
     Accessible.name: root.tr("Use an open window") + (root.selectedLabel ? ": " + root.selectedLabel : "")
     Accessible.checkable: true
     Accessible.checked: root.expanded
-    Accessible.onPressAction: if (!root.saving) root.expanded = !root.expanded
-    function toggle() { if (!root.saving) root.expanded = !root.expanded }
+    Accessible.onPressAction: if (!root.saving)
+      root.expanded = !root.expanded
+    function toggle() {
+      if (!root.saving)
+        root.expanded = !root.expanded
+    }
     // Expand toward the reading direction; collapse toward the leading edge.
-    Keys.onPressed: function(event) {
+    Keys.onPressed: function (event) {
       if (event.key === (FoamyI18n.rightToLeft ? Qt.Key_Left : Qt.Key_Right) && !root.saving) {
-        root.expanded = true; root.focusWindow(0); event.accepted = true
+        root.expanded = true
+        root.focusWindow(0)
+        event.accepted = true
       } else if (event.key === (FoamyI18n.rightToLeft ? Qt.Key_Right : Qt.Key_Left) && root.expanded) {
-        root.collapse(); event.accepted = true
+        root.collapse()
+        event.accepted = true
       }
     }
     Keys.onReturnPressed: toggle()
@@ -74,9 +88,11 @@ Column {
         root.focusWindow(0)
       }
     }
-    Keys.onEscapePressed: function(event) {
-      if (root.expanded) root.collapse()
-      else event.accepted = false
+    Keys.onEscapePressed: function (event) {
+      if (root.expanded)
+        root.collapse()
+      else
+        event.accepted = false
     }
     Column {
       id: headerText
@@ -116,14 +132,22 @@ Column {
       color: root.secondaryForeground
       name: "chevron-right"
       rotation: root.expanded ? (FoamyI18n.rightToLeft ? -90 : 90) : 0
-      Behavior on rotation { NumberAnimation { duration: FoamyMotion.press; easing.type: Easing.InOutQuad } }
+      Behavior on rotation {
+        NumberAnimation {
+          duration: FoamyMotion.press
+          easing.type: Easing.InOutQuad
+        }
+      }
     }
     MouseArea {
       id: headerMouse
       anchors.fill: parent
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
-      onClicked: { header.forceActiveFocus(); header.toggle() }
+      onClicked: {
+        header.forceActiveFocus()
+        header.toggle()
+      }
     }
   }
 
@@ -134,7 +158,12 @@ Column {
     // Remove collapsed rows from keyboard navigation immediately, including during animation.
     enabled: root.expanded && !root.saving
     visible: root.expanded || height > 0
-    Behavior on height { NumberAnimation { duration: FoamyMotion.press; easing.type: Easing.InOutQuad } }
+    Behavior on height {
+      NumberAnimation {
+        duration: FoamyMotion.press
+        easing.type: Easing.InOutQuad
+      }
+    }
     Column {
       id: windowColumn
       objectName: "browserWindowList"
@@ -176,12 +205,12 @@ Column {
           border.color: Commons.Color.accent
           activeFocusOnTab: true
           Accessible.role: Accessible.Button
-          Accessible.name: modelData.title + ", " + description
-            + (nameMissing ? ", " + root.tr("No MPRIS name found; set it under Advanced") : "")
+          Accessible.name: modelData.title + ", " + description + (nameMissing ? ", " + root.tr("No MPRIS name found; set it under Advanced") : "")
           Accessible.onPressAction: root.choose(modelData)
-          Keys.onPressed: function(event) {
+          Keys.onPressed: function (event) {
             if (event.key === (FoamyI18n.rightToLeft ? Qt.Key_Right : Qt.Key_Left)) {
-              root.collapse(); event.accepted = true
+              root.collapse()
+              event.accepted = true
             }
           }
           Keys.onReturnPressed: root.choose(modelData)
