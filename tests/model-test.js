@@ -208,7 +208,7 @@ const M = require("../Model.js")
   assert.ok(/^(e\u0301)+\u2026$/.test(cutAccents), JSON.stringify(cutAccents))
   const family = "\u{1F468}\u200d\u{1F469}\u200d\u{1F467}"
   const cutFamily = M.tooltipField("a".repeat(limit - 3) + family, limit)
-  assert.ok(!/\u200d\u2026$/.test(cutFamily) && !/\u200d$/.test(cutFamily.slice(0, -1)), JSON.stringify(cutFamily))
+  assert.ok(!cutFamily.endsWith("\u200d\u2026") && !cutFamily.slice(0, -1).endsWith("\u200d"), JSON.stringify(cutFamily))
   assert.ok(Array.from(cutFamily).length <= limit)
   // A long RTL title keeps its characters in logical order.
   const rtl = "مرحبا ".repeat(60)

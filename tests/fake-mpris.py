@@ -81,7 +81,7 @@ def properties(interface):
             "CanSeek": GLib.Variant("b", False), "CanControl": GLib.Variant("b", True)}
 
 
-def on_call(connection, sender, path, interface, method, params, invocation):
+def on_call(connection, _sender, path, interface, method, _params, invocation):
     if interface == PLAYER and method == "Next" and state["index"] < len(tracks) - 1:
         state["index"] += 1
         changed = {k: v for k, v in properties(PLAYER).items() if k in ("Metadata", "PlaybackStatus")}
@@ -91,7 +91,7 @@ def on_call(connection, sender, path, interface, method, params, invocation):
     invocation.return_value(None)
 
 
-def on_get(connection, sender, path, interface, name):
+def on_get(connection, _sender, path, interface, name):
     return properties(interface)[name]
 
 
@@ -103,6 +103,6 @@ def on_bus(connection, name):
 
 loop = GLib.MainLoop()
 Gio.bus_own_name(Gio.BusType.SESSION, "org.mpris.MediaPlayer2.spotify", Gio.BusNameOwnerFlags.NONE,
-                 on_bus, lambda c, n: print("FAKE MPRIS UP", flush=True), lambda c, n: loop.quit())
+                 on_bus, lambda _c, _n: print("FAKE MPRIS UP", flush=True), lambda _c, _n: loop.quit())
 GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, loop.quit)
 loop.run()
