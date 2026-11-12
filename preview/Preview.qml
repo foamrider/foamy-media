@@ -15,7 +15,7 @@ Item {
   property var previewStates: ["playing", "two-sources", "not-running", "settings", "settings-browser", "cursor-seek", "cursor-volume"]
   property string previewState: "playing"
   property int settleMs: 900
-  readonly property Item popup: popup
+  readonly property var popup: previewPopup
 
   QtObject {
     id: mock
@@ -204,7 +204,7 @@ Item {
     parent: preview.anchorItem.parent
     x: barWidget.x
     y: barWidget.y
-    width: popup.contentWidth
+    width: preview.popup.contentWidth
     height: barWidget.height
   }
 
@@ -219,14 +219,14 @@ Item {
   Timer {
     id: placeCursor
     interval: 300
-    onTriggered: if (popup.bodyItem)
-      popup.bodyItem.place(preview.previewState.slice(7))
+    onTriggered: if (preview.popup.bodyItem)
+      preview.popup.bodyItem.place(preview.previewState.slice(7))
   }
   Timer {
     id: scrollToBrowser
     interval: 300
     onTriggered: {
-      var view = popup.bodyItem
+      var view = preview.popup.bodyItem
       if (view && view.settingsPage && view.settingsPage.browserSection) {
         // Open the window list, so the shot shows its rows.
         var header = preview.findNamed(view.settingsPage, "browserPickerHeader")
@@ -251,7 +251,7 @@ Item {
   }
 
   FoamyPopup {
-    id: popup
+    id: previewPopup
     anchorItem: popupLeftAnchor
     bar: preview.bar
     open: true
