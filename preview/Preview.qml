@@ -70,7 +70,7 @@ Item {
       values: { youtubeAppId: "vivaldi-youtube.com__-Default", youtubeMprisName: "vivaldi" }
     }, {
       id: "chromium-youtube.com__-Profile_2", title: "YouTube – Work",
-      values: { youtubeAppId: "chromium-youtube.com__-Profile_2" }
+      values: { youtubeAppId: "chromium-youtube.com__-Profile_2" }, missing: ["youtubeMprisName"]
     }] : []
     function playPause() {}
     function skipNext() {}
@@ -182,9 +182,23 @@ Item {
     interval: 300
     onTriggered: {
       var view = popup.bodyItem
-      if (view && view.settingsPage && view.settingsPage.browserSection)
+      if (view && view.settingsPage && view.settingsPage.browserSection) {
+        // Open the window list, so the shot shows its rows.
+        var header = preview.findNamed(view.settingsPage, "browserPickerHeader")
+        if (header) header.parent.expanded = true
         view.settingsPage.keepVisible(view.settingsPage.browserSection)
+      }
     }
+  }
+  function findNamed(item, name) {
+    if (!item) return null
+    if (item.objectName === name) return item
+    var kids = item.children || []
+    for (var i = 0; i < kids.length; i++) {
+      var hit = findNamed(kids[i], name)
+      if (hit) return hit
+    }
+    return null
   }
 
   FoamyPopup {

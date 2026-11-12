@@ -163,8 +163,12 @@ Column {
           required property int index
           readonly property bool selected: root.matches(modelData.values)
           readonly property string description: BrowserSetup.description(modelData.id)
+          // No single MPRIS player of this browser was found (none playing,
+          // or two that could own the window): choosing the row saves only
+          // the app ID, so say where the name is set.
+          readonly property bool nameMissing: (modelData.missing || []).indexOf("youtubeMprisName") !== -1
           width: windowColumn.width
-          height: Style.space(54)
+          height: Math.max(Style.space(54), rowText.implicitHeight + 2 * FoamyStyle.rowPadding)
           radius: FoamyStyle.radius
           color: windowMouse.containsMouse || activeFocus || selected ? FoamyPalette.hoverFill : "transparent"
           border.width: activeFocus ? 1 : 0
@@ -172,6 +176,7 @@ Column {
           activeFocusOnTab: true
           Accessible.role: Accessible.Button
           Accessible.name: modelData.title + ", " + description
+            + (nameMissing ? ", " + root.tr("No MPRIS name found; set it under Advanced") : "")
           Accessible.onPressAction: root.choose(modelData)
           Keys.onPressed: function(event) {
             if (event.key === (FoamyI18n.rightToLeft ? Qt.Key_Right : Qt.Key_Left)) {
@@ -195,6 +200,7 @@ Column {
             color: root.secondaryForeground
           }
           Column {
+            id: rowText
             anchors.left: windowIcon.right
             anchors.right: check.left
             anchors.verticalCenter: parent.verticalCenter
@@ -217,6 +223,17 @@ Column {
               color: root.secondaryForeground
               textFormat: Text.PlainText
               elide: Text.ElideRight
+            }
+            Text {
+              objectName: "browserMissingName"
+              visible: windowRow.nameMissing
+              width: parent.width
+              text: root.tr("No MPRIS name found; set it under Advanced")
+              font.family: FoamyStyle.fontFamily
+              font.pixelSize: FoamyStyle.font.body
+              color: root.secondaryForeground
+              textFormat: Text.PlainText
+              wrapMode: Text.WordWrap
             }
           }
           FoamyIcon {

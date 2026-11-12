@@ -33,6 +33,20 @@ const chrome=B.suggestion({appId:'chrome-youtube.com__-Default',title:'YouTube'}
   [{dbusName:'org.mpris.MediaPlayer2.chrome.instance1',desktopEntry:'google-chrome'}])
 assert.deepEqual(chrome.values,{youtubeAppId:'chrome-youtube.com__-Default',youtubeMprisName:'chrome'})
 assert.equal(B.suggestion(window,[{dbusName:'org.mpris.MediaPlayer2.vivaldievil'}]).values.youtubeMprisName,undefined)
+// Chromium (Omarchy's default browser) names a web-app window like Chrome
+// does ("chrome-…", omarchy-webapp-window-class) but plays as "chromium".
+const chromiumWindow = {appId:'chrome-youtube.com__-Default', title:'YouTube'}
+const chromium = B.suggestion(chromiumWindow, [{dbusName:'org.mpris.MediaPlayer2.chromium.instance4242'}])
+assert.deepEqual(chromium.values, {youtubeAppId:'chrome-youtube.com__-Default', youtubeMprisName:'chromium'})
+assert.deepEqual(chromium.missing, [])
+// Chrome and Chromium playing at once: either could own the window, so no guess.
+const both = B.suggestion(chromiumWindow, [{dbusName:'org.mpris.MediaPlayer2.chromium.instance1'},
+  {dbusName:'org.mpris.MediaPlayer2.chrome.instance2'}])
+assert.equal(both.values.youtubeMprisName, undefined)
+assert.deepEqual(both.missing, ['youtubeMprisName'])
+// The widening is chrome's alone: a chromium-named window does not take a Chrome player.
+assert.equal(B.suggestion({appId:'chromium-youtube.com__-Default', title:'YouTube'},
+  [{dbusName:'org.mpris.MediaPlayer2.chrome.instance1'}]).values.youtubeMprisName, undefined)
 // BrowserPicker's summary reads the app ID through the schema: unset or
 // invalid is the default app, the one the widget actually uses. The profile
 // comes from the app ID (Chromium's Profile_N shown as its directory name).

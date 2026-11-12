@@ -7,6 +7,7 @@ import qs.Ui
 import "harness"
 import "plugin" as Media
 import "plugin/kit"
+import "plugin/BrowserSetup.js" as BrowserSetup
 
 // Foamy Media under a real host shell, offscreen: three bar instances (as on
 // three monitors) sharing one MediaService and one leader, the lazy popup
@@ -66,6 +67,19 @@ ShellRoot {
       progress: 0.5
     }
     Media.BarContent { id: growBar; y: 90; label: "X"; maxLabelWidth: 600; live: true; playing: true }
+    // The window picker fed what BrowserSetup makes of two windows: Omarchy's
+    // Chromium web app with its player, and a Vivaldi one with none.
+    Media.BrowserPicker {
+      id: picker
+      x: 1000
+      y: 120
+      width: 400
+      settings: ({ id: "foamy.media" })
+      candidates: BrowserSetup.candidates([
+        { appId: "chrome-youtube.com__-Default", title: "A - YouTube" },
+        { appId: "vivaldi-youtube.com__-Default", title: "B - YouTube" }
+      ], [{ dbusName: "org.mpris.MediaPlayer2.chromium.instance4242" }])
+    }
   }
 
   MockBar { id: mockBar; moduleName: "foamy.media" }
@@ -173,6 +187,32 @@ ShellRoot {
     eq(first.live, false, "no player offscreen")
     eq(first.popup.bodyItem, null, "popup body is lazy")
     eq(first.member.demanded, false, "no demand while closed")
+
+    // The picker row says when it found no MPRIS name to save.
+    picker.expanded = true
+    var pickerRows = []
+    function collectRows(item) {
+      if (item.modelData !== undefined && item.description !== undefined) pickerRows.push(item)
+      for (var r = 0; r < (item.children || []).length; r++) collectRows(item.children[r])
+    }
+    collectRows(picker)
+    eq(pickerRows.length, 2, "two picker rows")
+    if (pickerRows.length === 2) {
+      var chromiumRow = pickerRows[0].modelData.title === "A - YouTube" ? pickerRows[0] : pickerRows[1]
+      var vivaldiRow = chromiumRow === pickerRows[0] ? pickerRows[1] : pickerRows[0]
+      eq(chromiumRow.modelData.values.youtubeMprisName, "chromium", "a chrome window takes the chromium player")
+      var found = findNamed(chromiumRow, "browserMissingName")
+      eq(found !== null && found.visible, false, "no note when the name was found")
+      var note = findNamed(vivaldiRow, "browserMissingName")
+      check(note !== null, "a row without a player has a missing-name note")
+      if (note) {
+      eq(note.visible, true, "a row without a player says the name is missing")
+      eq(note.text, FoamyI18n.t("No MPRIS name found; set it under Advanced"), "the note's text")
+      var noteBottom = note.mapToItem(vivaldiRow, 0, note.height).y
+      check(noteBottom <= vivaldiRow.height, "the row grows to fit the note: " + noteBottom + " > " + vivaldiRow.height)
+      }
+    }
+    picker.expanded = false
 
     // Selection is shared by every bar.
     first.selectSource("spotify")

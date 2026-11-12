@@ -22,6 +22,14 @@ function description(appId) {
   var profile = /^Profile_[0-9]+$/.test(app.profile) ? app.profile.replace("_", " ") : app.profile
   return browser.charAt(0).toUpperCase() + browser.slice(1) + " · " + profile
 }
+// The MPRIS name families a web-app window's browser can play under.
+// Chromium and Google Chrome both name the window "chrome-<host>__-<profile>"
+// (Omarchy's omarchy-webapp-window-class prints that form), but Chromium
+// publishes MPRIS as "chromium" and Chrome as "chrome", so a chrome window
+// matches either. Both running at once stays ambiguous (suggestion()).
+function playerFamilies(browserFamily) {
+  return browserFamily === "chrome" ? ["chrome", "chromium"] : [browserFamily]
+}
 function unique(values) {
   var result = []
   for (var i = 0; i < values.length; i++)
@@ -33,11 +41,11 @@ function suggestion(window, players) {
   var app = webApp(appId)
   if (!app || appId.length > 200) return null
   var patch = {youtubeAppId:appId}
-  var browserFamily = family(app.browser)
+  var families = playerFamilies(family(app.browser))
   var names = []
   for (var i = 0; i < (players || []).length; i++) {
     var match = /^org\.mpris\.MediaPlayer2\.([A-Za-z0-9_+-]+)(?:\.|$)/i.exec(String(players[i].dbusName || ""))
-    if (match && family(match[1]) === browserFamily) names.push(match[1])
+    if (match && families.indexOf(family(match[1])) !== -1) names.push(match[1])
   }
   names = unique(names)
   if (names.length === 1) patch.youtubeMprisName = names[0]
