@@ -309,13 +309,14 @@ ShellRoot {
     player.sourceOpen = true
 
     first.open()
-    stepTwo.start()
+    // Steps wait for the state they check, not a fixed delay (FoamyWait).
+    wait.waitFor(function() { return first.popup.bodyItem !== null && first.member.demanded }, 10000,
+      shell.stepTwo, "the popup body is built on open")
   }
 
-  Timer {
-    id: stepTwo
-    interval: 600
-    onTriggered: {
+  FoamyWait { id: wait }
+
+  function stepTwo() {
       var first = panels.itemAt(0)
       var view = first.popup.bodyItem
       check(view !== null, "body built on open")
@@ -420,14 +421,12 @@ ShellRoot {
       first.closeSettings()
       eq(view.blocked, false, "back from Settings")
       first.close()
-      stepThree.start()
-    }
+      // Covers stay decoded for a moment after closing (Panel.imageRelease).
+      wait.waitFor(function() { return !first.member.demanded && !first.imagesActive }, 10000,
+        shell.stepThree, "closing releases demand and covers")
   }
 
-  Timer {
-    id: stepThree
-    interval: 1300
-    onTriggered: {
+  function stepThree() {
       var first = panels.itemAt(0)
       eq(first.member.demanded, false, "closing releases demand")
       eq(first.imagesActive, false, "covers released after closing")
@@ -450,20 +449,15 @@ ShellRoot {
       eq(hidden.shown, false, "nothing playing hides the widget")
       eq(hidden.popup.centerOnBar, true, "hidden widget centres its popup")
       hidden.open()
-      stepFour.hidden = hidden
-      stepFour.start()
-    }
+      wait.waitFor(function() { return hidden.popup.screenW > 0 && hidden.popup.bodyItem !== null }, 10000,
+        function() { shell.stepFour(hidden) }, "the hidden widget's popup opens")
   }
 
   Component {
     id: hiddenPanel
     Media.Panel {}
   }
-  Timer {
-    id: stepFour
-    property var hidden: null
-    interval: 600
-    onTriggered: {
+  function stepFour(hidden) {
       var popup = hidden.popup
       check(popup.screenW > 0, "popup knows its screen")
       eq(popup.cardOrigin.x, Math.round(Math.max(popup.margin, Math.min(popup.screenW / 2 - popup.contentWidth / 2,
@@ -473,7 +467,6 @@ ShellRoot {
       hidden.close()
       hidden.destroy()
       focusSteps.begin()
-    }
   }
 
   // YouTube is focus-only (regression: with no YouTube window, launch()
@@ -487,9 +480,8 @@ ShellRoot {
     property int activations: 0
     function activate() { activations++ }
   }
-  Timer {
+  QtObject {
     id: focusSteps
-    interval: 700
     function begin() {
       var first = panels.itemAt(0)
       eq(first.startBrowser, undefined, "no browser start path")
@@ -528,9 +520,10 @@ ShellRoot {
       svc.artProbe.exitSeen = false
       svc.artProbe.command = ["foamy-media-no-such-helper"]
       svc.artProbe.running = true
-      start()
+      wait.waitFor(function() { return !svc.artProbe.running && !svc.artSettling }, 10000,
+        focusSteps.finish, "the art probe that can't start ends")
     }
-    onTriggered: {
+    function finish() {
       var first = panels.itemAt(0)
       var svc = Media.MediaService
       eq(svc.artProbe.running, false, "art probe that can't start is not running")

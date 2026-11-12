@@ -21,7 +21,6 @@ ShellRoot {
   property int checks: 0
   property int failures: 0
   property int index: 0
-  property int waited: 0
 
   function check(ok, label) {
     checks++
@@ -109,12 +108,13 @@ ShellRoot {
   }
 
   Component.onCompleted: Qt.callLater(noPlayer)
+  FoamyWait { id: wait }
 
   function noPlayer() {
     eq(panel.live, false, "no player yet")
     hover("Spotify is not running", "not running", "", false)
     console.log("FOAMY WAITING FOR PLAYER")
-    poll.start()
+    nextTrack()
   }
 
   function settled(t) {
@@ -122,34 +122,29 @@ ShellRoot {
       && panel.playing === (t.status === "Playing")
   }
 
-  Timer {
-    id: poll
-    interval: 50
-    repeat: true
-    onTriggered: {
-      var t = shell.tracks[shell.index]
-      if (!shell.settled(t)) {
-        if (++shell.waited > 400) {
-          shell.check(false, "track " + shell.index + " never arrived (live " + panel.live + ", title "
-            + JSON.stringify(panel.trackTitle) + ")")
-          stop()
-          shell.finish()
-        }
+  // Each scripted track in turn: wait until the widget shows it, hover,
+  // then skip to the next one.
+  function nextTrack() {
+    var t = shell.tracks[shell.index]
+    wait.waitFor(function() { return shell.settled(t) }, 60000, function(ok) {
+      if (!ok) {
+        shell.check(false, "track " + shell.index + " never arrived (live " + panel.live + ", title "
+          + JSON.stringify(panel.trackTitle) + ")")
+        shell.finish()
         return
       }
-      shell.waited = 0
       var prefix = t.status === "Playing" ? "" : "Paused — "
       var raw = prefix + t.title + (t.artist ? "  ·  " + t.artist : "")
       raw = raw.split("tooltip-probe.png").join("control-probe.png")
       shell.hover(prefix + t.label, "track " + shell.index, raw, t.rich === true)
       if (shell.index === shell.tracks.length - 1) {
-        stop()
         shell.finish()
         return
       }
       shell.index++
       panel.skipNext()
-    }
+      shell.nextTrack()
+    })
   }
 
   function finish() {

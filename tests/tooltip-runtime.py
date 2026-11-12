@@ -19,7 +19,6 @@ from pathlib import Path
 import struct
 import subprocess
 import sys
-import time
 import zlib
 
 PLUGIN = Path(__file__).resolve().parents[1]
@@ -138,14 +137,10 @@ def main():
     ok = False
     try:
         r.start()
-        log_path = r.base / "qs.log"
-        for _ in range(300):
-            if "FOAMY WAITING FOR PLAYER" in log_path.read_text(errors="replace") or r.process.poll() is not None:
-                break
-            time.sleep(0.1)
+        r.wait_for_log("FOAMY WAITING FOR PLAYER", 60)
         fake = subprocess.Popen([sys.executable, "-I", str(PLUGIN / "tests/fake-mpris.py"), str(r.base / "tracks.json")],
                                 env=r.env, stdout=(r.base / "fake.log").open("w"), stderr=subprocess.STDOUT)
-        r.wait(90)
+        r.wait(180)
     finally:
         if fake and fake.poll() is None:
             fake.terminate()

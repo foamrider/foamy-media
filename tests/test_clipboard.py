@@ -6,9 +6,11 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import sys
 import time
 import unittest
 
+KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "kit/clipboard.sh"
@@ -135,6 +137,12 @@ class ClipboardTests(unittest.TestCase):
         runner = shutil.which("qs")
         if not runner:
             self.skipTest("Quickshell is unavailable")
+        if os.environ.get("FOAMY_SUITE_CI"):
+            self.skipTest("tests/suite.sh --ci runs no Quickshell")
+        if not (KIT / "preview/hostenv.py").exists():
+            self.skipTest(f"foamy-kit not found at {KIT} (set FOAMY_KIT)")
+        sys.path.insert(0, str(KIT / "preview"))
+        import hostenv
         # Quickshell's statically registered Io plugin requires the qs executable.
         # A stock qmltestrunner cannot load it as a dynamic QML plugin.
         fixture = self.base / "shell.qml"
@@ -158,7 +166,10 @@ ShellRoot {
         runtime.mkdir(mode=0o700)
         env = dict(self.env, QT_QPA_PLATFORM=os.environ.get("FOAMY_TEST_PLATFORM", "offscreen"),
                    QT_QUICK_BACKEND="software", QT_QPA_PLATFORMTHEME="",
-                   XDG_RUNTIME_DIR=str(runtime))
+                   XDG_RUNTIME_DIR=str(runtime),
+                   DBUS_SESSION_BUS_ADDRESS=f"unix:path={self.base}/no-session-bus")
+        # No Omarchy bin dir, AppImage library path, audio server or system bus.
+        hostenv.isolate(env, self.base)
         if env["QT_QPA_PLATFORM"] == "wayland":
             # Keep test logs/IPC private without hiding the host compositor socket.
             display = Path(os.environ["WAYLAND_DISPLAY"])
