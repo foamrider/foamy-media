@@ -85,5 +85,6 @@
   "Undo": "Angre",
   "Enter a number from %1 to %2": "Skriv inn et tall fra %1 til %2",
   "This plugin's helper isn't available for this CPU.": "Hjelpeprogrammet til denne utvidelsen er ikke tilgjengelig for denne prosessoren.",
-  "No MPRIS name found; set it under Advanced": "Fant ikke MPRIS-navnet; angi det under Avansert"
+  "No MPRIS name found; set it under Advanced": "Fant ikke MPRIS-navnet; angi det under Avansert",
+  "Omarchy's YouTube app": "Omarchys YouTube-app"
 }

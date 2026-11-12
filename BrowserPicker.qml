@@ -205,7 +205,7 @@ Column {
           border.color: Commons.Color.accent
           activeFocusOnTab: true
           Accessible.role: Accessible.Button
-          Accessible.name: modelData.title + ", " + description + (nameMissing ? ", " + root.tr("No MPRIS name found; set it under Advanced") : "")
+          Accessible.name: modelData.title + ", " + description + (modelData.hinted === true ? ", " + root.tr("Omarchy's YouTube app") : "") + (nameMissing ? ", " + root.tr("No MPRIS name found; set it under Advanced") : "")
           Accessible.onPressAction: root.choose(modelData)
           Keys.onPressed: function (event) {
             if (event.key === (FoamyI18n.rightToLeft ? Qt.Key_Right : Qt.Key_Left)) {
@@ -246,11 +246,24 @@ Column {
               elide: Text.ElideRight
             }
             Text {
+              id: rowDescription
               width: parent.width
               text: windowRow.description
               font.family: FoamyStyle.fontFamily
               font.pixelSize: FoamyStyle.font.body
               color: root.secondaryForeground
+              textFormat: Text.PlainText
+              elide: Text.ElideRight
+            }
+            // The window Omarchy names its YouTube web app (Panel's hint).
+            Text {
+              objectName: "browserHintNote"
+              visible: windowRow.modelData.hinted === true
+              width: parent.width
+              text: root.tr("Omarchy's YouTube app")
+              // The browser line's font (typed, unlike FoamyStyle.font.*).
+              font: rowDescription.font
+              color: Commons.Color.accent
               textFormat: Text.PlainText
               elide: Text.ElideRight
             }

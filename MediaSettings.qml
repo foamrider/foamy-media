@@ -148,8 +148,12 @@ FoamySettingsPage {
       BrowserPicker {
         id: browserPicker
         width: parent.width
-        onExpandedChanged: if (expanded)
+        onExpandedChanged: if (expanded) {
           page.ensureVisible(browserPicker)
+          // Omarchy's YouTube web app may be among the windows: ask (Panel).
+          if (typeof page.media.requestYoutubeAppIdHint === "function")
+            page.media.requestYoutubeAppIdHint()
+        }
         candidates: page.media.browserCandidates || []
         settings: page.settings
         saving: page.saving

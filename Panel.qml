@@ -112,7 +112,17 @@ Panel {
     prefs.retry()
   }
 
-  readonly property var browserCandidates: editingSettings && browserSettingsOpen ? BrowserSetup.candidates(root.toplevelModel ? root.toplevelModel.values || [] : [], players) : []
+  readonly property var browserCandidates: editingSettings && browserSettingsOpen ? BrowserSetup.candidates(root.toplevelModel ? root.toplevelModel.values || [] : [], players, root.youtubeAppIdHint) : []
+
+  // The window picker's hint: Omarchy's own class for its YouTube web app
+  // (MediaService asks omarchy-webapp-window-class each time the picker
+  // opens). It applies only to an entry that has never set an app ID and
+  // whose default app ID (the Vivaldi window) matches no open window, so a
+  // configured or Vivaldi setup sees no change.
+  readonly property string youtubeAppIdHint: root.effectiveSettings.youtubeAppId === undefined && !root.youtubeOpen ? MediaService.omarchyYoutubeAppId : ""
+  function requestYoutubeAppIdHint() {
+    MediaService.requestYoutubeAppIdHint()
+  }
 
   // ------------------------------------------------------------------- theme
   // Source brand colours: the default accent is the source's own colour.
@@ -128,7 +138,9 @@ Panel {
   readonly property bool compactPanel: popup.availableCardHeight > 0 && popup.availableCardHeight < Style.space(500)
 
   // ------------------------------------------------------------------ player
-  readonly property var players: Mpris.players ? Mpris.players.values : []
+  // The MPRIS players (a test stands in its own, as for toplevelModel).
+  property var playerModel: Mpris.players
+  readonly property var players: playerModel ? playerModel.values || [] : []
   // Bumped on every ToplevelManager.toplevels change and read by
   // youtubeWindow, so the YouTube window is matched again when a window opens
   // or closes. The binding also reads `values`, which notifies on its own

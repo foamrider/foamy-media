@@ -52,14 +52,30 @@ function suggestion(window, players) {
   var missing = patch.youtubeMprisName ? [] : ["youtubeMprisName"]
   return {id:appId, title:String(window.title || "YouTube"), values:patch, missing:missing}
 }
-function candidates(windows, players) {
+// The app ID in what `omarchy-webapp-window-class https://youtube.com/`
+// printed (at most 512 bytes; Panel bounds the read), or "". Only one line
+// naming a Chromium YouTube web app ("chrome-youtube.com__-Default") counts:
+// anything else, an empty or partial answer included, gives no hint.
+function omarchyAppId(text) {
+  var value = String(text === undefined || text === null ? "" : text).replace(/\n$/, "")
+  if (value.length > 200 || /[\x00-\x1f\x7f]/.test(value)) return ""
+  var app = webApp(value)
+  return app && family(app.browser) === "chrome" ? value : ""
+}
+// The window rows, by title. `hint` is the app ID of Omarchy's YouTube web
+// app (Panel passes it only while it applies): its row comes first and is
+// marked `hinted`, so one click on it sets that window.
+function candidates(windows, players, hint) {
   var result = [], seen = []
   for (var i = 0; i < windows.length; i++) {
     var row = suggestion(windows[i], players)
     if (!row || seen.indexOf(row.id) !== -1) continue
     seen.push(row.id)
+    row.hinted = !!hint && row.id === hint
     result.push(row)
   }
-  return result.sort(function(a,b) { return a.title.localeCompare(b.title) || a.id.localeCompare(b.id) })
+  return result.sort(function(a,b) {
+    return Number(b.hinted) - Number(a.hinted) || a.title.localeCompare(b.title) || a.id.localeCompare(b.id)
+  })
 }
-if (typeof module !== "undefined") module.exports = {description:description, webApp:webApp, suggestion:suggestion, candidates:candidates}
+if (typeof module !== "undefined") module.exports = {description:description, webApp:webApp, suggestion:suggestion, candidates:candidates, omarchyAppId:omarchyAppId}

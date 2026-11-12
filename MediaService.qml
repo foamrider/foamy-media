@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell.Io
 import Quickshell.Networking
 import "Model.js" as Model
+import "BrowserSetup.js" as BrowserSetup
 import "kit/FoamyNative.js" as FoamyNative
 
 // State shared by every media bar instance (4.5 draws one bar per monitor).
@@ -151,6 +152,60 @@ QtObject {
   function finishAttempt(url, exitCode) {
     if (url === root.artUrl && exitCode !== 0 && root.artProbed !== url)
       root.forgetArt()
+  }
+
+  // ------------------------------------------- Omarchy's YouTube app
+  // The class Chromium gives Omarchy's YouTube web app, as
+  // omarchy-webapp-window-class prints it, for the window picker's hint
+  // (Panel.youtubeAppIdHint). A finite job: asked each time a picker opens,
+  // never polled, one shell-wide answer for every bar.
+  property string omarchyYoutubeAppId: ""
+  // Answers so far, one per request whatever the outcome (tests wait on it).
+  property int youtubeAppIdHintAnswers: 0
+  // The probe's request state (on the root, where qmllint can type it):
+  // whether its exit was seen, whether this request is answered, and which
+  // request a deferred answer belongs to, so a late one never lands on the
+  // next request.
+  property bool probeExitSeen: false
+  property bool probeAnswered: true
+  property int probeGeneration: 0
+  function requestYoutubeAppIdHint() {
+    if (windowClassProbe.running)
+      return
+    root.probeExitSeen = false
+    root.probeAnswered = false
+    root.probeGeneration++
+    windowClassProbe.running = true
+  }
+  // The one completion path: an exit (any code) or a failed start. Only a
+  // single line naming a Chromium YouTube web app counts (BrowserSetup).
+  function finishYoutubeAppIdHint(text, generation) {
+    if (root.probeAnswered || generation !== root.probeGeneration)
+      return
+    root.probeAnswered = true
+    root.omarchyYoutubeAppId = BrowserSetup.omarchyAppId(text)
+    root.youtubeAppIdHintAnswers++
+  }
+
+  property Process windowClassProbe: Process {
+    // A fixed script with no outside values: the command gets 3 s (then
+    // SIGKILL), and at most 512 bytes of its output are read.
+    command: ["bash", "-c", "set -o pipefail; timeout --kill-after=1s 3s omarchy-webapp-window-class https://youtube.com/ | head -c 512"]
+    stdout: StdioCollector {
+      id: windowClassOutput
+      waitForEnd: true
+    }
+    // A command that can't start ends with running false and no exited().
+    onRunningChanged: if (!running && !root.probeExitSeen)
+      root.finishYoutubeAppIdHint("", root.probeGeneration)
+    onExited: function (exitCode) {
+      root.probeExitSeen = true
+      var request = root.probeGeneration
+      // Let the collector finish before reading it.
+      Qt.callLater(function () {
+        root.finishYoutubeAppIdHint(exitCode === 0 ? windowClassOutput.text : "", request)
+      })
+    }
   }
 
   property Timer networkSettle: Timer {

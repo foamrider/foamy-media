@@ -60,7 +60,11 @@ launcher), then open **Settings → YouTube → Browser settings → Use an open
 window** and pick it. That sets the window app ID the plugin focuses and,
 when exactly one MPRIS player of that browser is running (start a video
 first), the MPRIS name it controls; otherwise set the MPRIS name under
-**Advanced**. Ordinary browser tabs are never treated as the web app. The plugin only
+**Advanced**. While no app ID is set and no Vivaldi YouTube window (the
+default) is open, the list puts the window Omarchy names its YouTube web app
+first, marked "Omarchy's YouTube app" (the class comes from
+`omarchy-webapp-window-class`, asked when the list opens). The defaults stay
+Vivaldi's. Ordinary browser tabs are never treated as the web app. The plugin only
 controls and focuses that window: it never starts the browser, and without
 the window the YouTube tab is gone.
 

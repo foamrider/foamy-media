@@ -68,7 +68,18 @@ Item {
     readonly property bool saving: false
     readonly property string settingsError: ""
     readonly property bool retryable: false
+    // Omarchy's Chromium YouTube app first, marked as the hint (Panel puts
+    // it first when the hint applies).
     readonly property var browserCandidates: browserSettingsOpen ? [
+      {
+        id: "chrome-youtube.com__-Default",
+        title: "YouTube – Omarchy",
+        hinted: true,
+        values: {
+          youtubeAppId: "chrome-youtube.com__-Default",
+          youtubeMprisName: "chromium"
+        }
+      },
       {
         id: "vivaldi-youtube.com__-Default",
         title: "YouTube",

@@ -734,6 +734,143 @@ ShellRoot {
       eq(first.editingSettings, false, "and no settings page")
       eq(first.sourceKind, "spotify", "Spotify selected")
       eq(fakeYoutubeWindow.activations, 2, "the stand-in window was only focused while open")
+      hintSteps.begin()
+    }
+  }
+
+  // Omarchy's YouTube app hint. tests/runtime.py puts a fake
+  // omarchy-webapp-window-class first on PATH that answers, in turn: the
+  // Chromium class, a failure, a hang, two lines, 100 kB of junk, the class.
+  QtObject {
+    id: hintSteps
+    property var panel: null
+    property var hintPicker: null
+    property int asked: 0
+    property double started: 0
+    readonly property string omarchyId: "chrome-youtube.com__-Default"
+    readonly property var chromeWindow: ({
+        appId: "chrome-youtube.com__-Default",
+        title: "Omarchy - YouTube"
+      })
+    readonly property var vivaldiWindow: ({
+        appId: "vivaldi-youtube.com__-Default",
+        title: "Vivaldi - YouTube"
+      })
+    function begin() {
+      var svc = Media.MediaService
+      eq(svc.youtubeAppIdHintAnswers, 0, "nothing asks Omarchy before a picker opens")
+      panel = hiddenPanel.createObject(barRow, {
+        bar: mockBar,
+        moduleName: "foamy.media",
+        settings: ({
+            id: "foamy.media",
+            hideWhenClosed: false
+          })
+      })
+      panel.toplevelModel = {
+        values: [chromeWindow]
+      }
+      panel.playerModel = {
+        values: [
+          {
+            dbusName: "org.mpris.MediaPlayer2.chromium.instance7",
+            identity: "Chromium"
+          }
+        ]
+      }
+      eq(panel.preference("youtubeAppId"), "vivaldi-youtube.com__-Default", "the default app ID is still Vivaldi's")
+      eq(panel.preference("youtubeMprisName"), "vivaldi", "and so is the MPRIS name")
+      panel.openSettings()
+      panel.browserSettingsOpen = true
+      wait.waitFor(function () {
+        return shell.findNamed(panel.popup.bodyItem, "browserPickerHeader") !== null
+      }, 10000, function () {
+        var header = shell.findNamed(panel.popup.bodyItem, "browserPickerHeader")
+        hintSteps.hintPicker = header ? header.parent : null
+        check(hintSteps.hintPicker !== null, "the settings page has the window picker")
+        eq(svc.youtubeAppIdHintAnswers, 0, "opening Settings asks nothing")
+        hintSteps.ask(hintSteps.afterClass)
+      }, "the hint panel's settings page")
+    }
+    // Close and open the picker: each opening asks once.
+    function ask(then) {
+      if (!hintSteps.hintPicker) {
+        shell.finish()
+        return
+      }
+      hintSteps.hintPicker.expanded = false
+      asked++
+      started = Date.now()
+      hintSteps.hintPicker.expanded = true
+      var target = asked
+      wait.waitFor(function () {
+        return Media.MediaService.youtubeAppIdHintAnswers === target
+      }, 15000, then, "answer " + target + " to the window-class question")
+    }
+    function rows() {
+      return panel.browserCandidates.map(function (row) {
+        return row.id + (row.hinted ? " (hinted)" : "")
+      }).join(", ")
+    }
+    function noHint(label) {
+      eq(Media.MediaService.omarchyYoutubeAppId, "", label + ": no Omarchy class")
+      eq(panel.youtubeAppIdHint, "", label + ": no hint")
+      eq(rows(), omarchyId, label + ": the window is listed, unmarked")
+    }
+    function afterClass() {
+      eq(Media.MediaService.omarchyYoutubeAppId, omarchyId, "Omarchy's class is read")
+      eq(panel.youtubeAppIdHint, omarchyId, "the hint applies to an unset app ID")
+      eq(rows(), omarchyId + " (hinted)", "Omarchy's window is the marked row")
+      var first = panel.browserCandidates[0]
+      eq(JSON.stringify(first ? first.values : null), JSON.stringify({
+        youtubeAppId: omarchyId,
+        youtubeMprisName: "chromium"
+      }), "one click sets its app ID and player")
+      var note = shell.findNamed(hintSteps.hintPicker, "browserHintNote")
+      check(note !== null && note.visible, "the row says it is Omarchy's YouTube app")
+      if (note)
+        eq(note.text, FoamyI18n.t("Omarchy's YouTube app"), "the hint note's text")
+      ask(afterFailure)
+    }
+    function afterFailure() {
+      noHint("the command fails")
+      check(shell.findNamed(hintSteps.hintPicker, "browserHintNote") === null || !shell.findNamed(hintSteps.hintPicker, "browserHintNote").visible, "no hint note")
+      ask(afterHang)
+    }
+    function afterHang() {
+      noHint("the command hangs")
+      check(Date.now() - started < 8000, "a hanging command is ended within its deadline: " + (Date.now() - started) + " ms")
+      ask(afterTwoLines)
+    }
+    function afterTwoLines() {
+      noHint("the command prints two lines")
+      ask(afterFlood)
+    }
+    function afterFlood() {
+      noHint("the command prints 100 kB")
+      ask(afterAgain)
+    }
+    function afterAgain() {
+      eq(panel.youtubeAppIdHint, omarchyId, "the hint is back")
+      // A Vivaldi window matching the default app ID: that setup is left alone.
+      panel.toplevelModel = {
+        values: [chromeWindow, vivaldiWindow]
+      }
+      eq(panel.youtubeAppIdHint, "", "no hint while the default app ID's window is open")
+      eq(rows(), omarchyId + ", vivaldi-youtube.com__-Default", "rows by title, none marked")
+      panel.toplevelModel = {
+        values: [chromeWindow]
+      }
+      eq(panel.youtubeAppIdHint, omarchyId, "hint again without it")
+      // An app ID the user set: no hint.
+      panel.saveMany({
+        youtubeAppId: "vivaldi-youtube.com__-Profile_1"
+      })
+      eq(panel.youtubeAppIdHint, "", "no hint once an app ID is set")
+      eq(rows(), omarchyId, "and no marked row")
+      eq(Media.MediaService.youtubeAppIdHintAnswers, asked, "one answer per opening, none from a poll")
+      panel.close()
+      panel.destroy()
       shell.finish()
     }
   }

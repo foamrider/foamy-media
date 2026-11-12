@@ -27,6 +27,22 @@ sys.path.insert(0, str(KIT / "preview"))
 import harness  # noqa: E402
 
 
+# Stands in for Omarchy's omarchy-webapp-window-class. Each call logs its
+# arguments and answers the next case of Runtime.qml's hintSteps: the class,
+# the class with a failing exit, a hang, two lines, 100 kB of junk, the class
+# again.
+WINDOW_CLASS = r"""#!/bin/bash
+printf '%s\n' "$*" >>"$FOAMY_OUT/window-class-calls"
+case $(wc -l <"$FOAMY_OUT/window-class-calls") in
+  2) printf 'chrome-youtube.com__-Default\n'; exit 1 ;;
+  3) exec sleep 30 ;;
+  4) printf 'chrome-youtube.com__-Default\nsecond line\n' ;;
+  5) head -c 100000 /dev/zero | tr '\0' x ;;
+  *) printf 'chrome-youtube.com__-Default\n' ;;
+esac
+"""
+
+
 def ipc_status(run):
     """`qs ipc call foamy.media status` once the checks are done (FOAMY READY)."""
     if not run.wait_for_log("FOAMY READY", 120):
@@ -47,7 +63,14 @@ def ipc_status(run):
 
 def run(host, lang):
     shell = (PLUGIN / "tests/qml/Runtime.qml").read_text()
-    r = harness.Run(host, shell, plugin=PLUGIN, language=lang, prefix=f"foamy-media-runtime-{host}-{lang}-")
+    r = harness.Run(
+        host,
+        shell,
+        plugin=PLUGIN,
+        language=lang,
+        prefix=f"foamy-media-runtime-{host}-{lang}-",
+        fakebin={"omarchy-webapp-window-class": WINDOW_CLASS},
+    )
     # The harness gives each run a private session bus: no live MPRIS player.
     # The shell holds after its checks until the IPC call is made; stop() ends it.
     r.env.update(FOAMY_LANG=lang, FOAMY_HOLD_MS="120000")
@@ -61,6 +84,10 @@ def run(host, lang):
         (line.split("FOAMY RESULT ", 1)[1] for line in log.splitlines() if "FOAMY RESULT" in line), "no result"
     )
     failures = r.failures() + [f"FOAMY FAIL host command: {line}" for line in r.host_commands()]
+    calls_log = r.out / "window-class-calls"
+    calls = calls_log.read_text().splitlines() if calls_log.exists() else []
+    if calls != ["https://youtube.com/"] * 6:
+        failures.append(f"FOAMY FAIL omarchy-webapp-window-class calls: {calls}")
     try:
         leader = status is not None and json.loads(status).get("leader") is True
     except ValueError:

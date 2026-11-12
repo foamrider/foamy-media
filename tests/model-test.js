@@ -295,7 +295,11 @@ const M = require("../Model.js")
   const path = require("path")
   const service = fs.readFileSync(path.join(__dirname, "..", "MediaService.qml"), "utf8")
   // The target is an argument of the bundled binary, never spliced into code.
-  assert.ok(!/\/bin\/sh|"sh", *"-c"|bash", *"-c"/.test(service), "the probe must not run through a shell script")
+  // The only shell in the file is the window-class hint's fixed script (a
+  // `head -c` bound, REVIEW section 5): a literal with no outside values.
+  const shells = service.split("\n").filter(line => /\/bin\/sh|"sh", *"-c"|bash", *"-c"/.test(line)).map(line => line.trim())
+  assert.deepStrictEqual(shells, ['command: ["bash", "-c", "set -o pipefail; timeout --kill-after=1s 3s omarchy-webapp-window-class https://youtube.com/ | head -c 512"]'],
+    "the art probe must not run through a shell script")
   assert.ok(/FoamyNative\.command\(root\.pluginDir, "foamy-media-helper", Model\.artProbeArgs\(target\)\)/.test(service))
   // And its exits are read the way DESIGN.md asks: 126/127 mean there is no
   // helper for this CPU, which is said once and never retried.
