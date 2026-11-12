@@ -76,8 +76,9 @@ BMP or WebP, and ImageMagick is told which), drops a PNG's text chunks
 decodes it with ImageMagick under resource limits and a deadline, with no
 shell in between, and writes a re-encoded PNG of at most 640 pixels a side to
 `$XDG_CACHE_HOME/foamy-media/covers` (mode 0700, named by the cover's
-content, so a player that reuses one file path for every track still gets the
-new cover; the newest eight are kept). The popup only ever loads that copy. Remote covers
+content; the newest eight are kept). The popup only ever loads that copy. A
+cover is read once per art URL: a player that writes every track's cover to
+the same file path keeps showing the first one until the URL changes. Remote covers
 wait for the network to settle and are retried up to three times. A cover
 that cannot be fetched or read is never replaced by the previous track's
 cover: the popup shows the source icon until the new one arrives.
