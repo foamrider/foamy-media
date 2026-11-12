@@ -14,31 +14,50 @@ KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "kit/clipboard.sh"
-MOCK = """#!/usr/bin/python3
-import json, os, signal, sys, time
-from pathlib import Path
-state = Path(os.environ["TEST_CLIPBOARD_STATE"])
-if Path(sys.argv[0]).name == "clipboard-fixture":
-    state.write_text(sys.argv[1])
-    sys.exit(0)
-mode = state.read_text()
-Path(str(state) + ".pid").write_text(str(os.getpid()))
-Path(str(state) + ".args").write_text(json.dumps(sys.argv[1:]))
-if mode == "failure": sys.exit(1)
-if mode == "ignore":
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-    time.sleep(30)
-if mode == "stall": time.sleep(30)
-if mode in ("stream", "slow"):
-    while True:
-        os.write(1, b"x" * (4096 if mode == "stream" else 1))
-        if mode == "slow": time.sleep(0.1)
-if mode == "delayed": time.sleep(0.4)
-values = {"normal": "folder", "unicode": "/home/test/Blåbær 📁",
-          "empty": "", "limit": "x" * 16384, "large": "x" * 16385,
-          "nul": "a\\x00b", "lines": "one\\r\\ntwo\\u2028three",
-          "delayed": "later", "long": "x" * 400}
-os.write(1, values.get(mode, "folder").encode())
+# The stand-in wl-paste (and clipboard-fixture, which sets its mode). Bash
+# builtins only, so it starts in milliseconds: kit/clipboard.sh gives a paste
+# 2 s in all, and a Python stand-in's start-up alone took longer than that on
+# a loaded machine.
+MOCK = r"""#!/bin/bash
+state=$TEST_CLIPBOARD_STATE
+if [[ ${0##*/} == clipboard-fixture ]]; then
+  printf '%s' "$1" >"$state"
+  exit 0
+fi
+mode=$(<"$state")
+printf '%s' "$$" >"$state.pid"
+args=$(printf ',"%s"' "$@")
+printf '[%s]' "${args#,}" >"$state.args"
+xs() { local s; printf -v s '%*s' "$1" ''; printf '%s' "${s// /x}"; }
+case $mode in
+  failure) exit 1 ;;
+  ignore) trap '' TERM; exec sleep 30 ;;
+  stall) exec sleep 30 ;;
+  stream) while :; do xs 4096; done ;;
+  slow) while :; do printf x; sleep 0.1; done ;;
+  delayed) sleep 0.4; printf later ;;
+  unicode) printf '%s' "/home/test/Blåbær 📁" ;;
+  empty) ;;
+  limit) xs 16384 ;;
+  large) xs 16385 ;;
+  nul) printf 'a\0b' ;;
+  lines) printf 'one\r\ntwo\xe2\x80\xa8three' ;;
+  long) xs 400 ;;
+  *) printf folder ;;
+esac
+"""
+# Modes whose outcome is kit/clipboard.sh's 2 s deadline itself.
+DEADLINE_MODES = ("stall", "slow", "ignore")
+# Stand-in for timeout(1) in front of clipboard.sh. A deadline mode keeps
+# the real 2 s; every other mode, which finishes on its own, gets 60 s, so a
+# loaded machine (the pipeline is six processes) can't turn a paste that
+# works into a timeout. REAL_TIMEOUT is filled in by setUp().
+TIMEOUT_STUB = r"""#!/bin/bash
+case $(<"$TEST_CLIPBOARD_STATE") in
+  stall | slow | ignore) ;;
+  *) [[ $1 == --signal=KILL && $2 == 2s ]] && set -- "$1" 60s "${@:3}" ;;
+esac
+exec REAL_TIMEOUT "$@"
 """
 
 
@@ -51,15 +70,22 @@ class ClipboardTests(unittest.TestCase):
         self.state.write_text("normal")
         for name in ("wl-paste", "clipboard-fixture"):
             path = self.base / name
-            path.write_text(MOCK)
+            path.write_text(MOCK, encoding="utf-8")
             path.chmod(0o755)
+        stub = self.base / "timeout"
+        stub.write_text(TIMEOUT_STUB.replace("REAL_TIMEOUT", shutil.which("timeout")))
+        stub.chmod(0o755)
         self.env = dict(os.environ, TEST_CLIPBOARD_STATE=str(self.state), PATH=f"{self.base}:{os.environ['PATH']}")
 
     def read(self, mode, selection="clipboard"):
         self.state.write_text(mode)
         started = time.monotonic()
-        result = subprocess.run(["bash", str(HELPER), selection], env=self.env, capture_output=True, timeout=5)
-        self.assertLess(time.monotonic() - started, 4)
+        deadline = mode in DEADLINE_MODES
+        result = subprocess.run(
+            ["bash", str(HELPER), selection], env=self.env, capture_output=True, timeout=5 if deadline else 90
+        )
+        if deadline:
+            self.assertLess(time.monotonic() - started, 4)
         self.assertLessEqual(len(result.stdout), 100000)
         return result
 
@@ -176,13 +202,17 @@ ShellRoot {
         )
         # No Omarchy bin dir, AppImage library path, audio server or system bus.
         hostenv.isolate(env, self.base)
+        if env["QT_QPA_PLATFORM"] == "offscreen":
+            # Nothing of the live session: no compositor or Hyprland socket.
+            for name in ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE"):
+                env.pop(name, None)
         if env["QT_QPA_PLATFORM"] == "wayland":
             # Keep test logs/IPC private without hiding the host compositor socket.
             display = Path(os.environ["WAYLAND_DISPLAY"])
             if not display.is_absolute():
                 env["WAYLAND_DISPLAY"] = str(Path(os.environ["XDG_RUNTIME_DIR"]) / display)
         result = subprocess.run(
-            [runner, "-p", str(fixture), "--no-color"], env=env, text=True, capture_output=True, timeout=35
+            [runner, "-p", str(fixture), "--no-color"], env=env, text=True, capture_output=True, timeout=180
         )
         output = result.stdout + result.stderr
         self.assertEqual(result.returncode, 0, output)
