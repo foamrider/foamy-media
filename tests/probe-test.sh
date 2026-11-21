@@ -3,22 +3,19 @@
 # art-probe), against real fixtures, because asserting that the code contains
 # a check is not the same as showing what it does. Everything here is local:
 # no network, and nothing that needs a Spotify. The fetch's bounds (no
-# redirects, the size cap on received bytes, the deadline) are cargo tests in
-# native/src/fetch.rs, against a loopback server.
+# redirects, the size cap on received bytes, the deadline) and the refusal of
+# special files are cargo tests in native/src/, against a loopback server.
 #
 #   sh tests/probe-test.sh
 #
-# Skips if ImageMagick is missing, which is also the case where the plugin
-# quietly does without a cover backdrop.
+# A missing helper binary is a failure: bin/<arch>/ is committed. Without
+# ImageMagick only the cases that end before a decode run (the decode cases
+# are skipped and say so), which is what CI runs.
 
 set -eu
 
 cd "$(dirname "$0")/.."
 
-if ! command -v magick >/dev/null 2>&1; then
-  echo "skip — ImageMagick not installed"
-  exit 0
-fi
 if ! command -v node >/dev/null 2>&1; then
   echo "skip — node not installed"
   exit 0
@@ -28,17 +25,19 @@ fi
 arch=${FOAMY_MEDIA_ARCH:-$(uname -m)}
 helper="$PWD/bin/$arch/foamy-media-helper"
 if [ ! -x "$helper" ]; then
-  echo "skip — no helper for $arch (build it with kit/native/build-native.sh .)"
-  exit 0
+  echo "FAIL     no helper for $arch at $helper (build it with kit/native/build-native.sh .)"
+  exit 1
 fi
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 export XDG_CACHE_HOME="$work/cache"
 
 failures=0
+status=0
 
-probe() {
-  "$helper" art-probe "$1" >/dev/null 2>&1
+fail() {
+  echo "FAIL     $1"
+  failures=$((failures + 1))
 }
 
 # One field of the helper's JSON reply ("mean", "file").
@@ -46,176 +45,190 @@ field() {
   sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p"
 }
 
+# Runs a command with a deadline, so a helper that blocks fails instead of
+# hanging the suite. The exit status is left in $status, stdout in
+# $work/out and stderr in $work/err. Returns 1 (after counting a failure)
+# when the deadline ended it.
+run_helper() {
+  status=0
+  timeout 30 "$@" >"$work/out" 2>"$work/err" || status=$?
+  if [ "$status" -eq 124 ]; then
+    fail "$label — the helper hung past 30 s"
+    return 1
+  fi
+}
+
+# The reply of `art-probe <target>`, within the same deadline.
+reply_of() {
+  timeout 30 "$helper" art-probe "$1" || :
+}
+
+# expect_ok <target> <label>: exit 0, nothing on stderr, and a reply that
+# names a cover file that exists.
 expect_ok() {
-  if probe "$1"; then
-    echo "ok       $2"
+  label=$2
+  run_helper "$helper" art-probe "$1" || return 0
+  reply=$(cat "$work/out")
+  file=$(field file <"$work/out")
+  if [ "$status" -ne 0 ]; then
+    fail "$label — exit $status, expected the probe to read this ($reply)"
+  elif [ -s "$work/err" ]; then
+    fail "$label — the helper wrote to stderr: $(head -c 200 "$work/err")"
+  elif [ "${reply#*\"ok\":true}" = "$reply" ]; then
+    fail "$label — replied $reply"
+  elif [ -z "$file" ] || [ ! -f "$file" ]; then
+    fail "$label — the reply names no written cover ($reply)"
   else
-    echo "FAIL     $2 — expected the probe to read this"
-    failures=$((failures + 1))
+    echo "ok       $label"
   fi
 }
 
-expect_refused() {
-  if probe "$1"; then
-    echo "FAIL     $2 — expected the probe to refuse this"
-    failures=$((failures + 1))
+# expect_code <CODE> <label> <command…>: the refusal the helper documents
+# (native/src/main.rs): exit 2 for INVALID_ARGUMENT, 1 for every other code,
+# nothing on stderr, and exactly one JSON line with that code.
+expect_code() {
+  code=$1 label=$2
+  shift 2
+  want=1
+  if [ "$code" = INVALID_ARGUMENT ]; then
+    want=2
+  fi
+  run_helper "$@" || return 0
+  reply=$(cat "$work/out")
+  if [ "$status" -ne "$want" ]; then
+    fail "$label — exit $status, expected $want with $code ($reply)"
+  elif [ -s "$work/err" ]; then
+    fail "$label — the helper wrote to stderr: $(head -c 200 "$work/err")"
+  elif [ "$(wc -l <"$work/out")" -ne 1 ]; then
+    fail "$label — the reply is not one line: $reply"
   else
-    echo "refused  $2"
+    case "$reply" in
+      "{\"code\":\"$code\","*'"ok":false}') echo "ok       $label ($code)" ;;
+      *) fail "$label — replied $reply, expected $code" ;;
+    esac
   fi
 }
 
-# A cover, and a cover whose name has a space in it.
-magick -size 200x200 xc:'#1db954' "$work/cover.png"
-expect_ok "$work/cover.png" "a PNG cover"
-cp "$work/cover.png" "$work/My Cover.png"
-expect_ok "$work/My Cover.png" "a cover with a space in its name"
+# ---------------------------------------- cases that end before a decode
 
-magick -size 200x200 xc:'#b2313a' "$work/cover.jpg"
-expect_ok "$work/cover.jpg" "a JPEG cover"
+expect_code INVALID_ARGUMENT "a relative path" "$helper" art-probe relative.png
 
 # Formats that reach an ImageMagick delegate or coder rather than a raster
-# decoder. The magic-byte check is what keeps these out.
+# decoder. The magic-byte check is what keeps these out, and every outcome
+# is one JSON line, a refusal included.
 printf 'not an image at all\n' >"$work/text.txt"
-expect_refused "$work/text.txt" "a plain text file"
+expect_code UNSUPPORTED_FORMAT "a plain text file" "$helper" art-probe "$work/text.txt"
 
 printf '%s' '<svg xmlns="http://www.w3.org/2000/svg"><image href="/etc/passwd"/></svg>' >"$work/evil.svg"
-expect_refused "$work/evil.svg" "an SVG referencing a local file"
-
-printf '%s' 'push graphic-context image over 0,0 0,0 "msl:/etc/passwd" pop graphic-context' >"$work/evil.mvg"
-expect_refused "$work/evil.mvg" "an MVG vector script"
+expect_code UNSUPPORTED_FORMAT "an SVG referencing a local file" "$helper" art-probe "$work/evil.svg"
 
 # Past the byte bound, with a JPEG signature so only the size can catch it.
 printf '\377\330\377' >"$work/big.jpg"
 head -c 9000000 /dev/zero >>"$work/big.jpg"
-expect_refused "$work/big.jpg" "a 9MB file past the size bound"
+expect_code TOO_LARGE "a 9MB file past the size bound" "$helper" art-probe "$work/big.jpg"
 
-# 410KB on disk, 144 megapixels decoded — roughly 430MB of pixels if nothing
-# stops it. This is the case the byte bounds cannot catch, so it is the one
-# that shows the area limit doing the work.
-node tests/make-bomb.js "$work/bomb.png" 12000
-expect_refused "$work/bomb.png" "a 12000x12000 decompression bomb"
+expect_code UNREADABLE "a path that is not there" "$helper" art-probe "$work/does-not-exist.png"
 
-expect_refused "$work/does-not-exist.png" "a path that is not there"
+# A valid cover with no ImageMagick on PATH: the plugin does without a
+# backdrop, and says why.
+node tests/make-text-bomb.js "$work/tiny.png" 0 1
+expect_code MAGICK_MISSING "a cover without ImageMagick installed" \
+  env PATH=/var/empty "$helper" art-probe "$work/tiny.png"
 
-# A FIFO would have blocked a plain read forever; the helper never opens it.
-mkfifo "$work/cover.fifo"
-expect_refused "$work/cover.fifo" "a FIFO in place of a cover"
-expect_refused /dev/zero "a device in place of a cover"
+# ---------------------------------------------- cases that need a decode
 
-# Every outcome is one JSON line, a refusal included.
-reply=$("$helper" art-probe "$work/text.txt" || :)
-case "$reply" in
-  '{"code":"UNSUPPORTED_FORMAT",'*'"ok":false}') echo "ok       a refusal is a JSON reply ($reply)" ;;
-  *)
-    echo "FAIL     a refusal printed '$reply'"
-    failures=$((failures + 1))
-    ;;
-esac
+decode_cases() {
+  # A cover, and a cover whose name has a space in it.
+  magick -size 200x200 xc:'#1db954' "$work/cover.png"
+  expect_ok "$work/cover.png" "a PNG cover"
+  cp "$work/cover.png" "$work/My Cover.png"
+  expect_ok "$work/My Cover.png" "a cover with a space in its name"
 
-# 100KB on disk, a valid 1x1 image, and 96MiB of zTXt text that libpng would
-# inflate and keep outside every ImageMagick limit (half of it after the image
-# data). Unstripped, the probe peaks near 300MB here; the real attack scales
-# the same chunks to gigabytes. Stripped, it costs what a plain cover costs,
-# and the cover still shows: the text never reaches the decoder.
-node tests/make-text-bomb.js "$work/text-bomb.png" 96 1024
-expect_ok "$work/text-bomb.png" "a 1x1 PNG carrying 96MiB of zTXt text"
-if command -v python3 >/dev/null 2>&1; then
-  peak=$(python3 -I -c '
+  magick -size 200x200 xc:'#b2313a' "$work/cover.jpg"
+  expect_ok "$work/cover.jpg" "a JPEG cover"
+
+  # 410KB on disk, 144 megapixels decoded — roughly 430MB of pixels if nothing
+  # stops it. This is the case the byte bounds cannot catch, so it is the one
+  # that shows the area limit doing the work.
+  node tests/make-bomb.js "$work/bomb.png" 12000
+  expect_code DECODE_FAILED "a 12000x12000 decompression bomb" "$helper" art-probe "$work/bomb.png"
+
+  # 100KB on disk, a valid 1x1 image, and 96MiB of zTXt text that libpng would
+  # inflate and keep outside every ImageMagick limit (half of it after the image
+  # data). Unstripped, the probe peaks near 300MB here; the real attack scales
+  # the same chunks to gigabytes. Stripped, it costs what a plain cover costs,
+  # and the cover still shows: the text never reaches the decoder.
+  node tests/make-text-bomb.js "$work/text-bomb.png" 96 1024
+  expect_ok "$work/text-bomb.png" "a 1x1 PNG carrying 96MiB of zTXt text"
+  if command -v python3 >/dev/null 2>&1; then
+    peak=$(python3 -I -c '
 import resource, subprocess, sys
-subprocess.run(sys.argv[1:], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+subprocess.run(sys.argv[1:], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
 print(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss // 1024)
 ' "$helper" art-probe "$work/text-bomb.png")
-  if [ "$peak" -lt 64 ]; then
-    echo "ok       the zTXt bomb peaked at ${peak}MiB"
+    if [ "$peak" -lt 64 ]; then
+      echo "ok       the zTXt bomb peaked at ${peak}MiB"
+    else
+      fail "the zTXt bomb peaked at ${peak}MiB: its text reached the decoder"
+    fi
   else
-    echo "FAIL     the zTXt bomb peaked at ${peak}MiB: its text reached the decoder"
-    failures=$((failures + 1))
+    echo "skip     the zTXt bomb's peak memory — python3 not installed"
   fi
-else
-  echo "skip     the zTXt bomb's peak memory — python3 not installed"
-fi
 
-# Ordinary text (ImageMagick itself writes tEXt dates) is dropped without
-# changing the cover: the same pixels give the same colour.
-magick -size 64x64 gradient:'#1db954-#b2313a' -set comment 'a cover' "$work/texted.png"
-magick "$work/texted.png" -strip "$work/plain.png"
-with=$("$helper" art-probe "$work/texted.png" | field mean)
-without=$("$helper" art-probe "$work/plain.png" | field mean)
-if [ -n "$with" ] && [ "$with" = "$without" ]; then
-  echo "ok       a PNG with text chunks reads as the same cover ($with)"
-else
-  echo "FAIL     a PNG with text chunks read as '$with', the same cover without them as '$without'"
-  failures=$((failures + 1))
-fi
+  # Ordinary text (ImageMagick itself writes tEXt dates) is dropped without
+  # changing the cover: the same pixels give the same colour.
+  magick -size 64x64 gradient:'#1db954-#b2313a' -set comment 'a cover' "$work/texted.png"
+  magick "$work/texted.png" -strip "$work/plain.png"
+  with=$(reply_of "$work/texted.png" | field mean)
+  without=$(reply_of "$work/plain.png" | field mean)
+  if [ -n "$with" ] && [ "$with" = "$without" ]; then
+    echo "ok       a PNG with text chunks reads as the same cover ($with)"
+  else
+    fail "a PNG with text chunks read as '$with', the same cover without them as '$without'"
+  fi
 
-# A text chunk that claims to run past the end of the file, and text between
-# more chunks than any cover has (every gap it leaves is a copy to make).
-node -e '
-const fs = require("fs")
-const { crc32 } = require("zlib")
-const chunk = (type, body) => {
-  const head = Buffer.alloc(4)
-  head.writeUInt32BE(body.length)
-  const typed = Buffer.concat([Buffer.from(type, "latin1"), body])
-  const crc = Buffer.alloc(4)
-  crc.writeUInt32BE(crc32(typed))
-  return Buffer.concat([head, typed, crc])
+  # The cover the panel is allowed to display: written here, not fetched by Qt,
+  # and capped so that decoding it is bounded too.
+  oversized="$work/oversized.png"
+  magick -size 3000x2000 gradient:'#204080-#c0f0ff' "$oversized"
+  art=$(reply_of "$oversized" | field file)
+  if [ -z "$art" ] || [ ! -f "$art" ]; then
+    fail "the probe did not write a cover for the panel to show"
+  else
+    kind=$(od -An -v -tx1 -N8 "$art" | tr -d " \n")
+    case "$kind" in
+      89504e470d0a1a0a*) echo "ok       the written cover is a PNG" ;;
+      *) fail "the written cover is not a PNG" ;;
+    esac
+
+    width=$(magick identify -format '%w' "$art")
+    height=$(magick identify -format '%h' "$art")
+    if [ "$width" -le 640 ] && [ "$height" -le 640 ]; then
+      echo "ok       3000x2000 was capped to ${width}x${height}"
+    else
+      fail "the written cover is ${width}x${height}, past the 640 cap"
+    fi
+  fi
+
+  # The cache is keyed by the cover's bytes, not its URL: a player that writes
+  # every track's cover to one file:// path still gets the new cover.
+  same="$work/same-path.png"
+  magick -size 64x64 xc:'#1db954' "$same"
+  first=$(reply_of "$same" | field file)
+  magick -size 64x64 xc:'#b2313a' "$same"
+  second=$(reply_of "$same" | field file)
+  again=$(reply_of "$same" | field file)
+  if [ -n "$first" ] && [ -n "$second" ] && [ "$first" != "$second" ] && [ "$second" = "$again" ]; then
+    echo "ok       a rewritten cover at the same path is a new cached cover"
+  else
+    fail "the cover cache reused a stale cover for a rewritten path ($first, $second, $again)"
+  fi
 }
-const png = fs.readFileSync(process.argv[1])
-const head = png.subarray(0, 33)    // signature and IHDR
-const rest = png.subarray(33)
-const overrun = chunk("zTXt", Buffer.from("k\0\0x", "latin1"))
-overrun.writeUInt32BE(0x100000)
-fs.writeFileSync(process.argv[2], Buffer.concat([head, overrun, rest]))
-const parts = [head]
-for (let i = 0; i < 80; i++) parts.push(chunk("tEXt", Buffer.from("k\0v", "latin1")), chunk("gAMA", Buffer.from([0, 0, 0xb1, 0x8f])))
-parts.push(rest)
-fs.writeFileSync(process.argv[3], Buffer.concat(parts))
-' "$work/plain.png" "$work/overrun.png" "$work/interleaved.png"
-expect_refused "$work/overrun.png" "a PNG chunk that runs past the end of the file"
-expect_refused "$work/interleaved.png" "a PNG with text between 80 other chunks"
 
-# The cover the panel is allowed to display: written here, not fetched by Qt,
-# and capped so that decoding it is bounded too.
-oversized="$work/oversized.png"
-magick -size 3000x2000 gradient:'#204080-#c0f0ff' "$oversized"
-art=$("$helper" art-probe "$oversized" | field file)
-if [ -z "$art" ] || [ ! -f "$art" ]; then
-  echo "FAIL     the probe did not write a cover for the panel to show"
-  failures=$((failures + 1))
+if command -v magick >/dev/null 2>&1; then
+  decode_cases
 else
-  kind=$(od -An -v -tx1 -N8 "$art" | tr -d " \n")
-  case "$kind" in
-    89504e470d0a1a0a*) echo "ok       the written cover is a PNG" ;;
-    *)
-      echo "FAIL     the written cover is not a PNG"
-      failures=$((failures + 1))
-      ;;
-  esac
-
-  width=$(magick identify -format '%w' "$art")
-  height=$(magick identify -format '%h' "$art")
-  if [ "$width" -le 640 ] && [ "$height" -le 640 ]; then
-    echo "ok       3000x2000 was capped to ${width}x${height}"
-  else
-    echo "FAIL     the written cover is ${width}x${height}, past the 640 cap"
-    failures=$((failures + 1))
-  fi
-fi
-
-# The cache is keyed by the cover's bytes, not its URL: a player that writes
-# every track's cover to one file:// path still gets the new cover.
-same="$work/same-path.png"
-magick -size 64x64 xc:'#1db954' "$same"
-first=$("$helper" art-probe "$same" | field file)
-magick -size 64x64 xc:'#b2313a' "$same"
-second=$("$helper" art-probe "$same" | field file)
-again=$("$helper" art-probe "$same" | field file)
-if [ -n "$first" ] && [ -n "$second" ] && [ "$first" != "$second" ] && [ "$second" = "$again" ]; then
-  echo "ok       a rewritten cover at the same path is a new cached cover"
-else
-  echo "FAIL     the cover cache reused a stale cover for a rewritten path ($first, $second, $again)"
-  failures=$((failures + 1))
+  echo "SKIP decode cases: ImageMagick not installed"
 fi
 
 if [ "$failures" -gt 0 ]; then

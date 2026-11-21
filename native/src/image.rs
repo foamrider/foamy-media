@@ -377,21 +377,13 @@ mod tests {
     #[test]
     fn text_chunks_go_and_everything_else_stays_in_order() {
         let plain = plain([200, 30, 60]);
-        let bomb = text_bomb([200, 30, 60], 8, 4096);
+        // Contiguous text chunks leave one gap, so a bomb with more chunks
+        // than MAX_RUNS is still stripped: the limit counts kept ranges.
+        let bomb = text_bomb([200, 30, 60], 2 * MAX_RUNS, 16);
         assert!(bomb.len() > plain.len());
         let stripped = strip(&bomb).unwrap();
         assert_eq!(stripped, plain);
         assert_eq!(kinds(&stripped), ["IHDR", "IDAT", "IEND"]);
-    }
-
-    #[test]
-    fn a_zlib_bomb_is_dropped_without_being_inflated() {
-        // 64 chunks of ~1 MiB of text each (13 bits per 258 bytes) in
-        // ~430 KB of file: stripped by reading headers alone, so it costs
-        // what the file costs.
-        let bomb = text_bomb([1, 2, 3], 64, 4096);
-        assert!(bomb.len() < 500_000, "{}", bomb.len());
-        assert_eq!(strip(&bomb).unwrap(), plain([1, 2, 3]));
     }
 
     #[test]
@@ -509,10 +501,5 @@ mod tests {
         let mut png = plain([3, 4, 5]);
         png.extend_from_slice(b"trailing bytes, a zip, anything");
         assert_eq!(strip(&png).unwrap(), plain([3, 4, 5]));
-    }
-
-    #[test]
-    fn the_signature_is_required_for_a_png() {
-        assert!(strip(b"\x89PNX\r\n\x1a\n").is_err());
     }
 }

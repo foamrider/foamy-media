@@ -14,7 +14,7 @@ How the lists are made:
 
 - `bin/aarch64/foamy-media-helper`: sha256 `4ccc22187b66baa7f7c22093a8be66b2c4179543d779060b99669f5cdf0577cd`
 - `bin/x86_64/foamy-media-helper`: sha256 `c7b49f7ad2ce21a5e769e331aa20e4b7cd62015c98348ca69d56593e23e5bb27`
-- `native/native.pin`: source `9c506c102e6982b94e7dd09b512bab151e9a64ae70d99e87a93fefffcbdbf1b0`, toolchain 1.99.1
+- `native/native.pin`: source `dd33f1b4a65aaecd8eceff80e5540cb83866f8daf4a4d180e1275c63dd30f905`, toolchain 1.99.1
 
 ### Crates linked into `foamy-media-helper`
 

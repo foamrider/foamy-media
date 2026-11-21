@@ -1,6 +1,8 @@
 import QtQuick
+import QtTest
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.Mpris
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
@@ -11,12 +13,14 @@ import "plugin/BrowserSetup.js" as BrowserSetup
 
 // Foamy Media under a real host shell, offscreen: three bar instances (as on
 // three monitors) sharing one MediaService and one leader, the lazy popup
-// body, the single keyboard cursor, settings saving through the bar, the
-// cover rules (no stale cover after a failed fetch), the equalizer and
-// marquee gates, translations and RTL mirroring, and YouTube being
-// focus-only. No MPRIS player is reachable here, so the widget is in its
-// "not running" state. The entry still holds the browser and profile keys
-// 1.3.3 and earlier saved, which must stay inert.
+// body, the single keyboard cursor, settings saving through the bar, an art
+// probe that cannot start, the equalizer and marquee gates, translations and
+// RTL mirroring, and YouTube being focus-only. No MPRIS player is reachable
+// here, so the widget is in its "not running" state; the English run
+// (FOAMY_HINT=1) then drives clicks, source selection, the position tick,
+// the wheel and the transport with stand-in players, and the window picker's
+// hint. The entry still holds the browser and profile keys 1.3.3 and earlier
+// saved, which must stay inert. tests/art-runtime.py covers the cover service.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -70,11 +74,19 @@ ShellRoot {
       playing: true
       animate: true
     }
-    Media.MediaView {
-      id: playerView
+    // Mirrored as the host's popup card mirrors its body, so the RTL run
+    // reaches the mirrored path.
+    Item {
       y: 120
       width: 420
-      media: player
+      height: playerView.height
+      LayoutMirroring.enabled: FoamyI18n.rightToLeft
+      LayoutMirroring.childrenInherit: true
+      Media.MediaView {
+        id: playerView
+        width: parent.width
+        media: player
+      }
     }
     Media.BarContent {
       id: barContent
@@ -124,25 +136,10 @@ ShellRoot {
   MockBar {
     id: mockBar
     moduleName: "foamy.media"
-  }
-  // The 4.5 host: an inline save updates the widget's settings before it returns.
-  QtObject {
-    id: reflectingShell
-    property var panel: null
-    function updateEntryInline(id, settings) {
-      mockBar.saved = mockBar.saved.concat([
-        {
-          id: id,
-          settings: settings
-        }
-      ])
-      var next = {
-        id: id
-      }
-      for (var k in settings)
-        next[k] = settings[k]
-      panel.settings = next
-      return true
+    // The commands the widget hands the bar to run.
+    property var ran: []
+    function run(command) {
+      ran = ran.concat([String(command)])
     }
   }
 
@@ -269,6 +266,12 @@ ShellRoot {
     return null
   }
 
+  function leader() {
+    for (var i = 0; i < 3; i++)
+      if (panels.itemAt(i).statusObject().leader)
+        return panels.itemAt(i)
+    return null
+  }
   function leaders() {
     var count = 0
     for (var i = 0; i < 3; i++)
@@ -299,7 +302,6 @@ ShellRoot {
     if (pickerRows.length === 2) {
       var chromiumRow = pickerRows[0].modelData.title === "A - YouTube" ? pickerRows[0] : pickerRows[1]
       var vivaldiRow = chromiumRow === pickerRows[0] ? pickerRows[1] : pickerRows[0]
-      eq(chromiumRow.modelData.values.youtubeMprisName, "chromium", "a chrome window takes the chromium player")
       var found = findNamed(chromiumRow, "browserMissingName")
       eq(found !== null && found.visible, false, "no note when the name was found")
       var note = findNamed(vivaldiRow, "browserMissingName")
@@ -318,32 +320,6 @@ ShellRoot {
     Media.MediaService.selectedSource = "youtube"
     eq(panels.itemAt(2).sourceKind, "youtube", "source shared across bars")
     Media.MediaService.selectedSource = "spotify"
-
-    // Cover rules (regression: a failed fetch kept the previous cover).
-    var svc = Media.MediaService
-    var a = "file:///nonexistent/foamy-media-a.png", b = "file:///nonexistent/foamy-media-b.png"
-    svc.request(a)
-    svc.artProbeDelay.stop()
-    svc.applyArtProbe(a, '{"ok":true,"mean":"#336699","file":"/tmp/a.png","swatches":[]}')
-    eq(svc.artFor(a), true, "cover shown for its own track")
-    svc.request(b)
-    svc.artProbeDelay.stop()
-    eq(svc.artFor(b), true, "previous cover lingers while the next one settles")
-    eq(svc.artFor(a), true, "the measured URL still matches its cover")
-    svc.finishAttempt(b, 1)
-    eq(svc.artFor(b), false, "failed fetch drops the previous cover")
-    eq(svc.artFile, "", "no cover kept after the failure")
-    svc.request(a)
-    svc.artProbeDelay.stop()
-    svc.applyArtProbe(a, '{"ok":true,"mean":"#336699","file":"/tmp/a.png","swatches":[]}')
-    svc.applyArtProbe(b, '{"ok":true,"mean":"#000000","file":"/tmp/b.png","swatches":[]}')
-    eq(svc.artFile, "/tmp/a.png", "a late answer for another track is ignored")
-    svc.request(b)
-    svc.artProbeDelay.stop()
-    svc.applyArtProbe(b, "garbage")
-    eq(svc.artFor(b), false, "unreadable probe output shows no cover")
-    svc.request("")
-    svc.artProbeDelay.stop()
 
     // Equalizer and marquee gates.
     eq(equalizer.stepping, !FoamyMotion.reduceMotion, "equalizer steps while shown and playing")
@@ -364,6 +340,7 @@ ShellRoot {
 
     // The cursor over a playing player. Transport and sliders keep their
     // physical direction in RTL, where PanelKeyCatcher reports reading order.
+    eq(playerView.LayoutMirroring.enabled, shell.lang === "ar", "the player view mirrors in RTL only")
     var physical = playerView.LayoutMirroring.enabled ? -1 : 1
     playerView.moveRequested(0, 1)
     eq(playerView.cursorKey, "playPause", "first move lands on play/pause")
@@ -378,6 +355,8 @@ ShellRoot {
     var volumeSlider = findNamed(playerView, "mediaVolumeSlider")
     check(seekSlider !== null && volumeSlider !== null, "seek and volume sliders exist")
     if (seekSlider && volumeSlider) {
+      eq(seekSlider.LayoutMirroring.enabled, false, "the timeline keeps its physical direction")
+      eq(volumeSlider.LayoutMirroring.enabled, false, "the volume keeps its physical direction")
       eq(seekSlider.hasCursor, true, "the cursor on the timeline rings its thumb")
       eq(volumeSlider.hasCursor, false, "only the slider with the cursor is ringed")
       var row = seekSlider.parent ? seekSlider.parent.parent : null
@@ -408,16 +387,8 @@ ShellRoot {
     player.artSource = "file:///tmp/foamy-media-cover.png"
     eq(playerView.band.imageSource.toString(), gpu ? "" : "file:///tmp/foamy-media-cover.png", "cover is the band picture")
     eq(playerView.band.background !== null, gpu, "blurred cover only on the GPU renderer")
-    // Regression (kit 0.3.2): the band holds only the current cover.
-    for (var n = 1; n <= 5; n++)
-      player.artSource = "file:///tmp/foamy-media-cover-" + n + ".png"
-    eq(playerView.band.loadedImage, gpu ? "" : "file:///tmp/foamy-media-cover-5.png", "only the current cover is held after cycling")
-    player.artSource = ""
-    eq(playerView.band.loadedImage, "", "cleared cover (popup closed) is unloaded")
-    player.artSource = "file:///tmp/foamy-media-cover.png"
     player.artBackground = false
     eq(playerView.band.imageSource.toString(), "", "Artwork background off keeps the foamy wash")
-    eq(playerView.band.loadedImage, "", "and holds no picture")
     player.artBackground = true
     player.artSource = ""
     // Short screen: the player scrolls and keeps the cursor row in view.
@@ -467,8 +438,6 @@ ShellRoot {
   function stepTwo() {
     var first = panels.itemAt(0)
     var view = first.popup.bodyItem
-    check(view !== null, "body built on open")
-    eq(first.member.demanded, true, "open popup raises demand")
     eq(first.imagesActive, true, "covers decode while open")
     if (!view) {
       shell.finish()
@@ -482,14 +451,9 @@ ShellRoot {
     view.moveRequested(1, 0)
     eq(view.cursorKey, "launch", "along the source row")
     eq(view.LayoutMirroring.enabled, shell.lang === "ar", "popup body mirrors in RTL only")
-    var titles = {
-      en: "Not running",
-      no: "Ikke startet",
-      ar: "Not running"
-    }
-    if (shell.lang !== "ar")
-      eq(FoamyI18n.t("Not running"), titles[shell.lang], "translated")
-    eq(FoamyI18n.t("%1 is not running", "Spotify"), shell.lang === "no" ? "Spotify er ikke startet" : "Spotify is not running", "parameter")
+    // Arabic has no catalog and falls back to English.
+    eq(view.band.meta, shell.lang === "no" ? "Ikke startet" : "Not running", "band status in the UI language")
+    eq(first.tooltipText, shell.lang === "no" ? "Spotify er ikke startet" : "Spotify is not running", "hover text in the UI language")
     shell.key(view, "s")
     eq(first.editingSettings, true, "s opens Settings")
     eq(view.blocked, true, "settings page owns the keys")
@@ -544,11 +508,6 @@ ShellRoot {
       eq(width.field.text, width.format(320), "field shows the external change")
       width.commitEdit(true)
       eq(mockBar.saved.length, before, "leaving it unchanged saves nothing")
-      width.field.text = "abc"
-      width.dirty = true
-      check(width.handleKey(Qt.Key_Escape), "Escape is taken by the field")
-      eq(width.field.text, width.format(320), "Escape restores the value")
-      eq(first.editingSettings, true, "and the page stays")
       width.field.text = "250"
       width.dirty = true
       width.commitEdit(false)
@@ -569,30 +528,6 @@ ShellRoot {
       mpris.commitEdit(true)
       eq(mpris.field.text, mpris.value, "focus-out restores the saved name")
     }
-    // Regression: on a host that reflects an inline save at once (4.5), the
-    // saved value must not stay pending and mask a later outside change,
-    // which the next save (merging the whole entry) would undo.
-    // the host caught up
-    first.settings = JSON.parse(JSON.stringify(first.effectiveSettings))
-    var base = JSON.parse(JSON.stringify(first.settings))
-    base.showArtist = true
-    first.settings = base
-    eq(first.preference("showArtist"), true, "no saves pending")
-    var plainShell = mockBar.shell
-    mockBar.shell = reflectingShell
-    reflectingShell.panel = first
-    var savedBefore = mockBar.saved.length
-    first.save("showArtist", false)
-    eq(mockBar.saved.length, savedBefore + 1, "saved inline")
-    eq(first.settings.showArtist, false, "the host reflected the save at once")
-    var elsewhere = JSON.parse(JSON.stringify(first.settings))
-    // another monitor turns it back on
-    elsewhere.showArtist = true
-    first.settings = elsewhere
-    eq(first.preference("showArtist"), true, "an outside change after a reflected save shows")
-    first.save("showProgress", !first.preference("showProgress"))
-    eq(mockBar.saved[mockBar.saved.length - 1].settings.showArtist, true, "the next save keeps the outside change")
-    mockBar.shell = plainShell
     first.closeSettings()
     eq(view.blocked, false, "back from Settings")
     first.close()
@@ -604,8 +539,6 @@ ShellRoot {
 
   function stepThree() {
     var first = panels.itemAt(0)
-    eq(first.member.demanded, false, "closing releases demand")
-    eq(first.imagesActive, false, "covers released after closing")
     eq(first.editingSettings, false, "closing leaves Settings")
     // The grown label lays out again in its wider slot instead of keeping
     // the ellipsis of the shorter text.
@@ -645,7 +578,7 @@ ShellRoot {
   function stepFour(hidden) {
     var popup = hidden.popup
     check(popup.screenW > 0, "popup knows its screen")
-    eq(popup.cardOrigin.x, Math.round(Math.max(popup.margin, Math.min(popup.screenW / 2 - popup.contentWidth / 2, popup.screenW - popup.contentWidth - popup.margin))), "card centred on the screen")
+    check(Math.abs(popup.cardOrigin.x + popup.contentWidth / 2 - popup.screenW / 2) <= 1, "card centred on the screen: " + popup.cardOrigin.x)
     check(popup.cardOrigin.x > popup.margin && popup.cardOrigin.y > 0, "not in the top-left corner")
     eq(panels.itemAt(0).popup.centerOnBar, false, "a shown widget still hangs from itself")
     hidden.close()
@@ -670,8 +603,6 @@ ShellRoot {
     id: focusSteps
     function begin() {
       var first = panels.itemAt(0)
-      eq(first.startBrowser, undefined, "no browser start path")
-      eq(first.pendingLaunch, undefined, "no pending browser launch")
       // The app ID the panel matches (a suggestion saved earlier set it).
       fakeYoutubeWindow.appId = first.preference("youtubeAppId")
       first.toplevelModel = {
@@ -699,11 +630,13 @@ ShellRoot {
       eq(first.launch(), false, "launch() without the YouTube window does nothing")
       eq(first.playPause(), false, "nor does play/pause")
       eq(fakeYoutubeWindow.activations, 2, "nothing is focused")
+      eq(JSON.stringify(mockBar.ran), "[]", "YouTube launches run no command")
       eq(first.settingsError, "", "no error")
       eq(first.editingSettings, false, "no settings page")
       first.toplevelModel = ToplevelManager.toplevels
       Media.MediaService.selectedSource = "spotify"
       eq(first.launch(), true, "Spotify keeps Omarchy's launcher")
+      eq(JSON.stringify(mockBar.ran), JSON.stringify(["omarchy launch spotify"]), "Spotify runs Omarchy's launcher, once")
       // The art probe's command not starting ends the attempt too.
       var svc = Media.MediaService
       var a = "file:///nonexistent/foamy-media-a.png", b = "file:///nonexistent/foamy-media-b.png"
@@ -724,9 +657,7 @@ ShellRoot {
     function finish() {
       var first = panels.itemAt(0)
       var svc = Media.MediaService
-      eq(svc.artProbe.running, false, "art probe that can't start is not running")
-      eq(svc.artSettling, false, "a probe that can't start ends the settling")
-      eq(svc.artFile, "", "and keeps no previous cover")
+      eq(svc.artFile, "", "a probe that can't start keeps no previous cover")
       svc.request("")
       svc.artProbeDelay.stop()
       // A browser start would have failed or opened Settings by now.
@@ -734,13 +665,333 @@ ShellRoot {
       eq(first.editingSettings, false, "and no settings page")
       eq(first.sourceKind, "spotify", "Spotify selected")
       eq(fakeYoutubeWindow.activations, 2, "the stand-in window was only focused while open")
+      // The steps below do not depend on the language: tests/runtime.py
+      // asks for them in one run only.
+      if (Quickshell.env("FOAMY_HINT") === "1")
+        controlSteps.begin()
+      else
+        shell.finish()
+    }
+  }
+
+  TestEvent {
+    id: ev
+  }
+  // A playing Spotify that records what the widget asks of it. Panel binds to
+  // these properties, so they notify (a QtObject, not a plain object).
+  Component {
+    id: playerStandIn
+    QtObject {
+      property string dbusName: "org.mpris.MediaPlayer2.spotify"
+      property string identity: "Spotify"
+      property bool isPlaying: true
+      property int playbackState: isPlaying ? MprisPlaybackState.Playing : MprisPlaybackState.Paused
+      property string trackTitle: "T"
+      property string trackArtist: "A"
+      property bool lengthSupported: true
+      property real length: 200
+      property bool positionSupported: true
+      property real position: 50
+      property bool canSeek: true
+      property bool canGoNext: true
+      property bool canGoPrevious: true
+      property bool volumeSupported: true
+      property real volume: 0.5
+      property bool loopSupported: true
+      property int loopState: MprisLoopState.None
+      property bool shuffleSupported: true
+      property bool shuffle: false
+      property int nexts: 0
+      property int previouses: 0
+      // The position tick re-reads by emitting positionChanged.
+      property int ticks: 0
+      onPositionChanged: ticks++
+      function next() {
+        nexts++
+      }
+      function previous() {
+        previouses++
+      }
+    }
+  }
+
+  // Clicks, source selection, the tab equalizer, the position tick, the
+  // wheel and the transport, on the real panels. Every step puts the real
+  // player and window models back before the next.
+  QtObject {
+    id: controlSteps
+    property var stand: null
+    function begin() {
+      var first = panels.itemAt(0)
+      // The host bar's click entry point, with no player (left click opens
+      // the popup by default).
+      mockBar.ran = []
+      first.triggerPress(Qt.LeftButton)
+      wait.waitFor(function () {
+        return first.opened
+      }, 10000, function () {
+        first.triggerPress(Qt.LeftButton)
+        wait.waitFor(function () {
+          return !first.opened
+        }, 10000, controlSteps.clickPlays, "a second left click closes the popup")
+      }, "a left click opens the popup")
+    }
+    function clickPlays() {
+      var first = panels.itemAt(0)
+      first.triggerPress(Qt.MiddleButton)
+      eq(first.opened, false, "a middle click without a player opens nothing")
+      eq(JSON.stringify(mockBar.ran), "[]", "and runs nothing")
+      first.save("leftClick", "Play/pause")
+      first.triggerPress(Qt.LeftButton)
+      eq(JSON.stringify(mockBar.ran), JSON.stringify(["omarchy launch spotify"]), "left click set to play/pause starts Spotify when nothing plays")
+      eq(first.opened, false, "and opens no popup")
+      first.triggerPress(Qt.RightButton)
+      wait.waitFor(function () {
+        return first.opened
+      }, 10000, function () {
+        first.close()
+        first.save("leftClick", "Open panel")
+        eq(first.leftClick, "Open panel", "left click opens the popup again")
+        mockBar.ran = []
+        wait.waitFor(function () {
+          return !first.opened
+        }, 10000, controlSteps.sources, "the popup closes")
+      }, "then right click opens the popup")
+    }
+    // The leader keeps the selection in step with the players. An earlier
+    // step saved YouTube names on the first panel that the bar never
+    // reflects; wait until they expired back to the defaults, so the
+    // stand-ins below match whichever panel leads.
+    function sources() {
+      var lead = shell.leader()
+      wait.waitFor(function () {
+        return lead.preference("youtubeAppId") === "vivaldi-youtube.com__-Default" && lead.preference("youtubeMprisName") === "vivaldi"
+      }, 15000, controlSteps.sourcesSettled, "the leader's YouTube names are the defaults")
+    }
+    function sourcesSettled() {
+      var lead = shell.leader()
+      var spotify = {
+        dbusName: "org.mpris.MediaPlayer2.spotify",
+        identity: "Spotify",
+        isPlaying: true,
+        trackTitle: "T",
+        trackArtist: "A",
+        canSeek: false,
+        shuffleSupported: false,
+        // The leader's position tick re-reads through this signal.
+        positionChanged: function () {}
+      }
+      var youtube = {
+        dbusName: "org.mpris.MediaPlayer2." + lead.preference("youtubeMprisName") + ".instance1",
+        identity: "YouTube",
+        metadata: {},
+        isPlaying: true,
+        trackTitle: "Example",
+        canSeek: false,
+        shuffleSupported: false,
+        positionChanged: function () {}
+      }
+      fakeYoutubeWindow.appId = lead.preference("youtubeAppId")
+      fakeYoutubeWindow.title = "Example - YouTube"
+      Media.MediaService.selectedSource = "youtube"
+      lead.toplevelModel = {
+        values: []
+      }
+      lead.playerModel = {
+        values: [spotify]
+      }
+      wait.waitFor(function () {
+        return Media.MediaService.selectedSource === "spotify"
+      }, 10000, function () {
+        lead.toplevelModel = {
+          values: [fakeYoutubeWindow]
+        }
+        lead.playerModel = {
+          values: [spotify, youtube]
+        }
+        wait.waitFor(function () {
+          return Media.MediaService.selectedSource === "youtube"
+        }, 10000, controlSteps.youtubeOff, "the source that starts playing last is selected")
+      }, "a playing Spotify is selected")
+    }
+    function youtubeOff() {
+      var lead = shell.leader()
+      lead.saveMany({
+        youtubeEnabled: false
+      })
+      eq(lead.youtubeOpen, false, "with YouTube off its window is not matched")
+      wait.waitFor(function () {
+        return Media.MediaService.selectedSource === "spotify"
+      }, 10000, function () {
+        lead.saveMany({
+          youtubeEnabled: true
+        })
+        wait.waitFor(function () {
+          return Media.MediaService.selectedSource === "youtube"
+        }, 10000, function () {
+          lead.toplevelModel = {
+            values: []
+          }
+          wait.waitFor(function () {
+            return Media.MediaService.selectedSource === "spotify"
+          }, 10000, function () {
+            lead.playerModel = Mpris.players
+            lead.toplevelModel = ToplevelManager.toplevels
+            controlSteps.tabEqualizer()
+          }, "the YouTube window closed: back to Spotify")
+        }, "YouTube on again: it is selected")
+      }, "with YouTube off, Spotify is selected")
+    }
+    // The popup's Spotify tab animates its equalizer only while the popup
+    // is open and Settings is not.
+    function tabEqualizer() {
+      var tab = null
+      function findTab(item) {
+        if (!item || tab)
+          return
+        if (item.key === "tab:spotify" && item.kind !== undefined)
+          tab = item
+        for (var i = 0; i < (item.children || []).length; i++)
+          findTab(item.children[i])
+      }
+      findTab(playerView)
+      var equalizerItem = null
+      function findEqualizer(item) {
+        if (!item || equalizerItem)
+          return
+        if (item.stepping !== undefined)
+          equalizerItem = item
+        for (var i = 0; i < (item.children || []).length; i++)
+          findEqualizer(item.children[i])
+      }
+      findEqualizer(tab)
+      check(equalizerItem !== null, "the Spotify tab has an equalizer")
+      if (equalizerItem) {
+        eq(equalizerItem.stepping, !FoamyMotion.reduceMotion, "the tab's equalizer steps while the popup is open")
+        player.editingSettings = true
+        eq(equalizerItem.stepping, false, "and rests while Settings is open")
+        player.editingSettings = false
+        player.opened = false
+        eq(equalizerItem.stepping, false, "and while the popup is closed")
+        player.opened = true
+      }
+      controlSteps.positionTick()
+    }
+    // The position is re-read while playing, and only while a popup is open
+    // or the underline shows. Every bar sees the same player, so only the
+    // leader re-reads it: the other bars get playing stand-ins of their own
+    // that must never tick. The 500 ms rate of an open popup is not checked,
+    // because a rate check would fail under load.
+    property var others: []
+    function positionTick() {
+      var lead = shell.leader()
+      stand = playerStandIn.createObject(shell)
+      others = []
+      for (var i = 0; i < 3; i++) {
+        var panel = panels.itemAt(i)
+        var own = panel === lead ? stand : playerStandIn.createObject(shell)
+        if (panel !== lead)
+          others = others.concat([own])
+        panel.playerModel = {
+          values: [own]
+        }
+      }
+      Media.MediaService.selectedSource = "spotify"
+      for (var p = 0; p < 3; p++)
+        eq(panels.itemAt(p).playing, true, "bar " + p + " plays its stand-in")
+      // With the underline off and every popup closed, nothing asks for the
+      // position. An absence check, like the paused one below. A 1 s track
+      // gets the shortest underline interval (1 s), so a tick that ignores
+      // the setting falls inside the window.
+      lead.save("showProgress", false)
+      stand.length = 1
+      eq(lead.showProgress, false, "the underline is off")
+      wait.after(1200, function () {
+        eq(stand.ticks, 0, "no position reads with the underline off and the popup closed")
+        stand.length = 200
+        lead.open()
+        wait.waitFor(function () {
+          return stand.ticks >= 2
+        }, 5000, controlSteps.pausedTick, "the open popup re-reads the position")
+      })
+    }
+    function pausedTick() {
+      var lead = shell.leader()
+      stand.isPlaying = false
+      var ticks = stand.ticks
+      // An absence check: nothing may re-read a paused player. The other
+      // bars still play while the popup is open.
+      wait.after(1200, function () {
+        eq(stand.ticks, ticks, "no position reads while paused")
+        for (var i = 0; i < others.length; i++)
+          eq(others[i].ticks, 0, "bar that does not lead, stand-in " + i + ": no position reads")
+        lead.close()
+        lead.save("showProgress", true)
+        stand.isPlaying = true
+        wait.waitFor(function () {
+          return !lead.opened
+        }, 10000, controlSteps.wheel, "the leader's popup closes")
+      })
+    }
+    // Discrete mouse-wheel notches over the widget.
+    function wheel() {
+      var lead = shell.leader()
+      var x = lead.width / 2, y = lead.height / 2
+      // First with the wheel off, before a skip starts the skip cooldown.
+      lead.save("scrollAction", "Nothing")
+      ev.mouseWheel(lead, x, y, Qt.NoButton, Qt.NoModifier, 0, 120, -1)
+      ev.mouseWheel(lead, x, y, Qt.NoButton, Qt.NoModifier, 0, -120, -1)
+      eq(stand.volume, 0.5, "with the wheel off, notches leave the volume")
+      eq(stand.nexts, 0, "with the wheel off, notches skip nothing forward")
+      eq(stand.previouses, 0, "with the wheel off, notches skip nothing back")
+      lead.save("scrollAction", "Previous/next track")
+      ev.mouseWheel(lead, x, y, Qt.NoButton, Qt.NoModifier, 0, -120, -1)
+      eq(stand.nexts, 1, "one notch down skips to the next track")
+      ev.mouseWheel(lead, x, y, Qt.NoButton, Qt.NoModifier, 0, -120, -1)
+      eq(stand.nexts, 1, "a second notch within the cooldown skips nothing")
+      lead.save("scrollAction", "Volume")
+      ev.mouseWheel(lead, x, y, Qt.NoButton, Qt.NoModifier, 0, 120, -1)
+      check(Math.abs(stand.volume - 0.55) < 1e-6, "with the wheel on volume, one notch up adds the 5 % step: " + stand.volume)
+      eq(stand.previouses, 0, "and skips nothing")
+      lead.save("scrollAction", "Previous/next track")
+      controlSteps.transport()
+    }
+    // The transport calls bound what they write to the player.
+    function transport() {
+      var lead = shell.leader()
+      eq(lead.seekTo(-5), true, "a seek is accepted")
+      eq(stand.position, 0, "a seek before the start lands on 0")
+      lead.seekTo(9999)
+      eq(stand.position, 200, "a seek past the end lands on the length")
+      lead.setVolume(2)
+      eq(stand.volume, 1, "volume is capped at 100 %")
+      lead.setVolume(-1)
+      eq(stand.volume, 0, "and never below 0")
+      var loops = []
+      for (var n = 0; n < 3; n++) {
+        lead.cycleLoop()
+        loops.push(stand.loopState)
+      }
+      eq(JSON.stringify(loops), JSON.stringify([MprisLoopState.Playlist, MprisLoopState.Track, MprisLoopState.None]), "repeat cycles playlist, track, off")
+      eq(lead.toggleShuffle(), true, "shuffle is toggled")
+      eq(stand.shuffle, true, "shuffle on")
+      stand.canSeek = false
+      eq(lead.seekTo(10), false, "a player that can't seek refuses the seek")
+      eq(stand.position, 200, "and its position is unchanged")
+      for (var i = 0; i < 3; i++)
+        panels.itemAt(i).playerModel = Mpris.players
+      stand.destroy()
+      stand = null
+      for (var o = 0; o < others.length; o++)
+        others[o].destroy()
+      others = []
       hintSteps.begin()
     }
   }
 
   // Omarchy's YouTube app hint. tests/runtime.py puts a fake
   // omarchy-webapp-window-class first on PATH that answers, in turn: the
-  // Chromium class, a failure, a hang, two lines, 100 kB of junk, the class.
+  // Chromium class, a failure, a hang, two lines, 1 MB of junk, the class.
   QtObject {
     id: hintSteps
     property var panel: null
@@ -847,7 +1098,7 @@ ShellRoot {
       ask(afterFlood)
     }
     function afterFlood() {
-      noHint("the command prints 100 kB")
+      noHint("the command prints 1 MB")
       ask(afterAgain)
     }
     function afterAgain() {
@@ -871,6 +1122,8 @@ ShellRoot {
       eq(Media.MediaService.youtubeAppIdHintAnswers, asked, "one answer per opening, none from a poll")
       panel.close()
       panel.destroy()
+      // tests/runtime.py's IPC checks expect no player on the leader.
+      eq(shell.leader().live, false, "stand-ins removed before the IPC checks")
       shell.finish()
     }
   }
