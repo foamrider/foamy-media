@@ -378,8 +378,14 @@ mod tests {
 
     #[test]
     fn a_declared_size_over_the_cap_is_refused() {
+        // The server declares a large body and sends none of it, so only the
+        // Content-Length check can answer in time; reading the body would end
+        // in TIMEOUT at the deadline instead.
         let url = serve(|stream| {
-            let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\n01234567890");
+            let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000000\r\n\r\n");
+            // Hold the connection until the client drops it (bounded, so the thread ends).
+            let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+            let _ = stream.read(&mut [0u8; 1]);
         });
         assert_eq!(get(&url, 10).unwrap_err().code, "TOO_LARGE");
     }
@@ -428,7 +434,7 @@ mod tests {
         });
         let failure = get(&url, 10).unwrap_err();
         assert_eq!(failure.code, "HTTP");
-        thread::sleep(Duration::from_millis(100));
+        // The second server sets the flag before it answers, so it is already set if the redirect was followed.
         assert!(
             !followed.load(Ordering::SeqCst),
             "the redirect was followed"
