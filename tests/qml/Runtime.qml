@@ -681,13 +681,18 @@ ShellRoot {
       eq(first.editingSettings, false, "and no settings page")
       eq(first.sourceKind, "spotify", "Spotify selected")
       eq(fakeYoutubeWindow.activations, 2, "the stand-in window was only focused while open")
-      hintSteps.begin()
+      // The steps below do not depend on the language: tests/runtime.py
+      // asks for them in one run only.
+      if (Quickshell.env("FOAMY_HINT") === "1")
+        hintSteps.begin()
+      else
+        shell.finish()
     }
   }
 
   // Omarchy's YouTube app hint. tests/runtime.py puts a fake
   // omarchy-webapp-window-class first on PATH that answers, in turn: the
-  // Chromium class, a failure, a hang, two lines, 100 kB of junk, the class.
+  // Chromium class, a failure, a hang, two lines, 1 MB of junk, the class.
   QtObject {
     id: hintSteps
     property var panel: null
@@ -794,7 +799,7 @@ ShellRoot {
       ask(afterFlood)
     }
     function afterFlood() {
-      noHint("the command prints 100 kB")
+      noHint("the command prints 1 MB")
       ask(afterAgain)
     }
     function afterAgain() {

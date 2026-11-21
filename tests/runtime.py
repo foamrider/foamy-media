@@ -29,15 +29,17 @@ import harness  # noqa: E402
 
 # Stands in for Omarchy's omarchy-webapp-window-class. Each call logs its
 # arguments and answers the next case of Runtime.qml's hintSteps: the class,
-# the class with a failing exit, a hang, two lines, 100 kB of junk, the class
-# again.
+# the class with a failing exit, a hang, two lines, 1 MB of junk, the class
+# again. The junk is more than a pipe holds, so it is written completely
+# (and the marker file made) only when the reader takes more than the
+# widget's 512-byte bound; with the bound, `tr` loses its reader and fails.
 WINDOW_CLASS = r"""#!/bin/bash
 printf '%s\n' "$*" >>"$FOAMY_OUT/window-class-calls"
 case $(wc -l <"$FOAMY_OUT/window-class-calls") in
   2) printf 'chrome-youtube.com__-Default\n'; exit 1 ;;
   3) exec sleep 30 ;;
   4) printf 'chrome-youtube.com__-Default\nsecond line\n' ;;
-  5) head -c 100000 /dev/zero | tr '\0' x ;;
+  5) head -c 1000000 /dev/zero | tr '\0' x && : >"$FOAMY_OUT/window-class-flood-complete" ;;
   *) printf 'chrome-youtube.com__-Default\n' ;;
 esac
 """
@@ -74,6 +76,11 @@ def run(host, lang):
     # The harness gives each run a private session bus: no live MPRIS player.
     # The shell holds after its checks until the IPC call is made; stop() ends it.
     r.env.update(FOAMY_LANG=lang, FOAMY_HOLD_MS="120000")
+    # The window-picker hint steps do not depend on the language (and one
+    # of them waits out a 3 s deadline): they run in the English run only.
+    hint = lang == "en"
+    if hint:
+        r.env["FOAMY_HINT"] = "1"
     r.start()
     try:
         status = ipc_status(r)
@@ -86,8 +93,10 @@ def run(host, lang):
     failures = r.failures() + [f"FOAMY FAIL host command: {line}" for line in r.host_commands()]
     calls_log = r.out / "window-class-calls"
     calls = calls_log.read_text().splitlines() if calls_log.exists() else []
-    if calls != ["https://youtube.com/"] * 6:
+    if calls != (["https://youtube.com/"] * 6 if hint else []):
         failures.append(f"FOAMY FAIL omarchy-webapp-window-class calls: {calls}")
+    if (r.out / "window-class-flood-complete").exists():
+        failures.append("FOAMY FAIL the window-class output was read past its 512-byte bound")
     try:
         leader = status is not None and json.loads(status).get("leader") is True
     except ValueError:
