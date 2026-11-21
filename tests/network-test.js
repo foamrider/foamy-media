@@ -79,7 +79,7 @@ test("unreadable probe output clears the cover instead of keeping the old one", 
   c.request("file:///tmp/next.png");c.applyArtProbe(c.artUrl,"nothing useful");
   assert.equal(c.artFor(c.artUrl),false);assert.equal(c.artFile,"");
 });
-test("a successful probe for an older URL does not clear the current one", () => {
+test("a failure for an older URL, or a failed retry after a success, keeps the current cover", () => {
   const c=fixture();c.applyArtProbe(c.artUrl,reply("445566","/tmp/a.png"));
   c.finishAttempt("https://i.scdn.co/image/older",1);assert.equal(c.artFile,"/tmp/a.png");
   c.finishAttempt(c.artUrl,1);assert.equal(c.artFile,"/tmp/a.png");
