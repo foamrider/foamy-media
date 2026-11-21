@@ -29,9 +29,9 @@ if not os.environ.get("FOAMY_HOST_45"):
     _root = os.environ.get("OMARCHY_TEST_ROOT")
     os.environ["FOAMY_HOST_45"] = str(Path(_root) / "shell") if _root else "/usr/share/omarchy/shell"
 sys.path.insert(0, str(KIT / "preview"))
-import fake_nm  # noqa: E402
-import harness  # noqa: E402
-import hostenv  # noqa: E402
+import fake_nm
+import harness
+import hostenv
 
 # The helper's replies (native/src/main.rs): one JSON line, exit 0 for a
 # cover and 1 for a failure. Exit 127 is what FoamyNative reports for a

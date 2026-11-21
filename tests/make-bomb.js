@@ -1,7 +1,7 @@
 // Writes a valid PNG that is tiny on disk and enormous when decoded: the
 // fixture the byte bounds cannot catch and the area limit has to.
 //
-//   node test/make-bomb.js <path> [edge]
+//   node tests/make-bomb.js <path> [edge]
 //
 // Built by streaming zeroed scanlines through zlib rather than by asking an
 // image library for the pixels, because allocating the real thing is the very
@@ -13,7 +13,7 @@ const { createWriteStream } = require("node:fs")
 const output = process.argv[2]
 const edge = Number(process.argv[3] || 12000)
 if (!output) {
-  console.error("usage: node test/make-bomb.js <path> [edge]")
+  console.error("usage: node tests/make-bomb.js <path> [edge]")
   process.exit(2)
 }
 
