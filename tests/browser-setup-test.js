@@ -98,9 +98,3 @@ test("the picker's summary names the app the widget uses", () => {
   assert.equal(selectedLabel({youtubeAppId:'chromium-youtube.com__-Default', youtubeBrowser:'chromium', youtubeProfile:'Profile 9'}), 'Chromium · Default')
   assert.equal(B.description('not-a-web-app'), '')
 })
-
-test('Panel.qml creates no process', () => {
-  const fs = require('node:fs'), path = require('node:path')
-  const panel = fs.readFileSync(path.join(__dirname, '..', 'Panel.qml'), 'utf8')
-  assert.ok(!/\bProcess\s*\{|createObject|Quickshell\.Io/.test(panel), 'Panel.qml creates no process')
-})

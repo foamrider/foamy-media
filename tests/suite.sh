@@ -44,13 +44,14 @@ else
   run python3 -I tests/test_clipboard.py
 fi
 if ((ci || fast)); then
-  skip "i18n_runtime.py, runtime.py, tooltip-runtime.py: offscreen Quickshell"
+  skip "i18n_runtime.py, runtime.py, art-runtime.py, tooltip-runtime.py: offscreen Quickshell"
 elif [ ! -f "$kit/preview/harness.py" ]; then
   echo "FAIL the runtime tests need foamy-kit (set FOAMY_KIT)"
   status=1
 else
   run python3 "$kit/preview/i18n_runtime.py" .
   run python3 -I tests/runtime.py
+  run python3 -I tests/art-runtime.py
   run python3 -I tests/tooltip-runtime.py
 fi
 exit $status

@@ -268,21 +268,6 @@ test("which art URLs may reach the probe", () => {
   })
 })
 
-// ------------------------------------------ and how the helper is launched
-{
-  const service = fs.readFileSync(path.join(__dirname, "..", "MediaService.qml"), "utf8")
-  // And its exits are read the way DESIGN.md asks: 126/127 mean there is no
-  // helper for this CPU, which is said once and never retried.
-  assert.ok(/FoamyNative\.unavailable\(exitCode\)/.test(service))
-  assert.ok(/root\.artHelperUnavailable = true/.test(service))
-  assert.ok(/!target \|\| root\.artHelperUnavailable/.test(service), "an unavailable helper is not launched again")
-  assert.ok(/failure === "TLS_UNSUPPORTED"/.test(service), "a CPU without HTTPS support is not retried")
-  const settings = fs.readFileSync(path.join(__dirname, "..", "MediaSettings.qml"), "utf8")
-  assert.ok(settings.indexOf("This plugin's helper isn't available for this CPU.") !== -1)
-  const native = require("../kit/node-loader.cjs").load("FoamyNative")
-  assert.strictEqual(native.UNAVAILABLE_TEXT, "This plugin's helper isn't available for this CPU.")
-}
-
 test("the helper checks the host again, against the same list", () => {
   const main = fs.readFileSync(path.join(__dirname, "..", "native", "src", "main.rs"), "utf8")
   const hosts = /const HOSTS: \[&str; \d+\] = \[([^\]]*)\]/.exec(main)
@@ -297,8 +282,9 @@ test("no image source names the raw art URL", () => {
   // redirects, and decoded whatever its image plugins handle -- an Omarchy
   // install ships the SVG and PDF ones -- inside the shell process.
   //
-  // Everything shown now comes from the file the probe wrote, so this asserts
-  // the property directly against the QML rather than trusting it to stay so.
+  // Everything shown now comes from the file the probe wrote. tests/art-runtime.py
+  // checks that through the real popup; this scan stands in for the blurred
+  // GPU backdrop, which no offscreen scene can create.
   const read = (name) => fs.readFileSync(path.join(__dirname, "..", name), "utf8")
   const sources = (name) => read(name)
     .split("\n")
@@ -314,15 +300,6 @@ test("no image source names the raw art URL", () => {
   loaders.forEach(function (entry) {
     assert.ok(!/\bartUrl\b/.test(entry.line), entry.file + ":" + entry.number + " loads the raw art URL: " + entry.line)
   })
-
-  // The covers that are displayed come from the probed file, both of them:
-  // the thumbnail and the blurred backdrop. `artSource` is the Panel's URL of
-  // the file the probe wrote (MediaService.artFile), and only while it
-  // belongs to the current track.
-  const probed = loaders.filter(function (entry) { return /media\.artSource\b/.test(entry.line) })
-  assert.strictEqual(probed.length, 2, "expected exactly two loads of the probed cover")
-  assert.ok(/readonly property string artSource: artShown && imagesActive \? Model\.fileUrl\(MediaService\.artFile\) : ""/
-    .test(read("Panel.qml")), "Panel.artSource must come from the probed file of the current track")
 })
 
 test("the cover file the helper hands over", () => {

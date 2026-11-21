@@ -13,14 +13,14 @@ import "plugin/BrowserSetup.js" as BrowserSetup
 
 // Foamy Media under a real host shell, offscreen: three bar instances (as on
 // three monitors) sharing one MediaService and one leader, the lazy popup
-// body, the single keyboard cursor, settings saving through the bar, the
-// cover rules (no stale cover after a failed fetch), the equalizer and
-// marquee gates, translations and RTL mirroring, and YouTube being
-// focus-only. No MPRIS player is reachable here, so the widget is in its
-// "not running" state; the English run (FOAMY_HINT=1) then drives clicks,
-// source selection, the position tick, the wheel and the transport with
-// stand-in players, and the window picker's hint. The entry still holds the
-// browser and profile keys 1.3.3 and earlier saved, which must stay inert.
+// body, the single keyboard cursor, settings saving through the bar, an art
+// probe that cannot start, the equalizer and marquee gates, translations and
+// RTL mirroring, and YouTube being focus-only. No MPRIS player is reachable
+// here, so the widget is in its "not running" state; the English run
+// (FOAMY_HINT=1) then drives clicks, source selection, the position tick,
+// the wheel and the transport with stand-in players, and the window picker's
+// hint. The entry still holds the browser and profile keys 1.3.3 and earlier
+// saved, which must stay inert. tests/art-runtime.py covers the cover service.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -320,32 +320,6 @@ ShellRoot {
     Media.MediaService.selectedSource = "youtube"
     eq(panels.itemAt(2).sourceKind, "youtube", "source shared across bars")
     Media.MediaService.selectedSource = "spotify"
-
-    // Cover rules (regression: a failed fetch kept the previous cover).
-    var svc = Media.MediaService
-    var a = "file:///nonexistent/foamy-media-a.png", b = "file:///nonexistent/foamy-media-b.png"
-    svc.request(a)
-    svc.artProbeDelay.stop()
-    svc.applyArtProbe(a, '{"ok":true,"mean":"#336699","file":"/tmp/a.png","swatches":[]}')
-    eq(svc.artFor(a), true, "cover shown for its own track")
-    svc.request(b)
-    svc.artProbeDelay.stop()
-    eq(svc.artFor(b), true, "previous cover lingers while the next one settles")
-    eq(svc.artFor(a), true, "the measured URL still matches its cover")
-    svc.finishAttempt(b, 1)
-    eq(svc.artFor(b), false, "failed fetch drops the previous cover")
-    eq(svc.artFile, "", "no cover kept after the failure")
-    svc.request(a)
-    svc.artProbeDelay.stop()
-    svc.applyArtProbe(a, '{"ok":true,"mean":"#336699","file":"/tmp/a.png","swatches":[]}')
-    svc.applyArtProbe(b, '{"ok":true,"mean":"#000000","file":"/tmp/b.png","swatches":[]}')
-    eq(svc.artFile, "/tmp/a.png", "a late answer for another track is ignored")
-    svc.request(b)
-    svc.artProbeDelay.stop()
-    svc.applyArtProbe(b, "garbage")
-    eq(svc.artFor(b), false, "unreadable probe output shows no cover")
-    svc.request("")
-    svc.artProbeDelay.stop()
 
     // Equalizer and marquee gates.
     eq(equalizer.stepping, !FoamyMotion.reduceMotion, "equalizer steps while shown and playing")
@@ -803,7 +777,9 @@ ShellRoot {
         trackTitle: "T",
         trackArtist: "A",
         canSeek: false,
-        shuffleSupported: false
+        shuffleSupported: false,
+        // The leader's position tick re-reads through this signal.
+        positionChanged: function () {}
       }
       var youtube = {
         dbusName: "org.mpris.MediaPlayer2." + lead.preference("youtubeMprisName") + ".instance1",
@@ -812,7 +788,8 @@ ShellRoot {
         isPlaying: true,
         trackTitle: "Example",
         canSeek: false,
-        shuffleSupported: false
+        shuffleSupported: false,
+        positionChanged: function () {}
       }
       fakeYoutubeWindow.appId = lead.preference("youtubeAppId")
       fakeYoutubeWindow.title = "Example - YouTube"
