@@ -145,12 +145,21 @@ ShellRoot {
 
   Component.onCompleted: Qt.callLater(cover)
 
+  // Quickshell reports a started Process as running a moment after the
+  // request, so a check that no further probe started reads `starts` only
+  // after a short absence window.
+  function settled(then) {
+    return function () {
+      wait.after(500, then)
+    }
+  }
+
   // Three bars, one probe, and only the helper's file is shown.
   function cover() {
     play("file:///covers/My%20Cover.png")
     wait.waitFor(function () {
       return svc.artFile !== "" && !svc.artProbe.running
-    }, 10000, function () {
+    }, 10000, settled(function () {
       eq(starts, 1, "three bars ask for one probe")
       eq(svc.artFile, out + "/probed.png", "the cover is the file the helper wrote")
       var lead = leader()
@@ -178,7 +187,7 @@ ShellRoot {
           shell.burst()
         }, "covers are released after the popup closes")
       }, "the popup opens")
-    }, "the first cover is probed")
+    }), "the first cover is probed")
   }
 
   // Skipping through tracks probes only the one that settles.
@@ -188,10 +197,10 @@ ShellRoot {
     play("file:///covers/c.png")
     wait.waitFor(function () {
       return svc.artProbed === "file:///covers/c.png" && !svc.artProbe.running
-    }, 10000, function () {
+    }, 10000, settled(function () {
       eq(starts, 2, "a burst of track changes starts one probe")
       shell.offline()
-    }, "the last cover of a burst is probed")
+    }), "the last cover of a burst is probed")
   }
 
   // A remote cover waits for the network.
@@ -200,7 +209,7 @@ ShellRoot {
     play("https://i.scdn.co/image/x")
     wait.waitFor(function () {
       return svc.artUrl === "https://i.scdn.co/image/x" && !svc.artProbeDelay.running
-    }, 10000, function () {
+    }, 10000, settled(function () {
       eq(starts, 2, "no probe for a remote cover while offline")
       eq(svc.artFile, "", "and no previous cover is kept")
       networkFile.setText("4\n")
@@ -214,7 +223,7 @@ ShellRoot {
           })
         })
       }, "once online the cover is fetched, and the failure is retried")
-    }, "the remote cover waits")
+    }), "the remote cover waits")
   }
   // Fire the pending retry now instead of waiting it out; `interval` is the
   // next backoff, or 0 when none may follow.
@@ -293,10 +302,10 @@ ShellRoot {
         play("file:///covers/n.png")
         wait.waitFor(function () {
           return svc.artUrl === "file:///covers/n.png" && !svc.artProbeDelay.running
-        }, 10000, function () {
+        }, 10000, settled(function () {
           eq(starts, before, "the missing helper is not started again")
           shell.finish()
-        }, "the next track's cover is requested")
+        }), "the next track's cover is requested")
       }, "the artwork setting is shown")
     }, "exit 127 marks the helper unavailable")
   }
