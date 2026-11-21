@@ -434,7 +434,8 @@ mod tests {
         });
         let failure = get(&url, 10).unwrap_err();
         assert_eq!(failure.code, "HTTP");
-        // The second server sets the flag before it answers, so it is already set if the redirect was followed.
+        // The second server sets the flag before it answers, so it is
+        // already set if the redirect was followed.
         assert!(
             !followed.load(Ordering::SeqCst),
             "the redirect was followed"

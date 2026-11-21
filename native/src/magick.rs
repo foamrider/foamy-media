@@ -289,7 +289,10 @@ mod tests {
         let relative = up.join(behind_relative.strip_prefix("/").unwrap());
         // The relative entry must really lead to an executable, or this proves nothing.
         assert!(relative.is_relative() && relative.join("magick").is_file());
-        let path = std::env::join_paths([&relative, &not_executable, &directory, &found]).unwrap();
+        // A PATH often names directories that do not exist; they are skipped.
+        let missing = temp.0.join("missing");
+        let path = std::env::join_paths([&relative, &missing, &not_executable, &directory, &found])
+            .unwrap();
         assert_eq!(
             which("magick", Some(path.clone())),
             Some(found.join("magick"))

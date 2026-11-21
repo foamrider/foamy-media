@@ -191,10 +191,14 @@ mod tests {
         fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
         prepare(&dir).unwrap();
         assert_eq!(mode(&dir), 0o700);
-        // A symlink in its place is refused, and its target is not tightened through it.
-        fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
+        // A symlink in its place is refused because it is a symlink: its
+        // target is private, so only the link itself can be the reason.
         let link = temp.0.join("link");
         std::os::unix::fs::symlink(&dir, &link).unwrap();
+        assert_eq!(prepare(&link).unwrap_err().code, "CACHE_FAILED");
+        // With a wider target the link is still refused, and the target is
+        // not tightened through it.
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
         assert_eq!(prepare(&link).unwrap_err().code, "CACHE_FAILED");
         assert_eq!(
             mode(&dir),

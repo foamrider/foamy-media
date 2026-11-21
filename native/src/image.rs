@@ -377,7 +377,9 @@ mod tests {
     #[test]
     fn text_chunks_go_and_everything_else_stays_in_order() {
         let plain = plain([200, 30, 60]);
-        let bomb = text_bomb([200, 30, 60], 8, 4096);
+        // Contiguous text chunks leave one gap, so a bomb with more chunks
+        // than MAX_RUNS is still stripped: the limit counts kept ranges.
+        let bomb = text_bomb([200, 30, 60], 2 * MAX_RUNS, 16);
         assert!(bomb.len() > plain.len());
         let stripped = strip(&bomb).unwrap();
         assert_eq!(stripped, plain);
