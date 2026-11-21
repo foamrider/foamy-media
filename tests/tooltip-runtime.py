@@ -31,8 +31,8 @@ if not os.environ.get("FOAMY_HOST_45"):
     _root = os.environ.get("OMARCHY_TEST_ROOT")
     os.environ["FOAMY_HOST_45"] = str(Path(_root) / "shell") if _root else "/usr/share/omarchy/shell"
 sys.path.insert(0, str(KIT / "preview"))
-import harness  # noqa: E402
-import hostenv  # noqa: E402
+import harness
+import hostenv
 
 IN_OPEN = 0x20
 
@@ -117,6 +117,9 @@ def cases(probe):
         # use, so their length follows the run's temp path (TMPDIR, pid): only
         # their labels are worked out here.
         (img_title, img_artist, "Playing", True, cut(cut(img_title, 100) + "  ·  " + cut(img_artist, 60), 100)),
+        # The only paused row with markup. The label starts with the prefix,
+        # so the leading spaces and the doctype are not at the start of the
+        # text: Qt reads it as markup because of the <img> tag.
         (spaced_title, doctype, "Paused", True, cut("Paused — " + cut(spaced_title, 100) + "  ·  " + doctype, 100)),
         ("Tom & Jerry", "Simon & Garfunkel", "Paused", False, "Paused — Tom & Jerry  ·  Simon & Garfunkel"),
         ("a < b > c", "&amp;", "Playing", False, "a < b > c  ·  &amp;"),
