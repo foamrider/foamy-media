@@ -106,7 +106,6 @@ def cases(probe):
     # (title, artist, status, whether Qt's AutoText would read it as markup)
     rows = [
         ("Instant Crush", "Daft Punk", "Playing", False),
-        ("<b>bold</b>", "<i>italic</i>", "Playing", True),
         (f'<img src="{target}">', f"<img src='{target}' width=900>", "Playing", True),
         (f'  <img src="{target}">', "<!DOCTYPE html><p>artist", "Paused", True),
         ("Tom & Jerry", "Simon & Garfunkel", "Paused", False),

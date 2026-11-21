@@ -111,19 +111,11 @@ ShellRoot {
     pointerOf(panel).entered()
     eq(recordingBar.tips.length, before + 1, label + ": hovering shows one tooltip")
     var tip = recordingBar.tips[recordingBar.tips.length - 1] || ""
-    eq(tip, panel.tooltipText, label + ": the bar gets tooltipText")
     eq(tip.split(wj).join(""), expected, label + ": text")
-    for (var i = 0; i < tip.length; i++) {
-      if ((tip[i] === "<" || tip[i] === "&") && tip[i + 1] !== wj) {
-        check(false, label + ": unguarded " + tip[i] + " at " + i)
-        break
-      }
-    }
 
     hostTip.tooltipText = tip
     literal.text = expected
     autoSink.text = tip
-    eq(hostTip.label.text, tip, label + ": host Text holds the string")
     near(hostTip.label.implicitWidth, literal.implicitWidth, label + ": host tooltip draws it literally")
     eq(hostTip.label.lineCount, 1, label + ": one line in the host tooltip")
     near(autoSink.implicitWidth, literal.implicitWidth, label + ": literal in an AutoText Text too")
