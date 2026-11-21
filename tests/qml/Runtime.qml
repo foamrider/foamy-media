@@ -70,11 +70,19 @@ ShellRoot {
       playing: true
       animate: true
     }
-    Media.MediaView {
-      id: playerView
+    // Mirrored as the host's popup card mirrors its body, so the RTL run
+    // reaches the mirrored path.
+    Item {
       y: 120
       width: 420
-      media: player
+      height: playerView.height
+      LayoutMirroring.enabled: FoamyI18n.rightToLeft
+      LayoutMirroring.childrenInherit: true
+      Media.MediaView {
+        id: playerView
+        width: parent.width
+        media: player
+      }
     }
     Media.BarContent {
       id: barContent
@@ -124,6 +132,11 @@ ShellRoot {
   MockBar {
     id: mockBar
     moduleName: "foamy.media"
+    // The commands the widget hands the bar to run.
+    property var ran: []
+    function run(command) {
+      ran = ran.concat([String(command)])
+    }
   }
 
   // A playing player for the cursor checks (MediaView reads only `media`).
@@ -343,6 +356,7 @@ ShellRoot {
 
     // The cursor over a playing player. Transport and sliders keep their
     // physical direction in RTL, where PanelKeyCatcher reports reading order.
+    eq(playerView.LayoutMirroring.enabled, shell.lang === "ar", "the player view mirrors in RTL only")
     var physical = playerView.LayoutMirroring.enabled ? -1 : 1
     playerView.moveRequested(0, 1)
     eq(playerView.cursorKey, "playPause", "first move lands on play/pause")
@@ -357,6 +371,8 @@ ShellRoot {
     var volumeSlider = findNamed(playerView, "mediaVolumeSlider")
     check(seekSlider !== null && volumeSlider !== null, "seek and volume sliders exist")
     if (seekSlider && volumeSlider) {
+      eq(seekSlider.LayoutMirroring.enabled, false, "the timeline keeps its physical direction")
+      eq(volumeSlider.LayoutMirroring.enabled, false, "the volume keeps its physical direction")
       eq(seekSlider.hasCursor, true, "the cursor on the timeline rings its thumb")
       eq(volumeSlider.hasCursor, false, "only the slider with the cursor is ringed")
       var row = seekSlider.parent ? seekSlider.parent.parent : null
@@ -451,14 +467,9 @@ ShellRoot {
     view.moveRequested(1, 0)
     eq(view.cursorKey, "launch", "along the source row")
     eq(view.LayoutMirroring.enabled, shell.lang === "ar", "popup body mirrors in RTL only")
-    var titles = {
-      en: "Not running",
-      no: "Ikke startet",
-      ar: "Not running"
-    }
-    if (shell.lang !== "ar")
-      eq(FoamyI18n.t("Not running"), titles[shell.lang], "translated")
-    eq(FoamyI18n.t("%1 is not running", "Spotify"), shell.lang === "no" ? "Spotify er ikke startet" : "Spotify is not running", "parameter")
+    // Arabic has no catalog and falls back to English.
+    eq(view.band.meta, shell.lang === "no" ? "Ikke startet" : "Not running", "band status in the UI language")
+    eq(first.tooltipText, shell.lang === "no" ? "Spotify er ikke startet" : "Spotify is not running", "hover text in the UI language")
     shell.key(view, "s")
     eq(first.editingSettings, true, "s opens Settings")
     eq(view.blocked, true, "settings page owns the keys")
@@ -583,7 +594,7 @@ ShellRoot {
   function stepFour(hidden) {
     var popup = hidden.popup
     check(popup.screenW > 0, "popup knows its screen")
-    eq(popup.cardOrigin.x, Math.round(Math.max(popup.margin, Math.min(popup.screenW / 2 - popup.contentWidth / 2, popup.screenW - popup.contentWidth - popup.margin))), "card centred on the screen")
+    check(Math.abs(popup.cardOrigin.x + popup.contentWidth / 2 - popup.screenW / 2) <= 1, "card centred on the screen: " + popup.cardOrigin.x)
     check(popup.cardOrigin.x > popup.margin && popup.cardOrigin.y > 0, "not in the top-left corner")
     eq(panels.itemAt(0).popup.centerOnBar, false, "a shown widget still hangs from itself")
     hidden.close()
@@ -635,11 +646,13 @@ ShellRoot {
       eq(first.launch(), false, "launch() without the YouTube window does nothing")
       eq(first.playPause(), false, "nor does play/pause")
       eq(fakeYoutubeWindow.activations, 2, "nothing is focused")
+      eq(JSON.stringify(mockBar.ran), "[]", "YouTube launches run no command")
       eq(first.settingsError, "", "no error")
       eq(first.editingSettings, false, "no settings page")
       first.toplevelModel = ToplevelManager.toplevels
       Media.MediaService.selectedSource = "spotify"
       eq(first.launch(), true, "Spotify keeps Omarchy's launcher")
+      eq(JSON.stringify(mockBar.ran), JSON.stringify(["omarchy launch spotify"]), "Spotify runs Omarchy's launcher, once")
       // The art probe's command not starting ends the attempt too.
       var svc = Media.MediaService
       var a = "file:///nonexistent/foamy-media-a.png", b = "file:///nonexistent/foamy-media-b.png"

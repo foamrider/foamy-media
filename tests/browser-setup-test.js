@@ -99,12 +99,8 @@ test("the picker's summary names the app the widget uses", () => {
   assert.equal(B.description('not-a-web-app'), '')
 })
 
-test('Panel.launch() only focuses YouTube or runs Omarchy\'s Spotify launcher', () => {
+test('Panel.qml creates no process', () => {
   const fs = require('node:fs'), path = require('node:path')
   const panel = fs.readFileSync(path.join(__dirname, '..', 'Panel.qml'), 'utf8')
-  const launch = /\n  function launch\(\) \{\n([\s\S]*?)\n  \}\n/.exec(panel)
-  assert.ok(launch, 'Panel.launch()')
-  assert.deepEqual([...launch[1].matchAll(/bar\.run\(([^)]*)\)/g)].map(m => m[1]), ['"omarchy launch spotify"'])
-  assert.ok(/youtubeWindow\.activate\(\)/.test(launch[1]), 'YouTube is focused')
   assert.ok(!/\bProcess\s*\{|createObject|Quickshell\.Io/.test(panel), 'Panel.qml creates no process')
 })
