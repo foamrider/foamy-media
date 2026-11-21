@@ -1,6 +1,8 @@
 import QtQuick
+import QtTest
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.Mpris
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
@@ -15,8 +17,10 @@ import "plugin/BrowserSetup.js" as BrowserSetup
 // cover rules (no stale cover after a failed fetch), the equalizer and
 // marquee gates, translations and RTL mirroring, and YouTube being
 // focus-only. No MPRIS player is reachable here, so the widget is in its
-// "not running" state. The entry still holds the browser and profile keys
-// 1.3.3 and earlier saved, which must stay inert.
+// "not running" state; the English run (FOAMY_HINT=1) then drives clicks,
+// source selection, the position tick, the wheel and the transport with
+// stand-in players, and the window picker's hint. The entry still holds the
+// browser and profile keys 1.3.3 and earlier saved, which must stay inert.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -262,6 +266,12 @@ ShellRoot {
     return null
   }
 
+  function leader() {
+    for (var i = 0; i < 3; i++)
+      if (panels.itemAt(i).statusObject().leader)
+        return panels.itemAt(i)
+    return null
+  }
   function leaders() {
     var count = 0
     for (var i = 0; i < 3; i++)
@@ -684,9 +694,290 @@ ShellRoot {
       // The steps below do not depend on the language: tests/runtime.py
       // asks for them in one run only.
       if (Quickshell.env("FOAMY_HINT") === "1")
-        hintSteps.begin()
+        controlSteps.begin()
       else
         shell.finish()
+    }
+  }
+
+  TestEvent {
+    id: ev
+  }
+  // A playing Spotify that records what the widget asks of it. Panel binds to
+  // these properties, so they notify (a QtObject, not a plain object).
+  Component {
+    id: playerStandIn
+    QtObject {
+      property string dbusName: "org.mpris.MediaPlayer2.spotify"
+      property string identity: "Spotify"
+      property bool isPlaying: true
+      property int playbackState: isPlaying ? MprisPlaybackState.Playing : MprisPlaybackState.Paused
+      property string trackTitle: "T"
+      property string trackArtist: "A"
+      property bool lengthSupported: true
+      property real length: 200
+      property bool positionSupported: true
+      property real position: 50
+      property bool canSeek: true
+      property bool canGoNext: true
+      property bool canGoPrevious: true
+      property bool volumeSupported: true
+      property real volume: 0.5
+      property bool loopSupported: true
+      property int loopState: MprisLoopState.None
+      property bool shuffleSupported: true
+      property bool shuffle: false
+      property int nexts: 0
+      property int previouses: 0
+      // The position tick re-reads by emitting positionChanged.
+      property int ticks: 0
+      onPositionChanged: ticks++
+      function next() {
+        nexts++
+      }
+      function previous() {
+        previouses++
+      }
+    }
+  }
+
+  // Clicks, source selection, the tab equalizer, the position tick, the
+  // wheel and the transport, on the real panels. Every step puts the real
+  // player and window models back before the next.
+  QtObject {
+    id: controlSteps
+    property var stand: null
+    function begin() {
+      var first = panels.itemAt(0)
+      // The host bar's click entry point, with no player (left click opens
+      // the popup by default).
+      mockBar.ran = []
+      first.triggerPress(Qt.LeftButton)
+      wait.waitFor(function () {
+        return first.opened
+      }, 10000, function () {
+        first.triggerPress(Qt.LeftButton)
+        wait.waitFor(function () {
+          return !first.opened
+        }, 10000, controlSteps.clickPlays, "a second left click closes the popup")
+      }, "a left click opens the popup")
+    }
+    function clickPlays() {
+      var first = panels.itemAt(0)
+      first.triggerPress(Qt.MiddleButton)
+      eq(first.opened, false, "a middle click without a player opens nothing")
+      eq(JSON.stringify(mockBar.ran), "[]", "and runs nothing")
+      first.save("leftClick", "Play/pause")
+      first.triggerPress(Qt.LeftButton)
+      eq(JSON.stringify(mockBar.ran), JSON.stringify(["omarchy launch spotify"]), "left click set to play/pause starts Spotify when nothing plays")
+      eq(first.opened, false, "and opens no popup")
+      first.triggerPress(Qt.RightButton)
+      wait.waitFor(function () {
+        return first.opened
+      }, 10000, function () {
+        first.close()
+        first.save("leftClick", "Open panel")
+        eq(first.leftClick, "Open panel", "left click opens the popup again")
+        mockBar.ran = []
+        wait.waitFor(function () {
+          return !first.opened
+        }, 10000, controlSteps.sources, "the popup closes")
+      }, "then right click opens the popup")
+    }
+    // The leader keeps the selection in step with the players. An earlier
+    // step saved YouTube names on the first panel that the bar never
+    // reflects; wait until they expired back to the defaults, so the
+    // stand-ins below match whichever panel leads.
+    function sources() {
+      var lead = shell.leader()
+      wait.waitFor(function () {
+        return lead.preference("youtubeAppId") === "vivaldi-youtube.com__-Default" && lead.preference("youtubeMprisName") === "vivaldi"
+      }, 15000, controlSteps.sourcesSettled, "the leader's YouTube names are the defaults")
+    }
+    function sourcesSettled() {
+      var lead = shell.leader()
+      var spotify = {
+        dbusName: "org.mpris.MediaPlayer2.spotify",
+        identity: "Spotify",
+        isPlaying: true,
+        trackTitle: "T",
+        trackArtist: "A",
+        canSeek: false,
+        shuffleSupported: false
+      }
+      var youtube = {
+        dbusName: "org.mpris.MediaPlayer2." + lead.preference("youtubeMprisName") + ".instance1",
+        identity: "YouTube",
+        metadata: {},
+        isPlaying: true,
+        trackTitle: "Example",
+        canSeek: false,
+        shuffleSupported: false
+      }
+      fakeYoutubeWindow.appId = lead.preference("youtubeAppId")
+      fakeYoutubeWindow.title = "Example - YouTube"
+      Media.MediaService.selectedSource = "youtube"
+      lead.toplevelModel = {
+        values: []
+      }
+      lead.playerModel = {
+        values: [spotify]
+      }
+      wait.waitFor(function () {
+        return Media.MediaService.selectedSource === "spotify"
+      }, 10000, function () {
+        lead.toplevelModel = {
+          values: [fakeYoutubeWindow]
+        }
+        lead.playerModel = {
+          values: [spotify, youtube]
+        }
+        wait.waitFor(function () {
+          return Media.MediaService.selectedSource === "youtube"
+        }, 10000, controlSteps.youtubeOff, "the source that starts playing last is selected")
+      }, "a playing Spotify is selected")
+    }
+    function youtubeOff() {
+      var lead = shell.leader()
+      lead.saveMany({
+        youtubeEnabled: false
+      })
+      eq(lead.youtubeOpen, false, "with YouTube off its window is not matched")
+      wait.waitFor(function () {
+        return Media.MediaService.selectedSource === "spotify"
+      }, 10000, function () {
+        lead.saveMany({
+          youtubeEnabled: true
+        })
+        wait.waitFor(function () {
+          return Media.MediaService.selectedSource === "youtube"
+        }, 10000, function () {
+          lead.toplevelModel = {
+            values: []
+          }
+          wait.waitFor(function () {
+            return Media.MediaService.selectedSource === "spotify"
+          }, 10000, function () {
+            lead.playerModel = Mpris.players
+            lead.toplevelModel = ToplevelManager.toplevels
+            controlSteps.tabEqualizer()
+          }, "the YouTube window closed: back to Spotify")
+        }, "YouTube on again: it is selected")
+      }, "with YouTube off, Spotify is selected")
+    }
+    // The popup's Spotify tab animates its equalizer only while the popup
+    // is open and Settings is not.
+    function tabEqualizer() {
+      var tab = null
+      function findTab(item) {
+        if (!item || tab)
+          return
+        if (item.key === "tab:spotify" && item.kind !== undefined)
+          tab = item
+        for (var i = 0; i < (item.children || []).length; i++)
+          findTab(item.children[i])
+      }
+      findTab(playerView)
+      var equalizerItem = null
+      function findEqualizer(item) {
+        if (!item || equalizerItem)
+          return
+        if (item.stepping !== undefined)
+          equalizerItem = item
+        for (var i = 0; i < (item.children || []).length; i++)
+          findEqualizer(item.children[i])
+      }
+      findEqualizer(tab)
+      check(equalizerItem !== null, "the Spotify tab has an equalizer")
+      if (equalizerItem) {
+        eq(equalizerItem.stepping, !FoamyMotion.reduceMotion, "the tab's equalizer steps while the popup is open")
+        player.editingSettings = true
+        eq(equalizerItem.stepping, false, "and rests while Settings is open")
+        player.editingSettings = false
+        player.opened = false
+        eq(equalizerItem.stepping, false, "and while the popup is closed")
+        player.opened = true
+      }
+      controlSteps.positionTick()
+    }
+    // The position is re-read on the leader only, while playing, every
+    // 500 ms while a popup is open.
+    function positionTick() {
+      var lead = shell.leader()
+      stand = playerStandIn.createObject(shell)
+      for (var i = 0; i < 3; i++)
+        panels.itemAt(i).playerModel = panels.itemAt(i) === lead ? {
+          values: [stand]
+        } : {
+          values: []
+        }
+      Media.MediaService.selectedSource = "spotify"
+      eq(lead.live, true, "the stand-in plays on the leader")
+      lead.open()
+      wait.waitFor(function () {
+        return stand.ticks >= 2
+      }, 5000, function () {
+        stand.isPlaying = false
+        var ticks = stand.ticks
+        // An absence check: nothing may re-read a paused player.
+        wait.after(1200, function () {
+          eq(stand.ticks, ticks, "no position reads while paused")
+          lead.close()
+          stand.isPlaying = true
+          wait.waitFor(function () {
+            return !lead.opened
+          }, 10000, controlSteps.wheel, "the leader's popup closes")
+        })
+      }, "the open popup re-reads the position")
+    }
+    // Discrete mouse-wheel notches over the widget.
+    function wheel() {
+      var lead = shell.leader()
+      var x = lead.width / 2, y = lead.height / 2
+      // First with the wheel off, before a skip starts the skip cooldown.
+      lead.save("scrollAction", "Nothing")
+      ev.mouseWheel(lead, x, y, Qt.NoButton, Qt.NoModifier, 0, 120, -1)
+      ev.mouseWheel(lead, x, y, Qt.NoButton, Qt.NoModifier, 0, -120, -1)
+      check(stand.volume === 0.5 && stand.nexts === 0 && stand.previouses === 0, "with the wheel off, notches change nothing")
+      lead.save("scrollAction", "Previous/next track")
+      ev.mouseWheel(lead, x, y, Qt.NoButton, Qt.NoModifier, 0, -120, -1)
+      eq(stand.nexts, 1, "one notch down skips to the next track")
+      ev.mouseWheel(lead, x, y, Qt.NoButton, Qt.NoModifier, 0, -120, -1)
+      eq(stand.nexts, 1, "a second notch within the cooldown skips nothing")
+      lead.save("scrollAction", "Volume")
+      ev.mouseWheel(lead, x, y, Qt.NoButton, Qt.NoModifier, 0, 120, -1)
+      check(Math.abs(stand.volume - 0.55) < 1e-6, "with the wheel on volume, one notch up adds the 5 % step: " + stand.volume)
+      eq(stand.previouses, 0, "and skips nothing")
+      lead.save("scrollAction", "Previous/next track")
+      controlSteps.transport()
+    }
+    // The transport calls bound what they write to the player.
+    function transport() {
+      var lead = shell.leader()
+      eq(lead.seekTo(-5), true, "a seek is accepted")
+      eq(stand.position, 0, "a seek before the start lands on 0")
+      lead.seekTo(9999)
+      eq(stand.position, 200, "a seek past the end lands on the length")
+      lead.setVolume(2)
+      eq(stand.volume, 1, "volume is capped at 100 %")
+      lead.setVolume(-1)
+      eq(stand.volume, 0, "and never below 0")
+      var loops = []
+      for (var n = 0; n < 3; n++) {
+        lead.cycleLoop()
+        loops.push(stand.loopState)
+      }
+      eq(JSON.stringify(loops), JSON.stringify([MprisLoopState.Playlist, MprisLoopState.Track, MprisLoopState.None]), "repeat cycles playlist, track, off")
+      eq(lead.toggleShuffle(), true, "shuffle is toggled")
+      eq(stand.shuffle, true, "shuffle on")
+      stand.canSeek = false
+      eq(lead.seekTo(10), false, "a player that can't seek refuses the seek")
+      eq(stand.position, 200, "and its position is unchanged")
+      for (var i = 0; i < 3; i++)
+        panels.itemAt(i).playerModel = Mpris.players
+      stand.destroy()
+      stand = null
+      hintSteps.begin()
     }
   }
 
@@ -823,6 +1114,8 @@ ShellRoot {
       eq(Media.MediaService.youtubeAppIdHintAnswers, asked, "one answer per opening, none from a poll")
       panel.close()
       panel.destroy()
+      // tests/runtime.py's IPC checks expect no player on the leader.
+      eq(shell.leader().live, false, "stand-ins removed before the IPC checks")
       shell.finish()
     }
   }
