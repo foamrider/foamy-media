@@ -24,7 +24,7 @@ if not os.environ.get("FOAMY_HOST_45"):
     _root = os.environ.get("OMARCHY_TEST_ROOT")
     os.environ["FOAMY_HOST_45"] = str(Path(_root) / "shell") if _root else "/usr/share/omarchy/shell"
 sys.path.insert(0, str(KIT / "preview"))
-import harness  # noqa: E402
+import harness
 
 
 # Stands in for Omarchy's omarchy-webapp-window-class. Each call logs its
