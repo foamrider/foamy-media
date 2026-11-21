@@ -34,8 +34,6 @@ sys.path.insert(0, str(KIT / "preview"))
 import harness  # noqa: E402
 import hostenv  # noqa: E402
 
-TITLE_LIMIT, ARTIST_LIMIT = 100, 60  # Model.tooltipTitleLimit, tooltipArtistLimit
-LINE_LIMIT = 100  # kit FoamyText.TOOLTIP_CHARS: the whole line, prefix included
 IN_OPEN = 0x20
 
 
@@ -100,34 +98,40 @@ class Inotify:
                 offset += 16 + size
 
 
+def cut(text, limit):
+    """`text` bounded to `limit` code points, the last one "…"."""
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
 def cases(probe):
     target = (probe / "tooltip-probe.png").as_uri()
     long_title = "<b>long</b> " * 400
-    # (title, artist, status, whether Qt's AutoText would read it as markup)
+    img_title, img_artist = f'<img src="{target}">', f"<img src='{target}' width=900>"
+    spaced_title, doctype = f'  <img src="{target}">', "<!DOCTYPE html><p>artist"
+    # (title, artist, status, whether Qt's AutoText would read it as markup,
+    # the label a reader must see). The title is cut to 100 code points, the
+    # artist to 60, then the whole line to 100, prefix included.
     rows = [
-        ("Instant Crush", "Daft Punk", "Playing", False),
-        (f'<img src="{target}">', f"<img src='{target}' width=900>", "Playing", True),
-        (f'  <img src="{target}">', "<!DOCTYPE html><p>artist", "Paused", True),
-        ("Tom & Jerry", "Simon & Garfunkel", "Paused", False),
-        ("a < b > c", "&amp;", "Playing", False),
-        ("&lt;b&gt;escaped&lt;/b&gt;", "x<br>y", "Playing", True),
-        ("مرحبا بالعالم", "فيروز", "Playing", False),
-        ("first line\nsecond line", "", "Playing", False),
-        ("t" * 80, "a" * 50, "Paused", False),
-        (long_title, "z" * 3000, "Playing", True),
+        ("Instant Crush", "Daft Punk", "Playing", False, "Instant Crush  ·  Daft Punk"),
+        # These two hold the absolute probe URL, the form an attacker would
+        # use, so their length follows the run's temp path (TMPDIR, pid): only
+        # their labels are worked out here.
+        (img_title, img_artist, "Playing", True, cut(cut(img_title, 100) + "  ·  " + cut(img_artist, 60), 100)),
+        (spaced_title, doctype, "Paused", True, cut("Paused — " + cut(spaced_title, 100) + "  ·  " + doctype, 100)),
+        ("Tom & Jerry", "Simon & Garfunkel", "Paused", False, "Paused — Tom & Jerry  ·  Simon & Garfunkel"),
+        ("a < b > c", "&amp;", "Playing", False, "a < b > c  ·  &amp;"),
+        ("&lt;b&gt;escaped&lt;/b&gt;", "x<br>y", "Playing", True, "&lt;b&gt;escaped&lt;/b&gt;  ·  x<br>y"),
+        ("مرحبا بالعالم", "فيروز", "Playing", False, "مرحبا بالعالم  ·  فيروز"),
+        ("first line\nsecond line", "", "Playing", False, "first line second line"),
+        # 9 + 80 + 5 + 5 code points, then "…": the prefix counts toward the line.
+        ("t" * 80, "a" * 50, "Paused", False, "Paused — " + "t" * 80 + "  ·  " + "a" * 5 + "…"),
+        # The title is cut to 99 + "…", which fills the line: the artist is gone.
+        (long_title, "z" * 3000, "Playing", True, "<b>long</b> " * 8 + "<b>…"),
     ]
-
-    def bounded(text, limit):
-        text = text.replace("\n", " ")
-        return text if len(text) <= limit else text[: limit - 1] + "\u2026"
-
-    out = []
-    for title, artist, status, rich in rows:
-        title_shown, artist_shown = bounded(title, TITLE_LIMIT), bounded(artist, ARTIST_LIMIT)
-        prefix = "" if status == "Playing" else "Paused — "
-        label = bounded(prefix + title_shown + ("  ·  " + artist_shown if artist_shown else ""), LINE_LIMIT)
-        out.append({"title": title, "artist": artist, "status": status, "label": label, "rich": rich})
-    return out
+    return [
+        {"title": title, "artist": artist, "status": status, "rich": rich, "label": label}
+        for title, artist, status, rich, label in rows
+    ]
 
 
 def main():
@@ -147,19 +151,23 @@ def main():
     watch = Inotify(probe)
     fake = None
     ok = False
+    ready = False
     try:
         r.start()
-        r.wait_for_log("FOAMY WAITING FOR PLAYER", 60)
-        # r.env names the run's private session bus, so the fake player is
-        # never on the desktop's. Its own process group, killed with this test.
-        with (r.base / "fake.log").open("w") as fake_log:
-            fake = hostenv.ProcessGroup(
-                [sys.executable, "-I", str(PLUGIN / "tests/fake-mpris.py"), str(r.base / "tracks.json")],
-                env=r.env,
-                stdout=fake_log,
-                stderr=subprocess.STDOUT,
-            )
-        r.wait(180)
+        # A scene that fails to load or exits early never gets here: report
+        # that instead of waiting out the timeout for a player it cannot see.
+        ready = r.wait_for_log("FOAMY WAITING FOR PLAYER", 60)
+        if ready:
+            # r.env names the run's private session bus, so the fake player is
+            # never on the desktop's. Its own process group, killed with this test.
+            with (r.base / "fake.log").open("w") as fake_log:
+                fake = hostenv.ProcessGroup(
+                    [sys.executable, "-I", str(PLUGIN / "tests/fake-mpris.py"), str(r.base / "tracks.json")],
+                    env=r.env,
+                    stdout=fake_log,
+                    stderr=subprocess.STDOUT,
+                )
+            r.wait(180)
     finally:
         if fake:
             fake.stop()
@@ -170,6 +178,8 @@ def main():
         (line.split("FOAMY RESULT ", 1)[1] for line in log.splitlines() if "FOAMY RESULT" in line), "no result"
     )
     failures = r.failures()
+    if not ready:
+        failures.append("FOAMY FAIL the scene never reached the player wait")
     if "tooltip-probe.png" in opened:
         failures.append("FOAMY FAIL an <img> in track metadata made Qt open tooltip-probe.png")
     if "control-probe.png" not in opened:
