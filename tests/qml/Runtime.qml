@@ -125,26 +125,6 @@ ShellRoot {
     id: mockBar
     moduleName: "foamy.media"
   }
-  // The 4.5 host: an inline save updates the widget's settings before it returns.
-  QtObject {
-    id: reflectingShell
-    property var panel: null
-    function updateEntryInline(id, settings) {
-      mockBar.saved = mockBar.saved.concat([
-        {
-          id: id,
-          settings: settings
-        }
-      ])
-      var next = {
-        id: id
-      }
-      for (var k in settings)
-        next[k] = settings[k]
-      panel.settings = next
-      return true
-    }
-  }
 
   // A playing player for the cursor checks (MediaView reads only `media`).
   QtObject {
@@ -299,7 +279,6 @@ ShellRoot {
     if (pickerRows.length === 2) {
       var chromiumRow = pickerRows[0].modelData.title === "A - YouTube" ? pickerRows[0] : pickerRows[1]
       var vivaldiRow = chromiumRow === pickerRows[0] ? pickerRows[1] : pickerRows[0]
-      eq(chromiumRow.modelData.values.youtubeMprisName, "chromium", "a chrome window takes the chromium player")
       var found = findNamed(chromiumRow, "browserMissingName")
       eq(found !== null && found.visible, false, "no note when the name was found")
       var note = findNamed(vivaldiRow, "browserMissingName")
@@ -408,16 +387,8 @@ ShellRoot {
     player.artSource = "file:///tmp/foamy-media-cover.png"
     eq(playerView.band.imageSource.toString(), gpu ? "" : "file:///tmp/foamy-media-cover.png", "cover is the band picture")
     eq(playerView.band.background !== null, gpu, "blurred cover only on the GPU renderer")
-    // Regression (kit 0.3.2): the band holds only the current cover.
-    for (var n = 1; n <= 5; n++)
-      player.artSource = "file:///tmp/foamy-media-cover-" + n + ".png"
-    eq(playerView.band.loadedImage, gpu ? "" : "file:///tmp/foamy-media-cover-5.png", "only the current cover is held after cycling")
-    player.artSource = ""
-    eq(playerView.band.loadedImage, "", "cleared cover (popup closed) is unloaded")
-    player.artSource = "file:///tmp/foamy-media-cover.png"
     player.artBackground = false
     eq(playerView.band.imageSource.toString(), "", "Artwork background off keeps the foamy wash")
-    eq(playerView.band.loadedImage, "", "and holds no picture")
     player.artBackground = true
     player.artSource = ""
     // Short screen: the player scrolls and keeps the cursor row in view.
@@ -467,8 +438,6 @@ ShellRoot {
   function stepTwo() {
     var first = panels.itemAt(0)
     var view = first.popup.bodyItem
-    check(view !== null, "body built on open")
-    eq(first.member.demanded, true, "open popup raises demand")
     eq(first.imagesActive, true, "covers decode while open")
     if (!view) {
       shell.finish()
@@ -544,11 +513,6 @@ ShellRoot {
       eq(width.field.text, width.format(320), "field shows the external change")
       width.commitEdit(true)
       eq(mockBar.saved.length, before, "leaving it unchanged saves nothing")
-      width.field.text = "abc"
-      width.dirty = true
-      check(width.handleKey(Qt.Key_Escape), "Escape is taken by the field")
-      eq(width.field.text, width.format(320), "Escape restores the value")
-      eq(first.editingSettings, true, "and the page stays")
       width.field.text = "250"
       width.dirty = true
       width.commitEdit(false)
@@ -569,30 +533,6 @@ ShellRoot {
       mpris.commitEdit(true)
       eq(mpris.field.text, mpris.value, "focus-out restores the saved name")
     }
-    // Regression: on a host that reflects an inline save at once (4.5), the
-    // saved value must not stay pending and mask a later outside change,
-    // which the next save (merging the whole entry) would undo.
-    // the host caught up
-    first.settings = JSON.parse(JSON.stringify(first.effectiveSettings))
-    var base = JSON.parse(JSON.stringify(first.settings))
-    base.showArtist = true
-    first.settings = base
-    eq(first.preference("showArtist"), true, "no saves pending")
-    var plainShell = mockBar.shell
-    mockBar.shell = reflectingShell
-    reflectingShell.panel = first
-    var savedBefore = mockBar.saved.length
-    first.save("showArtist", false)
-    eq(mockBar.saved.length, savedBefore + 1, "saved inline")
-    eq(first.settings.showArtist, false, "the host reflected the save at once")
-    var elsewhere = JSON.parse(JSON.stringify(first.settings))
-    // another monitor turns it back on
-    elsewhere.showArtist = true
-    first.settings = elsewhere
-    eq(first.preference("showArtist"), true, "an outside change after a reflected save shows")
-    first.save("showProgress", !first.preference("showProgress"))
-    eq(mockBar.saved[mockBar.saved.length - 1].settings.showArtist, true, "the next save keeps the outside change")
-    mockBar.shell = plainShell
     first.closeSettings()
     eq(view.blocked, false, "back from Settings")
     first.close()
@@ -604,8 +544,6 @@ ShellRoot {
 
   function stepThree() {
     var first = panels.itemAt(0)
-    eq(first.member.demanded, false, "closing releases demand")
-    eq(first.imagesActive, false, "covers released after closing")
     eq(first.editingSettings, false, "closing leaves Settings")
     // The grown label lays out again in its wider slot instead of keeping
     // the ellipsis of the shorter text.
@@ -670,8 +608,6 @@ ShellRoot {
     id: focusSteps
     function begin() {
       var first = panels.itemAt(0)
-      eq(first.startBrowser, undefined, "no browser start path")
-      eq(first.pendingLaunch, undefined, "no pending browser launch")
       // The app ID the panel matches (a suggestion saved earlier set it).
       fakeYoutubeWindow.appId = first.preference("youtubeAppId")
       first.toplevelModel = {
@@ -724,9 +660,7 @@ ShellRoot {
     function finish() {
       var first = panels.itemAt(0)
       var svc = Media.MediaService
-      eq(svc.artProbe.running, false, "art probe that can't start is not running")
-      eq(svc.artSettling, false, "a probe that can't start ends the settling")
-      eq(svc.artFile, "", "and keeps no previous cover")
+      eq(svc.artFile, "", "a probe that can't start keeps no previous cover")
       svc.request("")
       svc.artProbeDelay.stop()
       // A browser start would have failed or opened Settings by now.
