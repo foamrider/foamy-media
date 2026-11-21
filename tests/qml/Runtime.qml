@@ -877,35 +877,61 @@ ShellRoot {
       }
       controlSteps.positionTick()
     }
-    // The position is re-read on the leader only, while playing, every
-    // 500 ms while a popup is open.
+    // The position is re-read while playing, and only while a popup is open
+    // or the underline shows. Every bar sees the same player, so only the
+    // leader re-reads it: the other bars get playing stand-ins of their own
+    // that must never tick. The 500 ms rate of an open popup is not checked,
+    // because a rate check would fail under load.
+    property var others: []
     function positionTick() {
       var lead = shell.leader()
       stand = playerStandIn.createObject(shell)
-      for (var i = 0; i < 3; i++)
-        panels.itemAt(i).playerModel = panels.itemAt(i) === lead ? {
-          values: [stand]
-        } : {
-          values: []
+      others = []
+      for (var i = 0; i < 3; i++) {
+        var panel = panels.itemAt(i)
+        var own = panel === lead ? stand : playerStandIn.createObject(shell)
+        if (panel !== lead)
+          others = others.concat([own])
+        panel.playerModel = {
+          values: [own]
         }
+      }
       Media.MediaService.selectedSource = "spotify"
-      eq(lead.live, true, "the stand-in plays on the leader")
-      lead.open()
-      wait.waitFor(function () {
-        return stand.ticks >= 2
-      }, 5000, function () {
-        stand.isPlaying = false
-        var ticks = stand.ticks
-        // An absence check: nothing may re-read a paused player.
-        wait.after(1200, function () {
-          eq(stand.ticks, ticks, "no position reads while paused")
-          lead.close()
-          stand.isPlaying = true
-          wait.waitFor(function () {
-            return !lead.opened
-          }, 10000, controlSteps.wheel, "the leader's popup closes")
-        })
-      }, "the open popup re-reads the position")
+      for (var p = 0; p < 3; p++)
+        eq(panels.itemAt(p).playing, true, "bar " + p + " plays its stand-in")
+      // With the underline off and every popup closed, nothing asks for the
+      // position. An absence check, like the paused one below. A 1 s track
+      // gets the shortest underline interval (1 s), so a tick that ignores
+      // the setting falls inside the window.
+      lead.save("showProgress", false)
+      stand.length = 1
+      eq(lead.showProgress, false, "the underline is off")
+      wait.after(1200, function () {
+        eq(stand.ticks, 0, "no position reads with the underline off and the popup closed")
+        stand.length = 200
+        lead.open()
+        wait.waitFor(function () {
+          return stand.ticks >= 2
+        }, 5000, controlSteps.pausedTick, "the open popup re-reads the position")
+      })
+    }
+    function pausedTick() {
+      var lead = shell.leader()
+      stand.isPlaying = false
+      var ticks = stand.ticks
+      // An absence check: nothing may re-read a paused player. The other
+      // bars still play while the popup is open.
+      wait.after(1200, function () {
+        eq(stand.ticks, ticks, "no position reads while paused")
+        for (var i = 0; i < others.length; i++)
+          eq(others[i].ticks, 0, "bar that does not lead, stand-in " + i + ": no position reads")
+        lead.close()
+        lead.save("showProgress", true)
+        stand.isPlaying = true
+        wait.waitFor(function () {
+          return !lead.opened
+        }, 10000, controlSteps.wheel, "the leader's popup closes")
+      })
     }
     // Discrete mouse-wheel notches over the widget.
     function wheel() {
@@ -915,7 +941,9 @@ ShellRoot {
       lead.save("scrollAction", "Nothing")
       ev.mouseWheel(lead, x, y, Qt.NoButton, Qt.NoModifier, 0, 120, -1)
       ev.mouseWheel(lead, x, y, Qt.NoButton, Qt.NoModifier, 0, -120, -1)
-      check(stand.volume === 0.5 && stand.nexts === 0 && stand.previouses === 0, "with the wheel off, notches change nothing")
+      eq(stand.volume, 0.5, "with the wheel off, notches leave the volume")
+      eq(stand.nexts, 0, "with the wheel off, notches skip nothing forward")
+      eq(stand.previouses, 0, "with the wheel off, notches skip nothing back")
       lead.save("scrollAction", "Previous/next track")
       ev.mouseWheel(lead, x, y, Qt.NoButton, Qt.NoModifier, 0, -120, -1)
       eq(stand.nexts, 1, "one notch down skips to the next track")
@@ -954,6 +982,9 @@ ShellRoot {
         panels.itemAt(i).playerModel = Mpris.players
       stand.destroy()
       stand = null
+      for (var o = 0; o < others.length; o++)
+        others[o].destroy()
+      others = []
       hintSteps.begin()
     }
   }
