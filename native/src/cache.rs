@@ -191,10 +191,16 @@ mod tests {
         fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
         prepare(&dir).unwrap();
         assert_eq!(mode(&dir), 0o700);
-        // A symlink in its place is refused, not followed.
+        // A symlink in its place is refused, and its target is not tightened through it.
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
         let link = temp.0.join("link");
         std::os::unix::fs::symlink(&dir, &link).unwrap();
         assert_eq!(prepare(&link).unwrap_err().code, "CACHE_FAILED");
+        assert_eq!(
+            mode(&dir),
+            0o755,
+            "prepare changed the mode through a symlink"
+        );
     }
 
     #[test]
@@ -230,6 +236,19 @@ mod tests {
         });
         assert_eq!(failure.unwrap_err().code, "DECODE_FAILED");
         assert_eq!(fs::read_dir(&temp.0).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn a_symlink_in_place_of_a_cover_is_never_returned() {
+        // A link at a cover's name must not reach the panel as the cover:
+        // the panel would decode whatever file it points to.
+        let temp = TempDir::new();
+        let elsewhere = temp.0.join("elsewhere.svg");
+        fs::write(&elsewhere, b"<svg/>").unwrap();
+        std::os::unix::fs::symlink(&elsewhere, temp.0.join(name(b"cover"))).unwrap();
+        let failure = store(&temp.0, b"cover", || Ok(b"png".to_vec())).unwrap_err();
+        assert_eq!(failure.code, "CACHE_FAILED");
+        assert_eq!(fs::read(&elsewhere).unwrap(), b"<svg/>");
     }
 
     #[test]

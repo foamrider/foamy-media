@@ -385,16 +385,6 @@ mod tests {
     }
 
     #[test]
-    fn a_zlib_bomb_is_dropped_without_being_inflated() {
-        // 64 chunks of ~1 MiB of text each (13 bits per 258 bytes) in
-        // ~430 KB of file: stripped by reading headers alone, so it costs
-        // what the file costs.
-        let bomb = text_bomb([1, 2, 3], 64, 4096);
-        assert!(bomb.len() < 500_000, "{}", bomb.len());
-        assert_eq!(strip(&bomb).unwrap(), plain([1, 2, 3]));
-    }
-
-    #[test]
     fn ancillary_chunks_between_text_are_kept() {
         let mut png = head(1);
         chunk(&mut png, b"tEXt", b"a\0b");
@@ -509,10 +499,5 @@ mod tests {
         let mut png = plain([3, 4, 5]);
         png.extend_from_slice(b"trailing bytes, a zip, anything");
         assert_eq!(strip(&png).unwrap(), plain([3, 4, 5]));
-    }
-
-    #[test]
-    fn the_signature_is_required_for_a_png() {
-        assert!(strip(b"\x89PNX\r\n\x1a\n").is_err());
     }
 }

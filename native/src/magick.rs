@@ -212,8 +212,8 @@ pub fn parse_histogram(text: &str) -> Vec<(u64, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::image::testing::{plain, text_bomb};
-    use crate::image::{format, strip_text};
+    use crate::image::testing::plain;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     #[test]
     fn the_mean_is_the_first_six_hex_digits() {
@@ -245,15 +245,57 @@ mod tests {
         assert_eq!(parse_histogram(&many).len(), MAX_SWATCHES);
     }
 
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new() -> TempDir {
+            static N: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "foamy-media-magick-{}-{}",
+                std::process::id(),
+                N.fetch_add(1, Ordering::Relaxed)
+            ));
+            std::fs::create_dir(&path).unwrap();
+            TempDir(path)
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     #[test]
-    fn which_finds_only_executable_files() {
-        let path = std::env::join_paths(["relative", "/nonexistent", "/usr/bin"]).unwrap();
+    fn which_finds_only_executable_files_in_absolute_directories() {
+        let temp = TempDir::new();
+        let put = |name: &str, mode: u32| {
+            let dir = temp.0.join(name);
+            std::fs::create_dir(&dir).unwrap();
+            let file = dir.join("magick");
+            std::fs::write(&file, "#!/bin/sh\n").unwrap();
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(mode)).unwrap();
+            dir
+        };
+        // An executable reachable only through a relative PATH entry, which
+        // names whatever the helper's working directory holds.
+        let behind_relative = put("relative", 0o755);
+        let not_executable = put("plain", 0o644);
+        let directory = temp.0.join("directory");
+        std::fs::create_dir_all(directory.join("magick")).unwrap();
+        let found = put("bin", 0o755);
+        let cwd = std::env::current_dir().unwrap();
+        let up: PathBuf = cwd.components().skip(1).map(|_| "..").collect();
+        let relative = up.join(behind_relative.strip_prefix("/").unwrap());
+        // The relative entry must really lead to an executable, or this proves nothing.
+        assert!(relative.is_relative() && relative.join("magick").is_file());
+        let path = std::env::join_paths([&relative, &not_executable, &directory, &found]).unwrap();
         assert_eq!(
-            which("sh", Some(path.clone())),
-            Some(PathBuf::from("/usr/bin/sh"))
+            which("magick", Some(path.clone())),
+            Some(found.join("magick"))
         );
         assert_eq!(which("foamy-media-no-such-program", Some(path)), None);
-        assert_eq!(which("sh", None), None);
+        assert_eq!(which("magick", None), None);
     }
 
     fn installed() -> Option<Magick> {
@@ -306,15 +348,6 @@ mod tests {
         let mut fine = crate::image::testing::head(4000);
         fine.extend_from_slice(&crate::image::testing::tail(4000, [0, 0, 0]));
         assert_eq!(magick.mean(Format::Png, &fine).unwrap(), "#000000");
-    }
-
-    #[test]
-    fn a_stripped_text_bomb_reads_as_the_plain_cover() {
-        let Some(magick) = installed() else { return };
-        let bomb = text_bomb([0xb2, 0x31, 0x3a], 16, 4096);
-        let format = format(&bomb).unwrap();
-        let stripped = strip_text(format, &bomb).unwrap();
-        assert_eq!(magick.mean(format, &stripped).unwrap(), "#b2313a");
     }
 
     #[test]

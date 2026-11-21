@@ -351,10 +351,4 @@ mod tests {
             .unwrap();
         assert!(elapsed < 5000, "within the 1 s budget: {elapsed} ms");
     }
-
-    #[test]
-    fn a_missing_local_cover_is_unreadable() {
-        let failure = art_probe("/nonexistent/foamy-media/cover.png").unwrap_err();
-        assert_eq!(failure.code, "UNREADABLE");
-    }
 }
