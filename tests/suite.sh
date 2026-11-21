@@ -1,8 +1,8 @@
 #!/bin/bash
 # foamy-media's own tests; tests/validate.sh runs this after the linters.
 #   --ci    no Quickshell, no Omarchy host: node, the helper on local
-#           fixtures (probe-test.sh skips without ImageMagick) and the
-#           clipboard producer tests
+#           fixtures (its decode cases skip without ImageMagick) and the
+#           clipboard producer test
 #   --fast  skip the offscreen runtime tests
 set -uo pipefail
 cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." || exit 1
