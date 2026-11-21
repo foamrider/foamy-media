@@ -12,7 +12,8 @@ import "plugin" as Media
 // and draw it in the host's own tooltip Text (HostTooltip.qml, lifted from
 // Bar.qml). The string must read literally there and in an AutoText Text,
 // while a control AutoText Text fed the raw metadata shows that the markup
-// would otherwise have been taken as markup.
+// would otherwise have been taken as markup. Leaving the widget and a click
+// on it must hide the tooltip again.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -46,8 +47,13 @@ ShellRoot {
     id: recordingBar
     moduleName: "foamy.media"
     property var tips: []
+    property var hidden: []
     function showTooltip(target, text) {
       tips = tips.concat([String(text)])
+    }
+    // The host ignores a hide for another target, so keep each one.
+    function hideTooltip(target) {
+      hidden = hidden.concat([target])
     }
   }
 
@@ -128,6 +134,15 @@ ShellRoot {
     }
   }
 
+  // A tooltip left up over the bar after the pointer leaves or clicks is
+  // what a user would see: `action` must hide this widget's tooltip, once.
+  function hides(action, label) {
+    var before = recordingBar.hidden.length
+    action()
+    eq(recordingBar.hidden.length, before + 1, label + " hides the tooltip once")
+    check(recordingBar.hidden[recordingBar.hidden.length - 1] === panel, label + " hides the widget's own tooltip")
+  }
+
   Component.onCompleted: Qt.callLater(noPlayer)
   FoamyWait {
     id: wait
@@ -136,6 +151,14 @@ ShellRoot {
   function noPlayer() {
     eq(panel.live, false, "no player yet")
     hover("Spotify is not running", "not running", "", false)
+    hides(function () {
+      pointerOf(panel).exited()
+    }, "leaving the widget")
+    pointerOf(panel).entered()
+    // With no player the middle click skips nothing, but still hides.
+    hides(function () {
+      panel.triggerPress(Qt.MiddleButton)
+    }, "a middle click")
     console.log("FOAMY WAITING FOR PLAYER")
     nextTrack()
   }
@@ -161,6 +184,10 @@ ShellRoot {
       raw = raw.split("tooltip-probe.png").join("control-probe.png")
       shell.hover(t.label, "track " + shell.index, raw, t.rich === true)
       if (shell.index === shell.tracks.length - 1) {
+        // Last, so a play/pause (a no-op in the fake) cannot change a later track.
+        shell.hides(function () {
+          panel.triggerPress(Qt.RightButton)
+        }, "a right click")
         shell.finish()
         return
       }
