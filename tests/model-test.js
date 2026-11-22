@@ -182,6 +182,18 @@ test("the hover tooltip: literal text, bounded fields and line", () => {
   const zwjFamily = "\u{1F468}\u200d\u{1F469}\u200d\u{1F467}"
   assert.strictEqual(capped("a".repeat(88) + zwjFamily + "b", "", "Paused — "), "Paused — " + "a".repeat(88) + "\u2026")
   assert.strictEqual(capped("t".repeat(93), "e\u0301" + "x".repeat(10), ""), "t".repeat(93) + "  ·  \u2026")
+  // The marks of other scripts stay with their letter too: an Arabic fatha,
+  // a Hebrew point, a Devanagari and a Thai vowel sign.
+  for (const [letter, mark] of [["\u0628", "\u064e"], ["\u05d1", "\u05b8"], ["\u0915", "\u093f"], ["\u0e01", "\u0e34"]]) {
+    const line = capped("a".repeat(89) + letter + mark + "zz", "", "Paused — ")
+    assert.strictEqual(line, "Paused — " + "a".repeat(89) + "\u2026", JSON.stringify(line))
+  }
+  // A flag is a pair of regional indicators, paired from the start of a run:
+  // the cut keeps a whole flag or none of it.
+  const norway = "\u{1F1F3}\u{1F1F4}"
+  assert.strictEqual(capped("a".repeat(89) + norway + "zz", "", "Paused — "), "Paused — " + "a".repeat(89) + "\u2026")
+  assert.strictEqual(capped("a".repeat(87) + norway + norway + "zz", "", "Paused — "),
+    "Paused — " + "a".repeat(87) + norway + "\u2026")
 
   // Control characters cannot stack the tooltip into lines.
   assert.strictEqual(tip("one\ntwo\r\nthree\u2028four\tfive", "", ""), "one two three four five")
