@@ -5,14 +5,8 @@ BarContent.qml: missing-property: Member "body" not found on type "QObject" | fo
 BarContent.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: Style.font.body
 BarContent.qml: missing-property: Member "family" not found on type "QObject" | property string fontFamily: Style.font.family
 BarContent.qml: missing-property: Member "sizeHorizontal" not found on type "QObject" | property int barSize: Style.bar.sizeHorizontal
-BrowserPicker.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
-BrowserPicker.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
-BrowserPicker.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
-BrowserPicker.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
 BrowserPicker.qml: missing-property: Member "rowPaddingX" not found on type "QObject" | anchors.leftMargin: Style.spacing.rowPaddingX
 BrowserPicker.qml: missing-property: Member "rowPaddingX" not found on type "QObject" | anchors.rightMargin: Style.spacing.rowPaddingX
-BrowserPicker.qml: missing-property: Member "subtitle" not found on type "QObject" | font.pixelSize: FoamyStyle.font.subtitle
-BrowserPicker.qml: missing-property: Member "subtitle" not found on type "QObject" | font.pixelSize: FoamyStyle.font.subtitle
 MediaService.qml: import: Type MediaService not declared as singleton in qmldir but using pragma Singleton
 MediaService.qml: missing-property: Member "exitSeen" not found on type MediaService::artProbe with type Process | artProbe.exitSeen = false
 MediaService.qml: missing-property: Member "failure" not found on type "Process" | if (url !== root.artUrl || root.artProbed === root.artUrl || root.artProbe.failure === "TLS_UNSUPPORTED" || !root.remoteArt || !root.networkReady || root.artRet
@@ -31,16 +25,6 @@ MediaView.qml: id-shadows-member: Note: Id defined here | id: settingsPage
 MediaView.qml: missing-property: Member "background" not found on type "QObject" | foreground: Commons.Color.popups.background
 MediaView.qml: missing-property: Member "background" not found on type "QObject" | foreground: toggledOn && enabled ? Commons.Color.popups.background : FoamyPalette.secondaryText
 MediaView.qml: missing-property: Member "background" not found on type "QObject" | var base = Commons.Color.popups.background
-MediaView.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
-MediaView.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-MediaView.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-MediaView.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-MediaView.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-MediaView.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-MediaView.qml: missing-property: Member "displayLarge" not found on type "QObject" | font.pixelSize: FoamyStyle.font.displayLarge
-MediaView.qml: missing-property: Member "heading" not found on type "QObject" | font.pixelSize: view.compact ? FoamyStyle.font.title : FoamyStyle.font.heading
-MediaView.qml: missing-property: Member "title" not found on type "QObject" | font.pixelSize: FoamyStyle.font.title
-MediaView.qml: missing-property: Member "title" not found on type "QObject" | font.pixelSize: view.compact ? FoamyStyle.font.title : FoamyStyle.font.heading
 MediaView.qml: property-override: Property "accent" already exists in base type "CursorSurface", use a different name. | required property color accent
 Panel.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < keys.length; i++) {
 Panel.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < values.length; i++) {
