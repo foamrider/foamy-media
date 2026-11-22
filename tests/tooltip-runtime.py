@@ -128,6 +128,9 @@ def cases(probe):
         ("first line\nsecond line", "", "Playing", False, "first line second line"),
         # 9 + 80 + 5 + 5 code points, then "…": the prefix counts toward the line.
         ("t" * 80, "a" * 50, "Paused", False, "Paused — " + "t" * 80 + "  ·  " + "a" * 5 + "…"),
+        # The 100th code point of the line is an accent: the line is cut before
+        # its letter, not between the two.
+        ("a" * 89 + "e\N{COMBINING ACUTE ACCENT}zz", "", "Paused", False, "Paused — " + "a" * 89 + "…"),
         # The title is cut to 99 + "…", which fills the line: the artist is gone.
         (long_title, "z" * 3000, "Playing", True, "<b>long</b> " * 8 + "<b>…"),
     ]

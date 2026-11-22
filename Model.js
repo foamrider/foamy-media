@@ -114,6 +114,10 @@ function barLabel(player, showArtist) {
 // than a 1366-pixel screen.
 var tooltipTitleLimit = 100
 var tooltipArtistLimit = 60
+// The whole line, prefix included: the kit's FoamyText.TOOLTIP_CHARS. The
+// line is cut here, on a cluster boundary, so the kit's code-point cap that
+// Panel applies after it never has to cut, and never splits a cluster.
+var tooltipLineLimit = 100
 
 // Characters that continue the one before them: combining marks, joiners,
 // variation selectors, emoji skin tones and tag sequences. A cut never lands
@@ -166,16 +170,17 @@ function literalTooltip(text) {
 }
 
 // The hover text for a live player: `prefix` (the translated "Paused — ")
-// then title and artist, both bounded, made literal as a whole. `bound`
-// (Panel passes the kit's FoamyText.tooltip, the cap every plugin applies to
-// app text it hands the host tooltip) caps the whole line before the guard
-// is added, so the word joiners never count against it or get cut off.
+// then title and artist, each bounded, the whole line bounded to
+// `tooltipLineLimit`, made literal as a whole. `bound` (Panel passes the
+// kit's FoamyText.tooltip, the cap every plugin applies to app text it hands
+// the host tooltip) caps the line again before the guard is added, so the
+// word joiners never count against it or get cut off.
 function tooltipLabel(player, prefix, bound) {
   if (!player) return ""
 
   var title = tooltipField(player.trackTitle, tooltipTitleLimit)
   var artist = tooltipField(player.trackArtist, tooltipArtistLimit)
-  var label = String(prefix || "") + (!title ? artist : !artist ? title : title + "  ·  " + artist)
+  var label = tooltipField(String(prefix || "") + (!title ? artist : !artist ? title : title + "  ·  " + artist), tooltipLineLimit)
   return literalTooltip(typeof bound === "function" ? bound(label) : label)
 }
 
@@ -568,6 +573,7 @@ if (typeof module !== "undefined") {
     barLabel: barLabel,
     tooltipTitleLimit: tooltipTitleLimit,
     tooltipArtistLimit: tooltipArtistLimit,
+    tooltipLineLimit: tooltipLineLimit,
     tooltipField: tooltipField,
     literalTooltip: literalTooltip,
     tooltipLabel: tooltipLabel,
