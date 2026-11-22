@@ -5,7 +5,8 @@ shell, offscreen.
 tests/qml/Art.qml drives three bars with stand-in players. The plugin is a
 copy whose bundled helper is a fake (hostenv.fake_helper_plugin): it logs
 its arguments and answers as $FOAMY_OUT/helper-mode says (a cover, an HTTP
-failure, TLS_UNSUPPORTED, or exit 127 for no helper on this CPU). Nothing
+failure, TLS_UNSUPPORTED, exit 127 for no helper on this CPU, or a run
+that lasts until the service stops it). Nothing
 reaches the network: the helper is the fake, and the network state the
 widget sees is the kit's fake NetworkManager on a private system bus.
 
@@ -44,15 +45,19 @@ case $mode in
   http) printf '{"ok":false,"code":"HTTP","error":"404"}\n'; exit 1 ;;
   tls) printf '{"ok":false,"code":"TLS_UNSUPPORTED","error":"no HTTPS on this CPU"}\n'; exit 1 ;;
   missing) exit 127 ;;
+  # Runs until the service stops it (a track change while it probes).
+  slow) exec sleep 30 ;;
 esac
 """
 
 # What the scene's steps must have asked of the helper, in order: one probe
-# for three bars, the last of a burst, an HTTPS cover once online and its
+# for three bars, the last of a burst, a slow probe stopped by a track
+# change and the next track's, an HTTPS cover once online and its
 # three retries, once more after the network came back, one TLS failure
 # with no retry, and one local cover before the helper went missing.
 EXPECTED_CALLS = (
     ["2 art-probe /covers/My Cover.png", "2 art-probe /covers/c.png"]
+    + ["2 art-probe /covers/slow.png", "2 art-probe /covers/next.png"]
     + ["2 art-probe https://i.scdn.co/image/x"] * 5
     + ["2 art-probe https://i.scdn.co/image/y", "2 art-probe /covers/m.png"]
 )
@@ -103,6 +108,13 @@ def run(plugin):
     calls = calls_log.read_text().splitlines() if calls_log.exists() else []
     if calls != EXPECTED_CALLS:
         failures.append(f"FOAMY FAIL helper calls: {calls}, expected {EXPECTED_CALLS}")
+    # Every probe of the scene starts, the stopped one included: none may be
+    # reported as one that could not start.
+    failures += [
+        "FOAMY FAIL a started probe was reported as not started: " + line
+        for line in log.splitlines()
+        if "could not start" in line
+    ]
     # The raw cover URLs name files that do not exist: an Image handed one
     # logs that it cannot open it.
     failures += [
