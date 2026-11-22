@@ -45,8 +45,10 @@ case $mode in
   http) printf '{"ok":false,"code":"HTTP","error":"404"}\n'; exit 1 ;;
   tls) printf '{"ok":false,"code":"TLS_UNSUPPORTED","error":"no HTTPS on this CPU"}\n'; exit 1 ;;
   missing) exit 127 ;;
-  # Runs until the service stops it (a track change while it probes).
-  slow) exec sleep 30 ;;
+  # Runs until the service stops it (a track change while it probes). It
+  # sets the next probe's mode itself, so the scene never writes the mode
+  # while this probe may not have read it yet.
+  slow) printf 'ok\n' >"$FOAMY_OUT/helper-mode"; exec sleep 30 ;;
 esac
 """
 
