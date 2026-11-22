@@ -114,17 +114,67 @@ function barLabel(player, showArtist) {
 // than a 1366-pixel screen.
 var tooltipTitleLimit = 100
 var tooltipArtistLimit = 60
+// The whole line, prefix included: the kit's FoamyText.TOOLTIP_CHARS. The
+// line is cut here, on a cluster boundary, so the kit's code-point cap that
+// Panel applies after it never has to cut, and never splits a cluster.
+var tooltipLineLimit = 100
 
-// Characters that continue the one before them: combining marks, joiners,
-// variation selectors, emoji skin tones and tag sequences. A cut never lands
-// in front of one, so a letter keeps its accent and an emoji its modifier.
+// The combining marks from U+0591 to U+0EFF (Unicode 16, general category
+// M), as pairs of first and last code point: Hebrew points, Arabic harakat,
+// the marks of Syriac, Thaana and NKo, the vowel signs and viramas of the
+// Indic scripts, and the Thai and Lao marks. Qt's JavaScript has no Unicode
+// property escapes, so the ranges are listed here.
+var scriptMarks = [
+  0x0591, 0x05bd, 0x05bf, 0x05bf, 0x05c1, 0x05c2, 0x05c4, 0x05c5, 0x05c7, 0x05c7, 0x0610, 0x061a,
+  0x064b, 0x065f, 0x0670, 0x0670, 0x06d6, 0x06dc, 0x06df, 0x06e4, 0x06e7, 0x06e8, 0x06ea, 0x06ed,
+  0x0711, 0x0711, 0x0730, 0x074a, 0x07a6, 0x07b0, 0x07eb, 0x07f3, 0x07fd, 0x07fd, 0x0816, 0x0819,
+  0x081b, 0x0823, 0x0825, 0x0827, 0x0829, 0x082d, 0x0859, 0x085b, 0x0897, 0x089f, 0x08ca, 0x08e1,
+  0x08e3, 0x0903, 0x093a, 0x093c, 0x093e, 0x094f, 0x0951, 0x0957, 0x0962, 0x0963, 0x0981, 0x0983,
+  0x09bc, 0x09bc, 0x09be, 0x09c4, 0x09c7, 0x09c8, 0x09cb, 0x09cd, 0x09d7, 0x09d7, 0x09e2, 0x09e3,
+  0x09fe, 0x09fe, 0x0a01, 0x0a03, 0x0a3c, 0x0a3c, 0x0a3e, 0x0a42, 0x0a47, 0x0a48, 0x0a4b, 0x0a4d,
+  0x0a51, 0x0a51, 0x0a70, 0x0a71, 0x0a75, 0x0a75, 0x0a81, 0x0a83, 0x0abc, 0x0abc, 0x0abe, 0x0ac5,
+  0x0ac7, 0x0ac9, 0x0acb, 0x0acd, 0x0ae2, 0x0ae3, 0x0afa, 0x0aff, 0x0b01, 0x0b03, 0x0b3c, 0x0b3c,
+  0x0b3e, 0x0b44, 0x0b47, 0x0b48, 0x0b4b, 0x0b4d, 0x0b55, 0x0b57, 0x0b62, 0x0b63, 0x0b82, 0x0b82,
+  0x0bbe, 0x0bc2, 0x0bc6, 0x0bc8, 0x0bca, 0x0bcd, 0x0bd7, 0x0bd7, 0x0c00, 0x0c04, 0x0c3c, 0x0c3c,
+  0x0c3e, 0x0c44, 0x0c46, 0x0c48, 0x0c4a, 0x0c4d, 0x0c55, 0x0c56, 0x0c62, 0x0c63, 0x0c81, 0x0c83,
+  0x0cbc, 0x0cbc, 0x0cbe, 0x0cc4, 0x0cc6, 0x0cc8, 0x0cca, 0x0ccd, 0x0cd5, 0x0cd6, 0x0ce2, 0x0ce3,
+  0x0cf3, 0x0cf3, 0x0d00, 0x0d03, 0x0d3b, 0x0d3c, 0x0d3e, 0x0d44, 0x0d46, 0x0d48, 0x0d4a, 0x0d4d,
+  0x0d57, 0x0d57, 0x0d62, 0x0d63, 0x0d81, 0x0d83, 0x0dca, 0x0dca, 0x0dcf, 0x0dd4, 0x0dd6, 0x0dd6,
+  0x0dd8, 0x0ddf, 0x0df2, 0x0df3, 0x0e31, 0x0e31, 0x0e34, 0x0e3a, 0x0e47, 0x0e4e, 0x0eb1, 0x0eb1,
+  0x0eb4, 0x0ebc, 0x0ec8, 0x0ece
+]
+
+function isScriptMark(code) {
+  if (code < scriptMarks[0] || code > scriptMarks[scriptMarks.length - 1]) return false
+  for (var i = 0; i < scriptMarks.length; i += 2) {
+    if (code <= scriptMarks[i + 1]) return code >= scriptMarks[i]
+  }
+  return false
+}
+
+// Characters that continue the one before them: combining marks (Latin and
+// the scripts above), joiners, variation selectors, emoji skin tones and tag
+// sequences. A cut never lands in front of one, so a letter keeps its accent
+// and an emoji its modifier.
 function continuesCluster(code) {
-  return (code >= 0x0300 && code <= 0x036f) || (code >= 0x1ab0 && code <= 0x1aff)
+  return isScriptMark(code)
+    || (code >= 0x0300 && code <= 0x036f) || (code >= 0x1ab0 && code <= 0x1aff)
     || (code >= 0x1dc0 && code <= 0x1dff) || (code >= 0x20d0 && code <= 0x20ff)
     || (code >= 0xfe00 && code <= 0xfe0f) || (code >= 0xfe20 && code <= 0xfe2f)
     || code === 0x200c || code === 0x200d
     || (code >= 0x1f3fb && code <= 0x1f3ff) || (code >= 0xe0020 && code <= 0xe007f)
     || (code >= 0xe0100 && code <= 0xe01ef)
+}
+
+// A flag is two regional indicators, paired from the start of a run, so a
+// cut in front of `points[cut]` splits one when an odd number of them comes
+// right before it.
+function splitsFlag(points, cut) {
+  var isIndicator = function (code) { return code >= 0x1f1e6 && code <= 0x1f1ff }
+  if (!isIndicator(points[cut])) return false
+  var run = 0
+  while (cut - run > 0 && isIndicator(points[cut - run - 1])) run++
+  return run % 2 === 1
 }
 
 // One untrusted metadata field for the tooltip: line breaks and other control
@@ -150,7 +200,7 @@ function tooltipField(value, limit) {
   if (points.length <= max) return text
 
   var cut = max - 1
-  while (cut > 0 && (continuesCluster(points[cut]) || points[cut - 1] === 0x200d)) cut--
+  while (cut > 0 && (continuesCluster(points[cut]) || points[cut - 1] === 0x200d || splitsFlag(points, cut))) cut--
   var kept = ""
   for (var j = 0; j < cut; j++) kept += String.fromCodePoint(points[j])
   return kept + "\u2026"
@@ -166,16 +216,17 @@ function literalTooltip(text) {
 }
 
 // The hover text for a live player: `prefix` (the translated "Paused — ")
-// then title and artist, both bounded, made literal as a whole. `bound`
-// (Panel passes the kit's FoamyText.tooltip, the cap every plugin applies to
-// app text it hands the host tooltip) caps the whole line before the guard
-// is added, so the word joiners never count against it or get cut off.
+// then title and artist, each bounded, the whole line bounded to
+// `tooltipLineLimit`, made literal as a whole. `bound` (Panel passes the
+// kit's FoamyText.tooltip, the cap every plugin applies to app text it hands
+// the host tooltip) caps the line again before the guard is added, so the
+// word joiners never count against it or get cut off.
 function tooltipLabel(player, prefix, bound) {
   if (!player) return ""
 
   var title = tooltipField(player.trackTitle, tooltipTitleLimit)
   var artist = tooltipField(player.trackArtist, tooltipArtistLimit)
-  var label = String(prefix || "") + (!title ? artist : !artist ? title : title + "  ·  " + artist)
+  var label = tooltipField(String(prefix || "") + (!title ? artist : !artist ? title : title + "  ·  " + artist), tooltipLineLimit)
   return literalTooltip(typeof bound === "function" ? bound(label) : label)
 }
 
@@ -286,10 +337,10 @@ function artProbeTarget(artUrl) {
 
   // The authority is everything before the first path, query or fragment.
   var authority = url.substring(8).split(/[/?#]/)[0]
-  if (!authority) return null
-  // Credentials and ports are never part of an album-art URL, and userinfo in
-  // particular is the oldest way to make a URL read as a host it is not.
-  if (authority.indexOf("@") !== -1 || authority.indexOf(":") !== -1) return null
+  // A cover host is a plain ASCII name. Anything else (userinfo, a port, a
+  // `\` or an encoded or fullwidth slash) can make another URL parser read
+  // the URL as a host other than the one checked here.
+  if (!/^[a-z0-9.-]+$/i.test(authority)) return null
   if (!artHostAllowed(authority.toLowerCase())) return null
 
   return url
@@ -568,6 +619,7 @@ if (typeof module !== "undefined") {
     barLabel: barLabel,
     tooltipTitleLimit: tooltipTitleLimit,
     tooltipArtistLimit: tooltipArtistLimit,
+    tooltipLineLimit: tooltipLineLimit,
     tooltipField: tooltipField,
     literalTooltip: literalTooltip,
     tooltipLabel: tooltipLabel,

@@ -174,18 +174,42 @@ test("the hover tooltip: literal text, bounded fields and line", () => {
   const guarded = capped("<".repeat(99) + "x", "", "")
   assert.strictEqual(shown(guarded), "<".repeat(99) + "x")
   assert.strictEqual(guarded, ("<" + WJ).repeat(99) + "x")
+  // The line is cut on a cluster boundary too, so the kit's code-point cap
+  // never has to cut it: here the 100th code point is an accent or inside a
+  // family emoji, and the whole cluster goes before the "…".
+  assert.strictEqual(M.tooltipLineLimit, FoamyText.TOOLTIP_CHARS)
+  assert.strictEqual(capped("a".repeat(89) + "e\u0301zz", "", "Paused — "), "Paused — " + "a".repeat(89) + "\u2026")
+  const zwjFamily = "\u{1F468}\u200d\u{1F469}\u200d\u{1F467}"
+  assert.strictEqual(capped("a".repeat(88) + zwjFamily + "b", "", "Paused — "), "Paused — " + "a".repeat(88) + "\u2026")
+  assert.strictEqual(capped("t".repeat(93), "e\u0301" + "x".repeat(10), ""), "t".repeat(93) + "  ·  \u2026")
+  // The marks of other scripts stay with their letter too: an Arabic fatha,
+  // a Hebrew point, a Devanagari and a Thai vowel sign.
+  for (const [letter, mark] of [["\u0628", "\u064e"], ["\u05d1", "\u05b8"], ["\u0915", "\u093f"], ["\u0e01", "\u0e34"]]) {
+    const line = capped("a".repeat(89) + letter + mark + "zz", "", "Paused — ")
+    assert.strictEqual(line, "Paused — " + "a".repeat(89) + "\u2026", JSON.stringify(line))
+  }
+  // A flag is a pair of regional indicators, paired from the start of a run:
+  // the cut keeps a whole flag or none of it.
+  const norway = "\u{1F1F3}\u{1F1F4}"
+  assert.strictEqual(capped("a".repeat(89) + norway + "zz", "", "Paused — "), "Paused — " + "a".repeat(89) + "\u2026")
+  assert.strictEqual(capped("a".repeat(87) + norway + norway + "zz", "", "Paused — "),
+    "Paused — " + "a".repeat(87) + norway + "\u2026")
 
   // Control characters cannot stack the tooltip into lines.
   assert.strictEqual(tip("one\ntwo\r\nthree\u2028four\tfive", "", ""), "one two three four five")
   assert.strictEqual(tip("a\u0000\u001b[31mb\u0085c", "", ""), "a [31mb c")
 
   // Each field is bounded, ellipsis included: the title to 100 code points
-  // (YouTube's own maximum, so a real one is never cut), the artist to 60.
-  assert.strictEqual(tip("t".repeat(100), "a".repeat(60), ""), "t".repeat(100) + "  ·  " + "a".repeat(60))
+  // (YouTube's own maximum, so a real one is never cut), the artist to 60;
+  // then the whole line to 100.
+  assert.strictEqual(tip("t".repeat(100), "", ""), "t".repeat(100))
+  assert.strictEqual(tip("t".repeat(35), "a".repeat(60), ""), "t".repeat(35) + "  ·  " + "a".repeat(60))
   assert.strictEqual(M.tooltipField("x".repeat(100), 100), "x".repeat(100))
   assert.strictEqual(M.tooltipField("y".repeat(5000), 100), "y".repeat(99) + "\u2026")
-  assert.strictEqual(tip("y".repeat(5000), "z".repeat(5000), "Paused — "),
-    "Paused — " + "y".repeat(99) + "\u2026  ·  " + "z".repeat(59) + "\u2026")
+  assert.strictEqual(tip("y".repeat(5000), "", ""), "y".repeat(99) + "\u2026")
+  assert.strictEqual(tip("t".repeat(20), "z".repeat(5000), "Paused — "),
+    "Paused — " + "t".repeat(20) + "  ·  " + "z".repeat(59) + "\u2026")
+  assert.strictEqual(tip("y".repeat(5000), "z".repeat(5000), "Paused — "), "Paused — " + "y".repeat(90) + "\u2026")
   // The bound counts what is shown, before the joiners go in.
   const angles = tip("<".repeat(500), "", "")
   assert.strictEqual(shown(angles), "<".repeat(99) + "\u2026")
@@ -248,6 +272,9 @@ test("which art URLs may reach the probe", () => {
     "https://i.ytimg.com.attacker.test/x",    // same for YouTube artwork
     "https://i.scdn.co@evil.test/x",          // userinfo, not a host
     "https://i.scdn.co:8443/x",               // a port is never part of one
+    "https://evil.test\\.scdn.co/x",          // a WHATWG parser reads `\` as `/`: host evil.test
+    "https://evil.test%2f.scdn.co/x",         // an encoded slash in the host
+    "https://evil.test\uff0f.scdn.co/x",      // a fullwidth slash, mapped to `/` by IDNA
     "https://evil.test/#https://i.scdn.co/",  // the allowed host in a fragment
     "https://evil.test/?u=https://i.scdn.co", // and in a query
     "http://i.scdn.co/image/x",               // plaintext

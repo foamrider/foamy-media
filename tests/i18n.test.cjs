@@ -57,6 +57,23 @@ function translated(file, assigned = []) {
   return found;
 }
 
+// The kit components the plugin's QML uses, directly or through other kit
+// components. Whatever they translate can reach the screen, a default
+// tooltip included.
+function kitComponents() {
+  const names = new Set(fs.readdirSync(path.join(root, 'kit')).filter(f => f.endsWith('.qml')).map(f => f.slice(0, -4)));
+  const used = new Set();
+  const queue = fs.readdirSync(root).filter(f => f.endsWith('.qml')).map(f => path.join(root, f));
+  while (queue.length) {
+    for (const [name] of code(queue.pop()).matchAll(/\b[A-Z]\w*\b/g)) {
+      if (!names.has(name) || used.has(name)) continue;
+      used.add(name);
+      queue.push(path.join(root, 'kit', name + '.qml'));
+    }
+  }
+  return [...used].sort();
+}
+
 function assertEnglishEntries(strings, where) {
   for (const s of strings) assert.ok(Object.hasOwn(I.en, s), `${where}: missing catalog entry ${JSON.stringify(s)}`);
 }
@@ -83,15 +100,17 @@ test('every string the plugin translates has a catalog entry', () => {
 });
 
 test('the kit strings this plugin shows have catalog entries', () => {
-  const kit = name => path.join(root, 'kit', name);
+  const used = kitComponents();
+  // A scan that stops following the kit would pass with less to check.
+  for (const name of ['FoamyHeader', 'FoamyInfoNote', 'FoamyPrefsQueue', 'FoamySettingsPage', 'SafeTextField'])
+    assert.ok(used.includes(name), `the plugin reaches kit ${name}: ${used.join(', ')}`);
+  // Fields that hold a message the component shows translated.
+  const assigned = { FoamyPrefsQueue: ['error'], SafeTextField: ['pasteError'] };
   const strings = [
     load('FoamyPrefs').NOT_ALLOWED,
     load('FoamyPrefs').NO_ENTRY,
     load('FoamyNative').UNAVAILABLE_TEXT,
-    ...['FoamySettingsHeader.qml', 'FoamySettingsError.qml', 'FoamyMenu.qml', 'FoamyNumberField.qml',
-      'FoamyTextSettingField.qml'].flatMap(name => translated(kit(name))),
-    ...translated(kit('FoamyPrefsQueue.qml'), ['error']),
-    ...translated(kit('SafeTextField.qml'), ['pasteError']),
+    ...used.flatMap(name => translated(path.join(root, 'kit', name + '.qml'), assigned[name] || [])),
   ];
   assertEnglishEntries(strings, 'kit');
   // Settings header and error, number field, save errors, the three paste

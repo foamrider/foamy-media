@@ -10,7 +10,8 @@ import "plugin/kit"
 import "plugin/Model.js" as Model
 
 // The cover service through its real Process (tests/art-runtime.py): three
-// bars share one probe; only the last URL of a burst is probed; a remote
+// bars share one probe; only the last URL of a burst is probed; a track
+// change stops a running probe, which still counts as started; a remote
 // cover waits for the network, is retried 2.5, 5 and 10 s apart, again after
 // the network comes back, and never after TLS_UNSUPPORTED; exit 127 turns
 // covers off and Settings says why. The popup shows only the file the
@@ -25,6 +26,8 @@ ShellRoot {
   // Probes started and exited, counted from the service's own Process.
   property int starts: 0
   property int exits: 0
+  // The exit code of the probe that a track change stops (null until it exits).
+  property var slowExit: null
 
   function check(ok, label) {
     checks++
@@ -43,8 +46,10 @@ ShellRoot {
       if (shell.svc.artProbe.running)
         shell.starts++
     }
-    function onExited() {
+    function onExited(exitCode) {
       shell.exits++
+      if (shell.svc.artProbe.pending === "file:///covers/slow.png")
+        shell.slowExit = exitCode
     }
   }
 
@@ -86,6 +91,8 @@ ShellRoot {
     id: modeFile
     path: shell.out + "/helper-mode"
     blockWrites: true
+    // cancel() reads back what the slow helper wrote.
+    blockAllReads: true
   }
   FileView {
     id: networkFile
@@ -199,8 +206,34 @@ ShellRoot {
       return svc.artProbed === "file:///covers/c.png" && !svc.artProbe.running
     }, 10000, settled(function () {
       eq(starts, 2, "a burst of track changes starts one probe")
-      shell.offline()
+      shell.cancel()
     }), "the last cover of a burst is probed")
+  }
+
+  // A track change while a probe runs stops that probe, and the new
+  // track's cover is probed once it has exited.
+  function cancel() {
+    modeFile.setText("slow\n")
+    var before = exits
+    play("file:///covers/slow.png")
+    // The slow helper writes "ok" for the next probe once it has read its
+    // own mode, so the track changes only while that probe really runs.
+    wait.waitFor(function () {
+      modeFile.reload()
+      return svc.artProbe.running && svc.artProbe.pending === "file:///covers/slow.png" && modeFile.text() === "ok\n"
+    }, 10000, function () {
+      play("file:///covers/next.png")
+      wait.waitFor(function () {
+        return svc.artProbed === "file:///covers/next.png" && !svc.artProbe.running
+      }, 10000, settled(function () {
+        eq(starts, 4, "the stopped probe and the next one")
+        eq(exits, before + 2, "both probes exited")
+        // A slow probe does not end by itself; exit 0 would mean no stop happened.
+        check(slowExit !== null && slowExit !== 0, "the slow probe was stopped: exit " + slowExit)
+        eq(svc.artFile, out + "/probed.png", "the next track's cover is shown")
+        shell.offline()
+      }), "the next track's cover is probed after the stopped one")
+    }, "the slow probe runs")
   }
 
   // A remote cover waits for the network.
@@ -210,11 +243,11 @@ ShellRoot {
     wait.waitFor(function () {
       return svc.artUrl === "https://i.scdn.co/image/x" && !svc.artProbeDelay.running
     }, 10000, settled(function () {
-      eq(starts, 2, "no probe for a remote cover while offline")
+      eq(starts, 4, "no probe for a remote cover while offline")
       eq(svc.artFile, "", "and no previous cover is kept")
       networkFile.setText("4\n")
       wait.waitFor(function () {
-        return exits === 3 && svc.artRetry.running
+        return exits === 5 && svc.artRetry.running
       }, 15000, function () {
         eq(svc.artRetry.interval, 2500, "the first retry waits 2.5 s")
         retry(5000, function () {
