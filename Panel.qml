@@ -299,7 +299,12 @@ Panel {
   onArtUrlChanged: requestArt()
   Connections {
     target: member
+    // Only a new leader has work to do. A leading bar destroyed with its
+    // monitor gets here too, as its member leaves, and `root` is null by
+    // then; `member` is not, since it is the object that just changed.
     function onIsLeaderChanged() {
+      if (!member.isLeader)
+        return
       root.requestArt()
       root.reconcileSource()
     }
