@@ -83,6 +83,8 @@
   "Redo": "Redo",
   "Select all": "Select all",
   "Undo": "Undo",
+  "More options": "More options",
+  "More information": "More information",
   "Enter a number from %1 to %2": "Enter a number from %1 to %2",
   "This plugin's helper isn't available for this CPU.": "This plugin's helper isn't available for this CPU.",
   "No MPRIS name found; set it under Advanced": "No MPRIS name found; set it under Advanced",
