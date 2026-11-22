@@ -56,12 +56,13 @@ esac
 # for three bars, the last of a burst, a slow probe stopped by a track
 # change and the next track's, an HTTPS cover once online and its
 # three retries, once more after the network came back, one TLS failure
-# with no retry, and one local cover before the helper went missing.
+# with no retry, the next cover after the leading bar's monitor was
+# unplugged, and one local cover before the helper went missing.
 EXPECTED_CALLS = (
     ["2 art-probe /covers/My Cover.png", "2 art-probe /covers/c.png"]
     + ["2 art-probe /covers/slow.png", "2 art-probe /covers/next.png"]
     + ["2 art-probe https://i.scdn.co/image/x"] * 5
-    + ["2 art-probe https://i.scdn.co/image/y", "2 art-probe /covers/m.png"]
+    + ["2 art-probe https://i.scdn.co/image/y", "2 art-probe /covers/u.png", "2 art-probe /covers/m.png"]
 )
 
 

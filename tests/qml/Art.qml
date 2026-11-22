@@ -13,9 +13,11 @@ import "plugin/Model.js" as Model
 // bars share one probe; only the last URL of a burst is probed; a track
 // change stops a running probe, which still counts as started; a remote
 // cover waits for the network, is retried 2.5, 5 and 10 s apart, again after
-// the network comes back, and never after TLS_UNSUPPORTED; exit 127 turns
-// covers off and Settings says why. The popup shows only the file the
-// helper wrote, never the player's URL, and only while it is open.
+// the network comes back, and never after TLS_UNSUPPORTED; unplugging the
+// leading bar's monitor hands the lead on without an error, and the next
+// cover is still probed; exit 127 turns covers off and Settings says why.
+// The popup shows only the file the helper wrote, never the player's URL,
+// and only while it is open.
 ShellRoot {
   id: shell
   property int checks: 0
@@ -63,18 +65,38 @@ ShellRoot {
       y: 4
       x: 1200
       spacing: 40
-      Repeater {
-        id: panels
-        model: 3
-        Media.Panel {
-          bar: mockBar
-          moduleName: "foamy.media"
-          settings: ({
-              id: "foamy.media",
-              hideWhenClosed: false
-            })
-        }
+    }
+  }
+  // One bar per monitor, made as the 4.5 bar makes them: a Variants over the
+  // screens, each bar holding the widget in a Loader, and the widget's
+  // component made outside the bars (the bar's widget registry gives every
+  // screen the same one). Taking a name out of `screens` unplugs that
+  // monitor: its bar is destroyed with the Loader in it.
+  property var screens: ["DP-1", "DP-2", "DP-3"]
+  Variants {
+    id: bars
+    model: shell.screens
+    Item {
+      required property var modelData
+      readonly property var panel: slot.item
+      parent: barRow
+      width: slot.width
+      height: slot.height
+      Loader {
+        id: slot
+        sourceComponent: panelComponent
       }
+    }
+  }
+  Component {
+    id: panelComponent
+    Media.Panel {
+      bar: mockBar
+      moduleName: "foamy.media"
+      settings: ({
+          id: "foamy.media",
+          hideWhenClosed: false
+        })
     }
   }
 
@@ -100,10 +122,19 @@ ShellRoot {
     blockWrites: true
   }
 
+  // The bars of the monitors still plugged in.
+  function panels() {
+    var found = []
+    for (var i = 0; i < bars.instances.length; i++)
+      if (bars.instances[i].panel)
+        found.push(bars.instances[i].panel)
+    return found
+  }
   function leader() {
-    for (var i = 0; i < 3; i++)
-      if (panels.itemAt(i).statusObject().leader)
-        return panels.itemAt(i)
+    var all = panels()
+    for (var i = 0; i < all.length; i++)
+      if (all[i].statusObject().leader)
+        return all[i]
     return null
   }
   // A playing Spotify with this cover, on every bar (a new object, since a
@@ -125,8 +156,9 @@ ShellRoot {
         }
       ]
     }
-    for (var i = 0; i < 3; i++)
-      panels.itemAt(i).playerModel = model
+    var all = panels()
+    for (var i = 0; i < all.length; i++)
+      all[i].playerModel = model
   }
   function images(item, found) {
     if (!item)
@@ -309,9 +341,40 @@ ShellRoot {
       Qt.callLater(function () {
         eq(svc.artProbe.failure, "TLS_UNSUPPORTED", "the failure code is read")
         eq(svc.artRetry.running, false, "TLS_UNSUPPORTED is not retried")
-        shell.missing()
+        shell.unplug()
       })
     }, "the TLS cover is probed")
+  }
+
+  // Unplugging the monitor of the leading bar destroys that bar while its
+  // member hands the lead on. The harness fails the run on any TypeError in
+  // the log; one of the bars left leads, and it asks for the next cover.
+  function unplug() {
+    modeFile.setText("ok\n")
+    var lead = leader()
+    var screen = ""
+    for (var i = 0; i < bars.instances.length; i++)
+      if (bars.instances[i].panel === lead)
+        screen = bars.instances[i].modelData
+    screens = screens.filter(function (name) {
+      return name !== screen
+    })
+    wait.waitFor(function () {
+      var left = panels()
+      return left.length === 2 && left[0].member.members === 2
+    }, 10000, function () {
+      eq(panels().filter(function (panel) {
+        return panel.statusObject().leader
+      }).length, 1, "one of the two bars left leads")
+      var before = starts
+      play("file:///covers/u.png")
+      wait.waitFor(function () {
+        return svc.artProbed === "file:///covers/u.png" && !svc.artProbe.running
+      }, 10000, settled(function () {
+        eq(starts, before + 1, "the new leader asks for the next cover once")
+        shell.missing()
+      }), "the next cover is probed after the unplug")
+    }, "the unplugged monitor's bar is gone")
   }
 
   // No helper for this CPU: covers stay off, Settings says why, and the
