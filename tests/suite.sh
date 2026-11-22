@@ -1,8 +1,7 @@
 #!/bin/bash
 # foamy-media's own tests; tests/validate.sh runs this after the linters.
-#   --ci    no Quickshell, no Omarchy host: node, the helper on local
-#           fixtures (its decode cases skip without ImageMagick) and the
-#           clipboard producer test
+#   --ci    no Quickshell, no Omarchy host: node and the helper on local
+#           fixtures (its decode cases skip without ImageMagick)
 #   --fast  skip the offscreen runtime tests
 set -uo pipefail
 cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." || exit 1
@@ -39,7 +38,7 @@ else
   skip "the aarch64 helper: no qemu-aarch64 binfmt"
 fi
 if ((ci)); then
-  FOAMY_SUITE_CI=1 run python3 -I tests/test_clipboard.py
+  skip "test_clipboard.py: Quickshell"
 else
   run python3 -I tests/test_clipboard.py
 fi

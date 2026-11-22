@@ -1,12 +1,9 @@
-"""Bound clipboard producers in real subprocesses and exercise the QML editor.
+"""Exercise the plain text field's editing and paste under Quickshell.
 
 The wl-paste, clipboard-fixture and timeout stand-ins are foamy-kit's
 hostenv.clipboard_fakes(), from the kit checkout (FOAMY_KIT). The paste
-modes themselves (limits, rejected input, deadlines) are foamy-kit's own
-tests of kit/clipboard.sh. Here: a killed wrapper still stops its producer,
-and the plain text field pastes and edits under Quickshell. The shell case
-needs no Quickshell or Omarchy host, so tests/suite.sh --ci runs it too
-(FOAMY_SUITE_CI=1 skips the QML case)."""
+modes themselves (limits, rejected input, deadlines, a killed wrapper) are
+foamy-kit's own tests of kit/clipboard.sh."""
 
 import json
 import os
@@ -15,13 +12,11 @@ import shutil
 import subprocess
 import tempfile
 import sys
-import time
 import unittest
 
 KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPER = ROOT / "kit/clipboard.sh"
 
 
 def load_hostenv():
@@ -45,42 +40,8 @@ class ClipboardTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.base = Path(self.temporary.name)
         self.env = dict(os.environ, **hostenv.clipboard_fakes(self.base / "bin"))
-        self.state = Path(self.env["TEST_CLIPBOARD_STATE"])
-
-    def assert_producer_stopped(self):
-        pid = Path(f"{self.state}.pid").read_text()
-        status = Path(f"/proc/{pid}/stat")
-        # The group leader can close stdout before a killed child is scheduled
-        # to exit. Observe the child's state with a bounded wait, without the
-        # exists/read race when /proc removes it between those two operations.
-        deadline = time.monotonic() + 1
-        while time.monotonic() < deadline:
-            try:
-                state = status.read_text().split()[2]
-            except (FileNotFoundError, ProcessLookupError):  # gone before the open, or before the read
-                return
-            if state == "Z":
-                return
-            time.sleep(0.01)
-        self.fail("clipboard producer survived its deadline")
-
-    def test_watchdog_survives_wrapper_destruction(self):
-        self.state.write_text("stall")
-        with subprocess.Popen(
-            ["bash", str(HELPER), "clipboard"], env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        ) as process:
-            pid_file = Path(f"{self.state}.pid")
-            deadline = time.monotonic() + 2
-            while not pid_file.exists() and time.monotonic() < deadline:
-                time.sleep(0.01)
-            self.assertTrue(pid_file.exists(), "clipboard producer did not start")
-            process.kill()
-            process.communicate(timeout=4)
-        self.assert_producer_stopped()
 
     def test_qml_editing_and_paste(self):
-        if os.environ.get("FOAMY_SUITE_CI"):
-            self.skipTest("tests/suite.sh --ci runs no Quickshell")
         runner = shutil.which("qs")
         if not runner:
             self.skipTest("Quickshell is unavailable")
