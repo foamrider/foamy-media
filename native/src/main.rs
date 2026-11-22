@@ -260,7 +260,9 @@ mod tests {
             "https://user@i.scdn.co/x",
             "https://i.scdn.co:8443/x",
             // A URL parser that reads `\` as `/` (WHATWG) sees the host
-            // evil.test in these; the label check alone sees `evil.test\.`.
+            // evil.test in the first. The other two hide a slash that
+            // another parser may decode. The label check alone would take
+            // each of them for a host under scdn.co.
             "https://evil.test\\.scdn.co/x",
             "https://evil.test%2f.scdn.co/x",
             "https://evil.test\u{ff0f}.scdn.co/x",
