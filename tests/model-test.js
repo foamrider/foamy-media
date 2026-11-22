@@ -183,10 +183,21 @@ test("the hover tooltip: literal text, bounded fields and line", () => {
   assert.strictEqual(capped("a".repeat(88) + zwjFamily + "b", "", "Paused — "), "Paused — " + "a".repeat(88) + "\u2026")
   assert.strictEqual(capped("t".repeat(93), "e\u0301" + "x".repeat(10), ""), "t".repeat(93) + "  ·  \u2026")
   // The marks of other scripts stay with their letter too: an Arabic fatha,
-  // a Hebrew point, a Devanagari and a Thai vowel sign.
-  for (const [letter, mark] of [["\u0628", "\u064e"], ["\u05d1", "\u05b8"], ["\u0915", "\u093f"], ["\u0e01", "\u0e34"]]) {
+  // a Hebrew point, a Devanagari and a Thai vowel sign, a Cyrillic titlo,
+  // Tibetan, Myanmar and Khmer vowel signs, the kana voiced sound mark (also
+  // the halfwidth ones), the Thai and Lao vowel sign AM, a Brahmi vowel sign
+  // past U+FFFF, and the vowel or final of a Hangul syllable written in jamo.
+  const marked = [
+    ["\u0628", "\u064e"], ["\u05d1", "\u05b8"], ["\u0915", "\u093f"], ["\u0e01", "\u0e34"],
+    ["\u0430", "\u0483"], ["\u0f40", "\u0f71"], ["\u1000", "\u102d"], ["\u1780", "\u17b6"],
+    ["\u304b", "\u3099"], ["\uff76", "\uff9e"], ["\uff76", "\uff9f"], ["\u0e19", "\u0e33"],
+    ["\u0e81", "\u0eb3"], ["\u{11013}", "\u{11038}"], ["\u1100", "\u1161"], ["\u1100", "\ud7b0"],
+    ["\uac00", "\u11a8"],
+  ]
+  for (const [letter, mark] of marked) {
     const line = capped("a".repeat(89) + letter + mark + "zz", "", "Paused — ")
-    assert.strictEqual(line, "Paused — " + "a".repeat(89) + "\u2026", JSON.stringify(line))
+    const code = "U+" + mark.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")
+    assert.strictEqual(line, "Paused — " + "a".repeat(89) + "\u2026", code + " is cut off its letter: " + JSON.stringify(line))
   }
   // A flag is a pair of regional indicators, paired from the start of a run:
   // the cut keeps a whole flag or none of it.
