@@ -248,6 +248,9 @@ test("which art URLs may reach the probe", () => {
     "https://i.ytimg.com.attacker.test/x",    // same for YouTube artwork
     "https://i.scdn.co@evil.test/x",          // userinfo, not a host
     "https://i.scdn.co:8443/x",               // a port is never part of one
+    "https://evil.test\\.scdn.co/x",          // a WHATWG parser reads `\` as `/`: host evil.test
+    "https://evil.test%2f.scdn.co/x",         // an encoded slash in the host
+    "https://evil.test／.scdn.co/x",      // a fullwidth slash, mapped to `/` by IDNA
     "https://evil.test/#https://i.scdn.co/",  // the allowed host in a fragment
     "https://evil.test/?u=https://i.scdn.co", // and in a query
     "http://i.scdn.co/image/x",               // plaintext

@@ -286,10 +286,10 @@ function artProbeTarget(artUrl) {
 
   // The authority is everything before the first path, query or fragment.
   var authority = url.substring(8).split(/[/?#]/)[0]
-  if (!authority) return null
-  // Credentials and ports are never part of an album-art URL, and userinfo in
-  // particular is the oldest way to make a URL read as a host it is not.
-  if (authority.indexOf("@") !== -1 || authority.indexOf(":") !== -1) return null
+  // A cover host is a plain ASCII name. Anything else (userinfo, a port, a
+  // `\` or an encoded or fullwidth slash) can make another URL parser read
+  // the URL as a host other than the one checked here.
+  if (!/^[a-z0-9.-]+$/i.test(authority)) return null
   if (!artHostAllowed(authority.toLowerCase())) return null
 
   return url

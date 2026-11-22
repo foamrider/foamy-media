@@ -7,8 +7,9 @@
 //! ```
 //!
 //! `<target>` is what `Model.artProbeTarget` returns: an `https://` URL on
-//! one of the cover hosts (`scdn.co`, `ytimg.com` and their subdomains; no
-//! credentials, no port, no space or control character), or an absolute
+//! one of the cover hosts (`scdn.co`, `ytimg.com` and their subdomains; an
+//! authority of ASCII letters, digits, `.` and `-` only, so no credentials
+//! and no port; no space or control character), or an absolute
 //! local path (no control character). Both are checked again here.
 //!
 //! # Reply
@@ -141,8 +142,14 @@ fn source(target: &str) -> Result<Source, Failure> {
             return Err(invalid("the URL has a space"));
         }
         let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
-        // Credentials and ports are never part of an album-art URL.
-        if authority.is_empty() || authority.contains(['@', ':']) {
+        // A cover host is a plain ASCII name. Anything else (userinfo, a
+        // port, a `\` or an encoded or fullwidth slash) can make another URL
+        // parser read the URL as a host other than the one checked here.
+        if authority.is_empty()
+            || !authority
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
+        {
             return Err(invalid("the URL's host is not a plain host name"));
         }
         if !host_allowed(&authority.to_ascii_lowercase()) {
@@ -252,6 +259,11 @@ mod tests {
             "https://i.scdn.co.evil.test/x",
             "https://user@i.scdn.co/x",
             "https://i.scdn.co:8443/x",
+            // A URL parser that reads `\` as `/` (WHATWG) sees the host
+            // evil.test in these; the label check alone sees `evil.test\.`.
+            "https://evil.test\\.scdn.co/x",
+            "https://evil.test%2f.scdn.co/x",
+            "https://evil.test\u{ff0f}.scdn.co/x",
             "https://evil.test/i.scdn.co",
             "https://evil.test?i.scdn.co",
             "https://i.scdn.co/a b",

@@ -112,6 +112,9 @@ expect_code() {
 # ---------------------------------------- cases that end before a decode
 
 expect_code INVALID_ARGUMENT "a relative path" "$helper" art-probe relative.png
+# A WHATWG URL parser reads this host as evil.test; the helper refuses it
+# before any URL parser sees it.
+expect_code INVALID_ARGUMENT "a backslash in the URL's host" "$helper" art-probe 'https://evil.test\.scdn.co/x'
 
 # Formats that reach an ImageMagick delegate or coder rather than a raster
 # decoder. The magic-byte check is what keeps these out, and every outcome
