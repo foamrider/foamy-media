@@ -539,12 +539,16 @@ PanelKeyCatcher {
           height: 1
           color: FoamyPalette.divider
         }
+        // The source tabs: a tab list for screen readers. FoamyTabs can't
+        // draw the brand glyph or the equalizer, so the row is built here;
+        // each tab is one stop of the panel cursor.
         Row {
           anchors.left: parent.left
           anchors.leftMargin: FoamyStyle.gapLarge
           anchors.verticalCenter: parent.verticalCenter
           anchors.verticalCenterOffset: FoamyStyle.gapTiny
           spacing: FoamyStyle.gapSmall
+          Accessible.role: Accessible.PageTabList
           SourceTab {
             kind: "spotify"
             visible: view.spotifyTabShown

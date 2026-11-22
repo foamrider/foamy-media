@@ -265,6 +265,28 @@ ShellRoot {
     }
     return null
   }
+  // The footer tab of one source ("spotify", "youtube") in a player view.
+  function sourceTab(item, kind) {
+    if (!item)
+      return null
+    if (item.key === "tab:" + kind && item.kind === kind)
+      return item
+    var kids = item.children || []
+    for (var i = 0; i < kids.length; i++) {
+      var hit = sourceTab(kids[i], kind)
+      if (hit)
+        return hit
+    }
+    return null
+  }
+  // The parent a screen reader sees: the nearest ancestor with an
+  // accessible role (Qt passes over plain layout items).
+  function accessibleParent(item) {
+    for (var p = item.parent; p; p = p.parent)
+      if (p.Accessible.role !== Accessible.NoRole)
+        return p
+    return null
+  }
 
   function leader() {
     for (var i = 0; i < 3; i++)
@@ -378,6 +400,21 @@ ShellRoot {
     playerView.activateRequested()
     playerView.tabRequested(1)
     eq(JSON.stringify(player.calls), JSON.stringify(["previous", "seekBy:5", "volume:55", "select:youtube", "switch:1"]), "cursor actions")
+    // Screen readers read the source row as a tab list: each tab a page tab
+    // named after its source, the open source's tab selected.
+    var spotifyTab = sourceTab(playerView, "spotify"), youtubeTab = sourceTab(playerView, "youtube")
+    check(spotifyTab !== null && youtubeTab !== null, "both source tabs are shown")
+    if (spotifyTab && youtubeTab) {
+      var tabList = accessibleParent(spotifyTab)
+      eq(tabList ? tabList.Accessible.role : Accessible.NoRole, Accessible.PageTabList, "the source tabs' accessible parent is a tab list (role)")
+      check(tabList !== null && accessibleParent(youtubeTab) === tabList, "both source tabs are in the same tab list")
+      eq(JSON.stringify([spotifyTab.Accessible.role, youtubeTab.Accessible.role]), JSON.stringify([Accessible.PageTab, Accessible.PageTab]), "each source tab is a page tab (role)")
+      eq(JSON.stringify([spotifyTab.Accessible.name, youtubeTab.Accessible.name]), JSON.stringify(["Spotify", "YouTube"]), "each source tab is named after its source")
+      eq(JSON.stringify([spotifyTab.Accessible.selected, youtubeTab.Accessible.selected]), JSON.stringify([true, false]), "the open source's tab is selected")
+      player.sourceKind = "youtube"
+      eq(JSON.stringify([spotifyTab.Accessible.selected, youtubeTab.Accessible.selected]), JSON.stringify([false, true]), "the selected tab follows the open source")
+      player.sourceKind = "spotify"
+    }
     // The hero band carries the cover as its picture (blurred on the GPU,
     // cover-fitted under the kit scrim on the software renderer).
     var gpu = playerView.effectsAvailable
