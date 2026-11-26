@@ -128,7 +128,11 @@ test("the bar label and when the widget shows", () => {
 test("the hover tooltip: literal text, bounded fields and line", () => {
   const WJ = "\u2060"
   const shown = (text) => text.split(WJ).join("") // what a reader sees
-  const tip = (title, artist, prefix) => M.tooltipLabel({ trackTitle: title, trackArtist: artist }, prefix)
+  // Panel passes the kit's FoamyText: its cap() bounds each field and its
+  // tooltip() the whole line. Where they cut a letter with marks, an emoji
+  // sequence or a flag is the kit's to test (its tests/text.test.cjs).
+  const FoamyText = require("../kit/node-loader.cjs").load("FoamyText")
+  const tip = (title, artist, prefix) => M.tooltipLabel({ trackTitle: title, trackArtist: artist }, prefix, FoamyText)
 
   // Normal text passes through untouched, prefix first.
   assert.strictEqual(tip("Instant Crush", "Daft Punk", ""), "Instant Crush  ·  Daft Punk")
@@ -160,51 +164,16 @@ test("the hover tooltip: literal text, bounded fields and line", () => {
   assert.strictEqual(M.literalTooltip("<b>"), "<" + WJ + "b>")
   assert.strictEqual(M.literalTooltip(undefined), "")
 
-  // The kit's host-tooltip cap (FoamyText.tooltip, as Panel passes it) bounds
-  // the whole line, prefix included, before the markup guard: a long title
-  // and artist end in "…" within 100 code points, and the joiners after `<`
-  // and `&` are added afterwards, so they neither count nor get cut off.
-  const FoamyText = require("../kit/node-loader.cjs").load("FoamyText")
-  const capped = (title, artist, prefix) =>
-    M.tooltipLabel({ trackTitle: title, trackArtist: artist }, prefix, FoamyText.tooltip)
-  assert.strictEqual(capped("Instant Crush", "Daft Punk", "Paused — "), "Paused — Instant Crush  ·  Daft Punk")
-  const longLine = capped("t".repeat(80), "a".repeat(50), "Paused — ")
+  // The kit's host-tooltip cap bounds the whole line, prefix included,
+  // before the markup guard: a long title and artist end in "…" within 100
+  // code points, and the joiners after `<` and `&` are added afterwards, so
+  // they neither count nor get cut off.
+  const longLine = tip("t".repeat(80), "a".repeat(50), "Paused — ")
   assert.strictEqual(longLine, ("Paused — " + "t".repeat(80) + "  ·  " + "a".repeat(50)).slice(0, 99) + "\u2026")
   assert.strictEqual([...longLine].length, FoamyText.TOOLTIP_CHARS)
-  const guarded = capped("<".repeat(99) + "x", "", "")
+  const guarded = tip("<".repeat(99) + "x", "", "")
   assert.strictEqual(shown(guarded), "<".repeat(99) + "x")
   assert.strictEqual(guarded, ("<" + WJ).repeat(99) + "x")
-  // The line is cut on a cluster boundary too, so the kit's code-point cap
-  // never has to cut it: here the 100th code point is an accent or inside a
-  // family emoji, and the whole cluster goes before the "…".
-  assert.strictEqual(M.tooltipLineLimit, FoamyText.TOOLTIP_CHARS)
-  assert.strictEqual(capped("a".repeat(89) + "e\u0301zz", "", "Paused — "), "Paused — " + "a".repeat(89) + "\u2026")
-  const zwjFamily = "\u{1F468}\u200d\u{1F469}\u200d\u{1F467}"
-  assert.strictEqual(capped("a".repeat(88) + zwjFamily + "b", "", "Paused — "), "Paused — " + "a".repeat(88) + "\u2026")
-  assert.strictEqual(capped("t".repeat(93), "e\u0301" + "x".repeat(10), ""), "t".repeat(93) + "  ·  \u2026")
-  // The marks of other scripts stay with their letter too: an Arabic fatha,
-  // a Hebrew point, a Devanagari and a Thai vowel sign, a Cyrillic titlo,
-  // Tibetan, Myanmar and Khmer vowel signs, the kana voiced sound mark (also
-  // the halfwidth ones), the Thai and Lao vowel sign AM, a Brahmi vowel sign
-  // past U+FFFF, and the vowel or final of a Hangul syllable written in jamo.
-  const marked = [
-    ["\u0628", "\u064e"], ["\u05d1", "\u05b8"], ["\u0915", "\u093f"], ["\u0e01", "\u0e34"],
-    ["\u0430", "\u0483"], ["\u0f40", "\u0f71"], ["\u1000", "\u102d"], ["\u1780", "\u17b6"],
-    ["\u304b", "\u3099"], ["\uff76", "\uff9e"], ["\uff76", "\uff9f"], ["\u0e19", "\u0e33"],
-    ["\u0e81", "\u0eb3"], ["\u{11013}", "\u{11038}"], ["\u1100", "\u1161"], ["\u1100", "\ud7b0"],
-    ["\uac00", "\u11a8"],
-  ]
-  for (const [letter, mark] of marked) {
-    const line = capped("a".repeat(89) + letter + mark + "zz", "", "Paused — ")
-    const code = "U+" + mark.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")
-    assert.strictEqual(line, "Paused — " + "a".repeat(89) + "\u2026", code + " is cut off its letter: " + JSON.stringify(line))
-  }
-  // A flag is a pair of regional indicators, paired from the start of a run:
-  // the cut keeps a whole flag or none of it.
-  const norway = "\u{1F1F3}\u{1F1F4}"
-  assert.strictEqual(capped("a".repeat(89) + norway + "zz", "", "Paused — "), "Paused — " + "a".repeat(89) + "\u2026")
-  assert.strictEqual(capped("a".repeat(87) + norway + norway + "zz", "", "Paused — "),
-    "Paused — " + "a".repeat(87) + norway + "\u2026")
 
   // Control characters cannot stack the tooltip into lines.
   assert.strictEqual(tip("one\ntwo\r\nthree\u2028four\tfive", "", ""), "one two three four five")
@@ -215,8 +184,8 @@ test("the hover tooltip: literal text, bounded fields and line", () => {
   // then the whole line to 100.
   assert.strictEqual(tip("t".repeat(100), "", ""), "t".repeat(100))
   assert.strictEqual(tip("t".repeat(35), "a".repeat(60), ""), "t".repeat(35) + "  ·  " + "a".repeat(60))
-  assert.strictEqual(M.tooltipField("x".repeat(100), 100), "x".repeat(100))
-  assert.strictEqual(M.tooltipField("y".repeat(5000), 100), "y".repeat(99) + "\u2026")
+  assert.strictEqual(M.tooltipField("x".repeat(100), 100, FoamyText.cap), "x".repeat(100))
+  assert.strictEqual(M.tooltipField("y".repeat(5000), 100, FoamyText.cap), "y".repeat(99) + "\u2026")
   assert.strictEqual(tip("y".repeat(5000), "", ""), "y".repeat(99) + "\u2026")
   assert.strictEqual(tip("t".repeat(20), "z".repeat(5000), "Paused — "),
     "Paused — " + "t".repeat(20) + "  ·  " + "z".repeat(59) + "\u2026")
@@ -224,18 +193,6 @@ test("the hover tooltip: literal text, bounded fields and line", () => {
   // The bound counts what is shown, before the joiners go in.
   const angles = tip("<".repeat(500), "", "")
   assert.strictEqual(shown(angles), "<".repeat(99) + "\u2026")
-  // Astral characters are counted and cut whole, never split into a lone surrogate.
-  const emoji = M.tooltipField("\u{1F600}".repeat(200), 100)
-  assert.strictEqual(emoji, "\u{1F600}".repeat(99) + "\u2026")
-  assert.strictEqual(Array.from(emoji).length, 100)
-  // A cut never strands a base letter from its combining mark or a ZWJ sequence half-built.
-  const accents = "e\u0301".repeat(100) // 200 code points
-  const cutAccents = M.tooltipField(accents, 100)
-  assert.ok(/^(e\u0301)+\u2026$/.test(cutAccents), JSON.stringify(cutAccents))
-  const family = "\u{1F468}\u200d\u{1F469}\u200d\u{1F467}"
-  const cutFamily = M.tooltipField("a".repeat(97) + family, 100)
-  assert.ok(!cutFamily.endsWith("\u200d\u2026") && !cutFamily.slice(0, -1).endsWith("\u200d"), JSON.stringify(cutFamily))
-  assert.ok(Array.from(cutFamily).length <= 100)
 })
 
 test("the run time is never a negative clock", () => {

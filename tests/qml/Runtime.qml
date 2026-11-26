@@ -9,6 +9,7 @@ import qs.Ui
 import "harness"
 import "plugin" as Media
 import "plugin/kit"
+import "plugin/kit/FoamyPrefs.js" as Prefs
 import "plugin/BrowserSetup.js" as BrowserSetup
 
 // Foamy Media under a real host shell, offscreen: three bar instances (as on
@@ -265,6 +266,20 @@ ShellRoot {
     }
     return null
   }
+  // The settings dropdown with this label.
+  function findDropdown(item, label) {
+    if (!item)
+      return null
+    if (item.label === label && item.shownValue !== undefined)
+      return item
+    var kids = item.children || []
+    for (var i = 0; i < kids.length; i++) {
+      var hit = findDropdown(kids[i], label)
+      if (hit)
+        return hit
+    }
+    return null
+  }
   // The footer tab of one source ("spotify", "youtube") in a player view.
   function sourceTab(item, kind) {
     if (!item)
@@ -494,6 +509,22 @@ ShellRoot {
     shell.key(view, "s")
     eq(first.editingSettings, true, "s opens Settings")
     eq(view.blocked, true, "settings page owns the keys")
+    // A dropdown pick the settings queue refuses shows the saved choice
+    // again at once, not for the dropdown's whole hold. Without a module
+    // name the widget has no bar entry, and the queue refuses every save.
+    first.moduleName = ""
+    var dropdownKeys = ["scrollAction", "accent"]
+    for (var d = 0; d < dropdownKeys.length; d++) {
+      var dropdown = shell.findDropdown(view.settingsPage, view.settingsPage.label(dropdownKeys[d]))
+      check(dropdown !== null, dropdownKeys[d] + ": the dropdown is on the settings page")
+      if (!dropdown)
+        continue
+      var savedChoice = dropdown.value
+      dropdown.select(dropdown.options[0].value === savedChoice ? dropdown.options[1].value : dropdown.options[0].value)
+      eq(first.settingsError, Prefs.NO_ENTRY, dropdownKeys[d] + ": the queue refuses the pick")
+      eq(dropdown.shownValue, savedChoice, dropdownKeys[d] + ": a refused pick shows the saved choice again at once")
+    }
+    first.moduleName = "foamy.media"
     first.save("showArtist", false)
     eq(mockBar.saved.length, 1, "setting saved inline")
     if (mockBar.saved.length === 1) {
@@ -620,7 +651,77 @@ ShellRoot {
     eq(panels.itemAt(0).popup.centerOnBar, false, "a shown widget still hangs from itself")
     hidden.close()
     hidden.destroy()
-    focusSteps.begin()
+    keySteps.begin()
+  }
+
+  // The keys after Settings hides, with real keys through the host's
+  // KeyboardPanel: the popup closed on Settings and opened again closes on
+  // Esc, and Esc on Settings goes back, then the next Esc closes the popup.
+  QtObject {
+    id: keySteps
+    function focused() {
+      var view = panels.itemAt(0).popup.bodyItem
+      var window = view ? view.Window.window : null
+      return window ? window.activeFocusItem : null
+    }
+    function inside(item, ancestor) {
+      for (var at = item; at; at = at.parent)
+        if (at === ancestor)
+          return true
+      return false
+    }
+    function esc() {
+      ev.keyClick(Qt.Key_Escape, Qt.NoModifier, -1)
+    }
+    // Opens Settings, then runs `then` once its page has the keys.
+    function showSettings(label, then) {
+      var first = panels.itemAt(0)
+      first.openSettings()
+      wait.waitFor(function () {
+        var view = first.popup.bodyItem
+        return view !== null && view.settingsPage.visible && keySteps.inside(keySteps.focused(), view.settingsPage)
+      }, 10000, then, label + ": the settings page has the keys")
+    }
+    // Opens the popup, then runs `then` once the host has given its body the keys.
+    function reopen(label, then) {
+      var first = panels.itemAt(0)
+      first.open()
+      wait.waitFor(function () {
+        var view = first.popup.bodyItem
+        return first.popup.open && view !== null && keySteps.inside(keySteps.focused(), view)
+      }, 10000, then, label + ": the popup opens with the keys in its body")
+    }
+    function begin() {
+      keySteps.showSettings("closed on Settings", function () {
+        var first = panels.itemAt(0)
+        first.close()
+        eq(first.editingSettings, false, "closing the popup leaves Settings")
+        keySteps.reopen("closed on Settings", function () {
+          check(!keySteps.inside(keySteps.focused(), first.popup.bodyItem.settingsPage), "the hidden settings page has no keys after the open: " + keySteps.focused())
+          keySteps.esc()
+          eq(first.opened, false, "Esc closes the popup that was closed on Settings")
+          keySteps.back()
+        })
+      })
+    }
+    function back() {
+      keySteps.reopen("Back", function () {
+        keySteps.showSettings("Back", function () {
+          var first = panels.itemAt(0)
+          keySteps.esc()
+          check(!first.editingSettings && first.opened, "Esc on Settings goes back")
+          wait.waitFor(function () {
+            return !keySteps.inside(keySteps.focused(), first.popup.bodyItem.settingsPage)
+          }, 3000, function () {
+            keySteps.esc()
+            eq(first.opened, false, "the next Esc closes the popup")
+            // Closed for the steps after these, also when a check failed.
+            first.close()
+            focusSteps.begin()
+          }, "the keys leave the hidden settings page after Back")
+        })
+      })
+    }
   }
 
   // YouTube is focus-only (regression: with no YouTube window, launch()

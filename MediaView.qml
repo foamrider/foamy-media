@@ -73,14 +73,13 @@ PanelKeyCatcher {
       if (view.media.opened)
         view.resetView()
     }
+    // When Settings hides, FoamyPopup gives the keys back to this view.
     function onEditingSettingsChanged() {
       if (view.editing)
         Qt.callLater(function () {
           settingsPage.resetScroll()
           settingsPage.focusBack()
         })
-      else
-        view.forceActiveFocus()
     }
   }
 
