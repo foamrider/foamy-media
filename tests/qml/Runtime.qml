@@ -651,7 +651,77 @@ ShellRoot {
     eq(panels.itemAt(0).popup.centerOnBar, false, "a shown widget still hangs from itself")
     hidden.close()
     hidden.destroy()
-    focusSteps.begin()
+    keySteps.begin()
+  }
+
+  // The keys after Settings hides, with real keys through the host's
+  // KeyboardPanel: the popup closed on Settings and opened again closes on
+  // Esc, and Esc on Settings goes back, then the next Esc closes the popup.
+  QtObject {
+    id: keySteps
+    function focused() {
+      var view = panels.itemAt(0).popup.bodyItem
+      var window = view ? view.Window.window : null
+      return window ? window.activeFocusItem : null
+    }
+    function inside(item, ancestor) {
+      for (var at = item; at; at = at.parent)
+        if (at === ancestor)
+          return true
+      return false
+    }
+    function esc() {
+      ev.keyClick(Qt.Key_Escape, Qt.NoModifier, -1)
+    }
+    // Opens Settings, then runs `then` once its page has the keys.
+    function showSettings(label, then) {
+      var first = panels.itemAt(0)
+      first.openSettings()
+      wait.waitFor(function () {
+        var view = first.popup.bodyItem
+        return view !== null && view.settingsPage.visible && keySteps.inside(keySteps.focused(), view.settingsPage)
+      }, 10000, then, label + ": the settings page has the keys")
+    }
+    // Opens the popup, then runs `then` once the host has given its body the keys.
+    function reopen(label, then) {
+      var first = panels.itemAt(0)
+      first.open()
+      wait.waitFor(function () {
+        var view = first.popup.bodyItem
+        return first.popup.open && view !== null && keySteps.inside(keySteps.focused(), view)
+      }, 10000, then, label + ": the popup opens with the keys in its body")
+    }
+    function begin() {
+      keySteps.showSettings("closed on Settings", function () {
+        var first = panels.itemAt(0)
+        first.close()
+        eq(first.editingSettings, false, "closing the popup leaves Settings")
+        keySteps.reopen("closed on Settings", function () {
+          check(!keySteps.inside(keySteps.focused(), first.popup.bodyItem.settingsPage), "the hidden settings page has no keys after the open: " + keySteps.focused())
+          keySteps.esc()
+          eq(first.opened, false, "Esc closes the popup that was closed on Settings")
+          keySteps.back()
+        })
+      })
+    }
+    function back() {
+      keySteps.reopen("Back", function () {
+        keySteps.showSettings("Back", function () {
+          var first = panels.itemAt(0)
+          keySteps.esc()
+          check(!first.editingSettings && first.opened, "Esc on Settings goes back")
+          wait.waitFor(function () {
+            return !keySteps.inside(keySteps.focused(), first.popup.bodyItem.settingsPage)
+          }, 3000, function () {
+            keySteps.esc()
+            eq(first.opened, false, "the next Esc closes the popup")
+            // Closed for the steps after these, also when a check failed.
+            first.close()
+            focusSteps.begin()
+          }, "the keys leave the hidden settings page after Back")
+        })
+      })
+    }
   }
 
   // YouTube is focus-only (regression: with no YouTube window, launch()
