@@ -74,6 +74,7 @@
   "That value isn't allowed.": "Den verdien er ikke tillatt.",
   "Couldn't save the setting.": "Kunne ikke lagre innstillingen.",
   "Settings can't be saved: this widget has no bar entry.": "Innstillingene kan ikke lagres: modulen har ingen oppføring i linjen.",
+  "The saved list in shell.json isn't valid, so it wasn't replaced.": "Den lagrede listen i shell.json er ikke gyldig, så den ble ikke erstattet.",
   "Clipboard paste timed out. Copy the text again.": "Innlimingen tok for lang tid. Kopier teksten på nytt.",
   "Clipboard text is too large or contains invalid characters.": "Teksten er for stor eller inneholder ugyldige tegn.",
   "Could not paste clipboard text. Copy plain text and try again.": "Kunne ikke lime inn teksten. Kopier ren tekst og prøv igjen.",
