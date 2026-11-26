@@ -9,6 +9,7 @@ import qs.Ui
 import "harness"
 import "plugin" as Media
 import "plugin/kit"
+import "plugin/kit/FoamyPrefs.js" as Prefs
 import "plugin/BrowserSetup.js" as BrowserSetup
 
 // Foamy Media under a real host shell, offscreen: three bar instances (as on
@@ -265,6 +266,20 @@ ShellRoot {
     }
     return null
   }
+  // The settings dropdown with this label.
+  function findDropdown(item, label) {
+    if (!item)
+      return null
+    if (item.label === label && item.shownValue !== undefined)
+      return item
+    var kids = item.children || []
+    for (var i = 0; i < kids.length; i++) {
+      var hit = findDropdown(kids[i], label)
+      if (hit)
+        return hit
+    }
+    return null
+  }
   // The footer tab of one source ("spotify", "youtube") in a player view.
   function sourceTab(item, kind) {
     if (!item)
@@ -494,6 +509,22 @@ ShellRoot {
     shell.key(view, "s")
     eq(first.editingSettings, true, "s opens Settings")
     eq(view.blocked, true, "settings page owns the keys")
+    // A dropdown pick the settings queue refuses shows the saved choice
+    // again at once, not for the dropdown's whole hold. Without a module
+    // name the widget has no bar entry, and the queue refuses every save.
+    first.moduleName = ""
+    var dropdownKeys = ["scrollAction", "accent"]
+    for (var d = 0; d < dropdownKeys.length; d++) {
+      var dropdown = shell.findDropdown(view.settingsPage, view.settingsPage.label(dropdownKeys[d]))
+      check(dropdown !== null, dropdownKeys[d] + ": the dropdown is on the settings page")
+      if (!dropdown)
+        continue
+      var savedChoice = dropdown.value
+      dropdown.select(dropdown.options[0].value === savedChoice ? dropdown.options[1].value : dropdown.options[0].value)
+      eq(first.settingsError, Prefs.NO_ENTRY, dropdownKeys[d] + ": the queue refuses the pick")
+      eq(dropdown.shownValue, savedChoice, dropdownKeys[d] + ": a refused pick shows the saved choice again at once")
+    }
+    first.moduleName = "foamy.media"
     first.save("showArtist", false)
     eq(mockBar.saved.length, 1, "setting saved inline")
     if (mockBar.saved.length === 1) {

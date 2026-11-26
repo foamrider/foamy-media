@@ -45,6 +45,8 @@ Panel {
     fields: Schema.schema
     settings: root.settings
   }
+  // The settings dropdowns link to it, so a pick it refuses gives way at once.
+  readonly property alias prefsQueue: prefs
   function preference(key) {
     return prefs.value(key)
   }

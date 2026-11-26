@@ -7,7 +7,9 @@ import "Preferences.js" as Schema
 // The settings page: controls, bar, panel and YouTube browser settings on
 // the foamy settings skeleton. Reads and saves through `media` (the Panel or
 // the preview mock): media.settings, media.save(key, value),
-// media.saveMany(values), media.saving, media.settingsError, media.retryable.
+// media.saveMany(values), media.saving, media.settingsError, media.retryable,
+// and media.prefsQueue, the FoamyPrefsQueue the dropdowns link to (the
+// preview has none).
 FoamySettingsPage {
   id: page
 
@@ -53,6 +55,8 @@ FoamySettingsPage {
           label: FoamyI18n.t(option)
         }
       })
+      queue: page.media.prefsQueue || null
+      queueKey: "scrollAction"
       onChanged: function (next) {
         page.media.save("scrollAction", next)
       }
@@ -106,6 +110,8 @@ FoamySettingsPage {
           label: FoamyI18n.t(option)
         }
       })
+      queue: page.media.prefsQueue || null
+      queueKey: "accent"
       onChanged: function (next) {
         page.media.save("accent", next)
       }
