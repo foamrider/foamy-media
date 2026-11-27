@@ -250,6 +250,7 @@ PanelKeyCatcher {
         title: view.media.sourceName
         meta: !view.media.sourceOpen && !view.media.live ? FoamyI18n.t("Not running") : !view.media.live ? FoamyI18n.t("Nothing playing") : FoamyI18n.t(view.media.playing ? "Playing" : "Paused")
         settingsHasCursor: view.hasCursor("settings")
+        cursorByKeys: cursor.byKeys
         onSettingsClicked: view.media.openSettings()
         onSettingsHovered: function (hovered) {
           if (hovered)

@@ -563,6 +563,7 @@ ShellRoot {
     eq(view.cursorKey, "", "no cursor highlight on open")
     view.moveRequested(0, 1)
     eq(view.cursorKey, "settings", "first move lands on the first stop when nothing plays")
+    eq(JSON.stringify(keysBorders(view)), JSON.stringify([FoamyI18n.t("Settings")]), "the keys' cursor on the band's settings button has the border")
     view.moveRequested(0, 1)
     eq(view.cursorKey, "tab:spotify", "down reaches the source row")
     view.moveRequested(1, 0)
