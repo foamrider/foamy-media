@@ -12,9 +12,9 @@ How the lists are made:
 
 ## `foamy-media-helper`
 
-- `bin/aarch64/foamy-media-helper`: sha256 `8fb55dce4a5ec044a2edaf964d12ac172627ed0ad4af4b22b0b5ce74c818974d`
-- `bin/x86_64/foamy-media-helper`: sha256 `c0485003a7ddeffba62e7bee452be0df43f8d5589e6ce6f465b4a01a4e47a52d`
-- `native/native.pin`: source `9effc2a982bf1bac68b6b0e836e86407a61de89c7c9c555c4198718e0a24140e`, toolchain 1.99.1
+- `bin/aarch64/foamy-media-helper`: sha256 `7b340566574c0ff941d734e1e5a54de846b9fd6fa83c43391abe008b8cc7196a`
+- `bin/x86_64/foamy-media-helper`: sha256 `956a0593236c7183871b51ac1b4bdd848ae0bfca153e8a8684b803d269e10355`
+- `native/native.pin`: source `99a6294bb41e3ce969543796226fea8e0221dfb41c2077ba233ad37684d6aefe`, toolchain 1.99.1
 
 ### Crates linked into `foamy-media-helper`
 
@@ -57,7 +57,7 @@ First-party crates (not third-party code, listed for completeness):
 
 | Crate | Version | Source | License | Arches | Notices |
 |---|---|---|---|---|---|
-| foamy-helper | 0.1.2 | `kit/rust/foamy-helper/` (foamy-kit, vendored) | MIT | both | [N7](#n7) |
+| foamy-helper | 0.1.3 | `kit/rust/foamy-helper/` (foamy-kit, vendored) | MIT | both | [N7](#n7) |
 | foamy-media-helper | 0.1.0 | `native/` (this plugin) | MIT | both | `LICENSE` |
 
 ### Toolchain code linked into `foamy-media-helper`
@@ -426,7 +426,7 @@ DEALINGS IN THE SOFTWARE.
 
 ### N7
 
-Shipped by: foamy-helper 0.1.2 (foamy-kit's LICENSE).
+Shipped by: foamy-helper 0.1.3 (foamy-kit's LICENSE).
 
 ```text
 MIT License
