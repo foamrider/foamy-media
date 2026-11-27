@@ -12,7 +12,7 @@ Item {
   id: preview
   required property QtObject bar
   required property Item anchorItem
-  property var previewStates: ["playing", "two-sources", "not-running", "settings", "settings-browser", "cursor-seek", "cursor-volume"]
+  property var previewStates: ["playing", "two-sources", "not-running", "settings", "settings-browser", "cursor-seek", "cursor-volume", "cursor-shuffle"]
   property string previewState: "playing"
   property int settleMs: 900
   readonly property var popup: previewPopup
@@ -209,7 +209,7 @@ Item {
   }
 
   // Scroll the settings page to the browser picker for that shot; put the
-  // panel cursor on a slider for the cursor-* shots.
+  // panel cursor on a slider or on shuffle for the cursor-* shots.
   onPreviewStateChanged: {
     if (previewState === "settings-browser")
       scrollToBrowser.start()
@@ -219,8 +219,18 @@ Item {
   Timer {
     id: placeCursor
     interval: 300
-    onTriggered: if (preview.popup.bodyItem)
-      preview.popup.bodyItem.place(preview.previewState.slice(7))
+    onTriggered: {
+      var view = preview.popup.bodyItem
+      if (!view)
+        return
+      // Shuffle is on in the mock: the keys reach it with an arrow key, so
+      // the shot shows the keys' border on the accent fill.
+      if (preview.previewState === "cursor-shuffle") {
+        view.place("previous")
+        view.moveRequested(-1, 0)
+      } else
+        view.place(preview.previewState.slice(7))
+    }
   }
   Timer {
     id: scrollToBrowser

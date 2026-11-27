@@ -186,6 +186,9 @@ PanelKeyCatcher {
   }
 
   onMoveRequested: function (dx, dy) {
+    // Any arrow key gives the keys' cursor look (FoamyCursor.byKeys), also
+    // one that stops at an edge and leaves the index where the pointer put it.
+    cursor.byKeys = true
     if (!cursor.active) {
       place(stops.indexOf("playPause") >= 0 ? "playPause" : stops[0])
       return
@@ -247,6 +250,7 @@ PanelKeyCatcher {
         title: view.media.sourceName
         meta: !view.media.sourceOpen && !view.media.live ? FoamyI18n.t("Not running") : !view.media.live ? FoamyI18n.t("Nothing playing") : FoamyI18n.t(view.media.playing ? "Playing" : "Paused")
         settingsHasCursor: view.hasCursor("settings")
+        cursorByKeys: cursor.byKeys
         onSettingsClicked: view.media.openSettings()
         onSettingsHovered: function (hovered) {
           if (hovered)
@@ -453,6 +457,8 @@ PanelKeyCatcher {
             iconSize: FoamyStyle.headerIconSize
             foreground: Commons.Color.popups.background
             color: hasCursor || hovered ? Commons.Color.accent : FoamyPalette.text
+            // The kit's accent border cannot be seen on the accent fill.
+            border.color: FoamyPalette.text
             tooltipText: FoamyI18n.t(view.media.playing ? "Pause" : "Play")
             enabled: view.media.live === true
             onClicked: view.media.playPause()
@@ -574,6 +580,7 @@ PanelKeyCatcher {
           iconName: "external-link"
           foreground: FoamyPalette.secondaryText
           hasCursor: view.hasCursor("launch")
+          cursorByKeys: cursor.byKeys
           tooltipText: FoamyI18n.t(view.launchShows ? "Show %1" : "Start %1", view.media.sourceName)
           onHoveredChanged: if (hovered)
             view.hover("launch")
@@ -709,8 +716,15 @@ PanelKeyCatcher {
     iconName: ""
     iconSize: FoamyStyle.iconSize + Style.space(3)
     hasCursor: view.hasCursor(key)
+    cursorByKeys: cursor.byKeys
     foreground: toggledOn && enabled ? Commons.Color.popups.background : FoamyPalette.secondaryText
-    color: toggledOn && enabled ? Commons.Color.accent : (hasCursor || hovered) && enabled ? FoamyPalette.hoverFill : "transparent"
+    // The cursor shows on a disabled button too (YouTube's shuffle and
+    // repeat, a player that cannot skip): the keys still stop there.
+    color: toggledOn && enabled ? Commons.Color.accent : hasCursor || (hovered && enabled) ? FoamyPalette.hoverFill : "transparent"
+    border.width: hasCursor && cursorByKeys ? 1 : 0
+    // On an accent fill (an active mode) the accent border cannot be seen:
+    // the keys' border takes the text colour there.
+    border.color: toggledOn && enabled ? FoamyPalette.text : Commons.Color.accent
     onHoveredChanged: if (hovered)
       view.hover(control.key)
     TransportGlyph {
@@ -761,6 +775,7 @@ PanelKeyCatcher {
     implicitHeight: FoamyStyle.actionSize
     foreground: FoamyPalette.text
     hasCursor: view.hasCursor(key)
+    byKeys: cursor.byKeys
     onHovered: view.hover(key)
     onClicked: if (tab.enabled)
       view.media.selectSource(tab.kind)
