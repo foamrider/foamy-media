@@ -5,6 +5,7 @@ import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "harness"
 import "plugin" as Media
@@ -280,6 +281,23 @@ ShellRoot {
     }
     return null
   }
+  // The keys of the cursor stops that draw the keys' accent border: a
+  // FoamyAction's 1 px border, a FoamyCursorSurface's flat accent border.
+  function keysBorders(item, found) {
+    found = found || []
+    if (!item)
+      return found
+    // Every FoamyAction (cursorByKeys) and FoamyCursorSurface (byKeys), so a
+    // stop without a key (the launch button) is seen too.
+    var action = item.cursorByKeys !== undefined && item.border !== undefined
+    var surface = item.byKeys !== undefined && item.borderSpec !== undefined
+    if (action ? item.border.width > 0 : surface && item.borderTop > 0 && Qt.colorEqual(item.borderSpec.color, Commons.Color.accent))
+      found.push(item.key !== undefined ? item.key : item.tooltipText)
+    var kids = item.children || []
+    for (var i = 0; i < kids.length; i++)
+      keysBorders(kids[i], found)
+    return found
+  }
   // The footer tab of one source ("spotify", "youtube") in a player view.
   function sourceTab(item, kind) {
     if (!item)
@@ -383,6 +401,7 @@ ShellRoot {
     eq(playerView.cursorKey, "playPause", "first move lands on play/pause")
     playerView.moveRequested(-physical, 0)
     eq(playerView.cursorKey, "previous", "left moves to previous")
+    eq(JSON.stringify(keysBorders(playerView)), JSON.stringify(["previous"]), "the keys' cursor on previous has the accent border, no other stop")
     playerView.activateRequested()
     playerView.moveRequested(0, -1)
     eq(playerView.cursorKey, "seek", "up reaches the timeline")
@@ -412,9 +431,17 @@ ShellRoot {
     eq(playerView.cursorKey, "tab:spotify", "down reaches the source tabs")
     playerView.moveRequested(1, 0)
     eq(playerView.cursorKey, "tab:youtube", "along the tabs in reading order")
+    eq(JSON.stringify(keysBorders(playerView)), JSON.stringify(["tab:youtube"]), "the keys' cursor on a source tab has the accent border")
     playerView.activateRequested()
     playerView.tabRequested(1)
     eq(JSON.stringify(player.calls), JSON.stringify(["previous", "seekBy:5", "volume:55", "select:youtube", "switch:1"]), "cursor actions")
+    // The pointer takes the cursor: no stop keeps the keys' border.
+    var pointed = sourceTab(playerView, "spotify")
+    if (pointed)
+      ev.mouseMove(pointed, pointed.width / 2, pointed.height / 2, -1, Qt.NoButton, Qt.NoModifier)
+    eq(playerView.cursorKey, "tab:spotify", "the pointer moves the cursor to the tab under it")
+    eq(JSON.stringify(keysBorders(playerView)), "[]", "under the pointer no stop has the keys' border")
+    ev.mouseMove(equalizer, 1, 1, -1, Qt.NoButton, Qt.NoModifier)
     // Screen readers read the source row as a tab list: each tab a page tab
     // named after its source, the open source's tab selected.
     var spotifyTab = sourceTab(playerView, "spotify"), youtubeTab = sourceTab(playerView, "youtube")

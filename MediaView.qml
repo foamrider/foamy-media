@@ -123,10 +123,13 @@ PanelKeyCatcher {
     if (index >= 0)
       cursor.hover(index)
   }
+  // The key handler's move: the keys' cursor look (FoamyCursor.byKeys).
   function place(key) {
     var index = stops.indexOf(key)
-    if (index >= 0)
+    if (index >= 0) {
       cursor.index = index
+      cursor.byKeys = true
+    }
   }
   function rowOf(key) {
     for (var i = 0; i < rows.length; i++)
@@ -574,6 +577,7 @@ PanelKeyCatcher {
           iconName: "external-link"
           foreground: FoamyPalette.secondaryText
           hasCursor: view.hasCursor("launch")
+          cursorByKeys: cursor.byKeys
           tooltipText: FoamyI18n.t(view.launchShows ? "Show %1" : "Start %1", view.media.sourceName)
           onHoveredChanged: if (hovered)
             view.hover("launch")
@@ -709,6 +713,7 @@ PanelKeyCatcher {
     iconName: ""
     iconSize: FoamyStyle.iconSize + Style.space(3)
     hasCursor: view.hasCursor(key)
+    cursorByKeys: cursor.byKeys
     foreground: toggledOn && enabled ? Commons.Color.popups.background : FoamyPalette.secondaryText
     color: toggledOn && enabled ? Commons.Color.accent : (hasCursor || hovered) && enabled ? FoamyPalette.hoverFill : "transparent"
     onHoveredChanged: if (hovered)
@@ -761,6 +766,7 @@ PanelKeyCatcher {
     implicitHeight: FoamyStyle.actionSize
     foreground: FoamyPalette.text
     hasCursor: view.hasCursor(key)
+    byKeys: cursor.byKeys
     onHovered: view.hover(key)
     onClicked: if (tab.enabled)
       view.media.selectSource(tab.kind)
