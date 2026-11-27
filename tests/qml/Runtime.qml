@@ -298,6 +298,20 @@ ShellRoot {
       keysBorders(kids[i], found)
     return found
   }
+  // The transport button with this key ("shuffle", "playPause", …).
+  function transportButton(item, key) {
+    if (!item)
+      return null
+    if (item.key === key && item.toggledOn !== undefined)
+      return item
+    var kids = item.children || []
+    for (var i = 0; i < kids.length; i++) {
+      var hit = transportButton(kids[i], key)
+      if (hit)
+        return hit
+    }
+    return null
+  }
   // The footer tab of one source ("spotify", "youtube") in a player view.
   function sourceTab(item, kind) {
     if (!item)
@@ -399,9 +413,28 @@ ShellRoot {
     var physical = playerView.LayoutMirroring.enabled ? -1 : 1
     playerView.moveRequested(0, 1)
     eq(playerView.cursorKey, "playPause", "first move lands on play/pause")
+    // On an accent fill (play/pause, an active mode) the keys' border must
+    // not be the accent, or keys and pointer look the same there. (The fill
+    // itself animates, so the check compares with the accent.)
+    var playButton = transportButton(playerView, "playPause")
+    eq(JSON.stringify(keysBorders(playerView)), JSON.stringify(["playPause"]), "the keys' cursor on play/pause has a border")
+    check(playButton !== null && !Qt.colorEqual(playButton.border.color, Commons.Color.accent), "the keys' border on play/pause differs from its accent fill")
     playerView.moveRequested(-physical, 0)
     eq(playerView.cursorKey, "previous", "left moves to previous")
     eq(JSON.stringify(keysBorders(playerView)), JSON.stringify(["previous"]), "the keys' cursor on previous has the accent border, no other stop")
+    player.shuffleOn = true
+    playerView.moveRequested(-physical, 0)
+    eq(playerView.cursorKey, "shuffle", "left moves to shuffle")
+    var shuffleButton = transportButton(playerView, "shuffle")
+    eq(JSON.stringify(keysBorders(playerView)), JSON.stringify(["shuffle"]), "the keys' cursor on an active shuffle has a border")
+    check(shuffleButton !== null && !Qt.colorEqual(shuffleButton.border.color, Commons.Color.accent), "the keys' border on an active shuffle differs from its accent fill")
+    player.shuffleOn = false
+    playerView.moveRequested(physical, 0)
+    // A disabled stop (a player that cannot skip back) still shows the
+    // cursor: the keys stop there.
+    player.canGoPrevious = false
+    eq(JSON.stringify(keysBorders(playerView)), JSON.stringify(["previous"]), "the keys' cursor on a disabled previous has the border")
+    player.canGoPrevious = true
     playerView.activateRequested()
     playerView.moveRequested(0, -1)
     eq(playerView.cursorKey, "seek", "up reaches the timeline")
@@ -441,6 +474,11 @@ ShellRoot {
       ev.mouseMove(pointed, pointed.width / 2, pointed.height / 2, -1, Qt.NoButton, Qt.NoModifier)
     eq(playerView.cursorKey, "tab:spotify", "the pointer moves the cursor to the tab under it")
     eq(JSON.stringify(keysBorders(playerView)), "[]", "under the pointer no stop has the keys' border")
+    // Down at the bottom row leaves the cursor where the pointer put it,
+    // but it is the keys' cursor now.
+    playerView.moveRequested(0, 1)
+    eq(playerView.cursorKey, "tab:spotify", "down from the bottom row stays on the tab")
+    eq(JSON.stringify(keysBorders(playerView)), JSON.stringify(["tab:spotify"]), "a clamped down gives the keys' border")
     ev.mouseMove(equalizer, 1, 1, -1, Qt.NoButton, Qt.NoModifier)
     // Screen readers read the source row as a tab list: each tab a page tab
     // named after its source, the open source's tab selected.
@@ -529,6 +567,7 @@ ShellRoot {
     eq(view.cursorKey, "tab:spotify", "down reaches the source row")
     view.moveRequested(1, 0)
     eq(view.cursorKey, "launch", "along the source row")
+    eq(JSON.stringify(keysBorders(view)), JSON.stringify([FoamyI18n.t("Start %1", "Spotify")]), "the keys' cursor on the launch button has the accent border")
     eq(view.LayoutMirroring.enabled, shell.lang === "ar", "popup body mirrors in RTL only")
     // Arabic has no catalog and falls back to English.
     eq(view.band.meta, shell.lang === "no" ? "Ikke startet" : "Not running", "band status in the UI language")

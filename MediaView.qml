@@ -123,13 +123,10 @@ PanelKeyCatcher {
     if (index >= 0)
       cursor.hover(index)
   }
-  // The key handler's move: the keys' cursor look (FoamyCursor.byKeys).
   function place(key) {
     var index = stops.indexOf(key)
-    if (index >= 0) {
+    if (index >= 0)
       cursor.index = index
-      cursor.byKeys = true
-    }
   }
   function rowOf(key) {
     for (var i = 0; i < rows.length; i++)
@@ -189,6 +186,9 @@ PanelKeyCatcher {
   }
 
   onMoveRequested: function (dx, dy) {
+    // Any arrow key gives the keys' cursor look (FoamyCursor.byKeys), also
+    // one that stops at an edge and leaves the index where the pointer put it.
+    cursor.byKeys = true
     if (!cursor.active) {
       place(stops.indexOf("playPause") >= 0 ? "playPause" : stops[0])
       return
@@ -456,6 +456,8 @@ PanelKeyCatcher {
             iconSize: FoamyStyle.headerIconSize
             foreground: Commons.Color.popups.background
             color: hasCursor || hovered ? Commons.Color.accent : FoamyPalette.text
+            // The kit's accent border cannot be seen on the accent fill.
+            border.color: FoamyPalette.text
             tooltipText: FoamyI18n.t(view.media.playing ? "Pause" : "Play")
             enabled: view.media.live === true
             onClicked: view.media.playPause()
@@ -715,7 +717,13 @@ PanelKeyCatcher {
     hasCursor: view.hasCursor(key)
     cursorByKeys: cursor.byKeys
     foreground: toggledOn && enabled ? Commons.Color.popups.background : FoamyPalette.secondaryText
-    color: toggledOn && enabled ? Commons.Color.accent : (hasCursor || hovered) && enabled ? FoamyPalette.hoverFill : "transparent"
+    // The cursor shows on a disabled button too (YouTube's shuffle and
+    // repeat, a player that cannot skip): the keys still stop there.
+    color: toggledOn && enabled ? Commons.Color.accent : hasCursor || (hovered && enabled) ? FoamyPalette.hoverFill : "transparent"
+    border.width: hasCursor && cursorByKeys ? 1 : 0
+    // On an accent fill (an active mode) the accent border cannot be seen:
+    // the keys' border takes the text colour there.
+    border.color: toggledOn && enabled ? FoamyPalette.text : Commons.Color.accent
     onHoveredChanged: if (hovered)
       view.hover(control.key)
     TransportGlyph {
