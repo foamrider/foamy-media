@@ -6,6 +6,7 @@
 
 use std::fs::File;
 use std::io;
+use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -15,7 +16,7 @@ use rustix::fs::{FileType, Mode, OFlags};
 use ureq::config::AutoHeaderValue;
 use ureq::http::header::CONTENT_LENGTH;
 use ureq::tls::{Certificate, RootCerts, TlsConfig, TlsProvider};
-use ureq::unversioned::resolver::DefaultResolver;
+use ureq::unversioned::resolver::{DefaultResolver, Resolver};
 use ureq::unversioned::transport::{
     Buffers, ConnectProxyConnector, ConnectionDetails, Connector, NextTimeout, RustlsConnector,
     TcpConnector, Transport,
@@ -119,6 +120,100 @@ impl<In: Transport> Connector<In> for DeadlineConnector {
     }
 }
 
+/// Cap a non-final attempt while allowing for one TCP retransmission.
+const ATTEMPT: Duration = Duration::from_millis(2500);
+
+/// Try the other family before more addresses on a silent route. Delegate
+/// each socket to ureq to retain its configuration and shutdown handling.
+#[derive(Debug)]
+struct FallbackConnector(Deadline);
+
+impl<In: Transport> Connector<In> for FallbackConnector {
+    type Out = <TcpConnector as Connector<In>>::Out;
+
+    fn connect(
+        &self,
+        details: &ConnectionDetails,
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, ureq::Error> {
+        if chained.is_some() {
+            return TcpConnector::default().connect(details, chained);
+        }
+        let started = Instant::now();
+        let budget = *details.timeout.after;
+        // Proxy resolution can consume part of ureq's connect budget.
+        let budget = self.0.get().map_or(budget, |at| {
+            budget.min(at.saturating_duration_since(started))
+        });
+        let addrs = interleave(&details.addrs);
+        let mut last = None;
+        for (index, &addr) in addrs.iter().enumerate() {
+            let left = budget.saturating_sub(started.elapsed());
+            if left.is_zero() {
+                return Err(ureq::Error::Timeout(details.timeout.reason));
+            }
+            // The last address keeps the whole remaining budget, so a host
+            // with one address waits as long as before.
+            let attempt = if index + 1 == addrs.len() {
+                left
+            } else {
+                // Leave time for the next address even on a short request.
+                (left / 2).min(ATTEMPT)
+            };
+            let mut one = details.resolver.empty();
+            one.push(addr);
+            let single = ConnectionDetails {
+                addrs: one,
+                now: (details.current_time)(),
+                timeout: NextTimeout {
+                    after: attempt.into(),
+                    ..details.timeout
+                },
+                current_time: details.current_time.clone(),
+                run_connector: details.run_connector.clone(),
+                register_shutdown: details.register_shutdown.clone(),
+                ..*details
+            };
+            match TcpConnector::default().connect(&single, None) {
+                Err(error @ ureq::Error::Timeout(_)) => last = Some(error),
+                Err(ureq::Error::Io(error)) if elsewhere(&error) => {
+                    last = Some(ureq::Error::Io(error));
+                }
+                done => return done,
+            }
+        }
+        if started.elapsed() >= budget {
+            return Err(ureq::Error::Timeout(details.timeout.reason));
+        }
+        Err(last
+            .unwrap_or_else(|| std::io::Error::from(std::io::ErrorKind::ConnectionRefused).into()))
+    }
+}
+
+/// A failure of this address only: another one may still connect. The same
+/// kinds ureq moves on for.
+fn elsewhere(error: &std::io::Error) -> bool {
+    use std::io::ErrorKind::*;
+    matches!(
+        error.kind(),
+        ConnectionRefused | HostUnreachable | NetworkUnreachable | AddrNotAvailable
+    )
+}
+
+/// The resolver's addresses with the families alternating, starting with
+/// the family of its first: v6 v6 v4 v4 becomes v6 v4 v6 v4.
+fn interleave(addrs: &[SocketAddr]) -> Vec<SocketAddr> {
+    let first_v6 = addrs.first().is_some_and(SocketAddr::is_ipv6);
+    let (first, other): (Vec<SocketAddr>, Vec<SocketAddr>) =
+        addrs.iter().partition(|addr| addr.is_ipv6() == first_v6);
+    let mut out = Vec::with_capacity(addrs.len());
+    for index in 0..first.len().max(other.len()) {
+        out.extend(first.get(index));
+        out.extend(other.get(index));
+    }
+    out
+}
+
 /// Every read and write capped at the time left before the request's deadline.
 #[derive(Debug)]
 struct DeadlineTransport<T> {
@@ -177,6 +272,10 @@ impl Client {
     /// `https_only` is false only in tests, which talk to a loopback
     /// `http://` server; [`https`] always sets it.
     fn new(https_only: bool, proxy: Option<Proxy>) -> Client {
+        Self::with_resolver(https_only, proxy, DefaultResolver::default())
+    }
+
+    fn with_resolver(https_only: bool, proxy: Option<Proxy>, resolver: impl Resolver) -> Client {
         let deadline = Deadline::default();
         let config = Agent::config_builder()
             .https_only(https_only)
@@ -198,11 +297,11 @@ impl Client {
             );
         let connector =
             ().chain(ConnectProxyConnector::default())
-                .chain(TcpConnector::default())
+                .chain(FallbackConnector(deadline.clone()))
                 .chain(DeadlineConnector(deadline.clone()))
                 .chain(RustlsConnector::default());
         Client {
-            agent: Agent::with_parts(config.build(), connector, DefaultResolver::default()),
+            agent: Agent::with_parts(config.build(), connector, resolver),
             deadline,
         }
     }
@@ -362,6 +461,109 @@ mod tests {
             reply(&mut stream);
         });
         format!("http://127.0.0.1:{port}/cover")
+    }
+
+    use ureq::unversioned::resolver::ResolvedSocketAddrs;
+
+    /// The addresses the test chooses, whatever the URL's host.
+    #[derive(Debug)]
+    struct Fixed(Vec<SocketAddr>);
+
+    impl Resolver for Fixed {
+        fn resolve(
+            &self,
+            _uri: &ureq::http::Uri,
+            _config: &ureq::config::Config,
+            _timeout: NextTimeout,
+        ) -> Result<ResolvedSocketAddrs, ureq::Error> {
+            let mut addrs = self.empty();
+            for &addr in &self.0 {
+                addrs.push(addr);
+            }
+            Ok(addrs)
+        }
+    }
+
+    /// An address that never answers a connect, like a route that drops
+    /// packets: a listener whose accept queue is full, so the kernel drops
+    /// every new SYN. Keep the returned listener and streams alive.
+    fn silent_ipv6() -> (SocketAddr, TcpListener, Vec<TcpStream>) {
+        let listener = TcpListener::bind("[::1]:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let mut queued = Vec::new();
+        loop {
+            match TcpStream::connect_timeout(&addr, Duration::from_millis(200)) {
+                Ok(stream) => queued.push(stream),
+                Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {
+                    return (addr, listener, queued);
+                }
+                Err(error) => panic!("filling the accept queue: {error}"),
+            }
+            assert!(queued.len() < 8192, "the accept queue never filled");
+        }
+    }
+
+    fn failure_for(addresses: Vec<SocketAddr>, timeout: Duration) -> String {
+        let url = "http://127.0.0.1:9";
+        let addresses = Fixed(addresses);
+        Client::with_resolver(false, None, addresses)
+            .get(url, timeout, 2)
+            .unwrap_err()
+            .code
+    }
+
+    #[test]
+    fn silent_addresses_share_one_deadline_and_refusals_fail_promptly() {
+        let (addr, _listener, _queued) = silent_ipv6();
+        let limit = Duration::from_millis(650);
+        let started = Instant::now();
+        assert_eq!(failure_for(vec![addr; 4], limit), "TIMEOUT");
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed >= limit - Duration::from_millis(50)
+                && elapsed < limit + Duration::from_millis(350),
+            "silent addresses exhausted the request budget after {elapsed:?}"
+        );
+
+        let closed = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap();
+        let started = Instant::now();
+        assert_eq!(
+            failure_for(vec![closed; 2], Duration::from_secs(8)),
+            "NETWORK"
+        );
+        assert!(started.elapsed() < Duration::from_secs(2));
+    }
+
+    #[test]
+    fn a_silent_ipv6_route_falls_back_to_ipv4() {
+        let (silent, _listener, _queued) = silent_ipv6();
+        for (limit, expected) in [(8_000, 4_000), (1_000, 800)] {
+            let url = serve(|stream| {
+                stream
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+                    .unwrap();
+            });
+            let v4 = url
+                .strip_prefix("http://")
+                .unwrap()
+                .strip_suffix("/cover")
+                .unwrap()
+                .parse()
+                .unwrap();
+            let addresses = Fixed(vec![silent, silent, silent, v4]);
+            let client = Client::with_resolver(false, None, addresses);
+            let started = Instant::now();
+            let timeout = Duration::from_millis(limit);
+            assert_eq!(client.get(&url, timeout, 2).unwrap(), b"ok");
+            let elapsed = started.elapsed();
+            assert!(
+                elapsed < Duration::from_millis(expected),
+                "IPv4 reached after {elapsed:?} with an overall budget of {limit} ms"
+            );
+        }
     }
 
     fn get(url: &str, max: u64) -> Result<Vec<u8>, Failure> {
